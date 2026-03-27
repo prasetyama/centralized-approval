@@ -1,0 +1,566 @@
+{
+  "info": {
+    "name": "Centralized Approval Workflow API",
+    "description": "API endpoints for the Centralized Approval Workflow project.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"username\": \"admin\",\n    \"password\": \"admin\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/login",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "auth", "login"]
+            }
+          }
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/logout",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "auth", "logout"]
+            }
+          }
+        },
+        {
+          "name": "Me",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/me",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "auth", "me"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Workflow Actions",
+      "item": [
+        {
+          "name": "Submit Workflow",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"workflow_definition_id\": 1,\n    \"data\": {}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/workflow/submit",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "workflow", "submit"]
+            }
+          }
+        },
+        {
+          "name": "Get Workflow Detail",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/workflow/:id",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "workflow", ":id"],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "1"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Approve Workflow",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"notes\": \"Approved.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/workflow/:id/approve",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "workflow", ":id", "approve"],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "1"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Reject Workflow",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"notes\": \"Rejected due to missing info.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/workflow/:id/reject",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "workflow", ":id", "reject"],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "1"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Revise Workflow",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"notes\": \"Needs revision on section 2.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/workflow/:id/revise",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "workflow", ":id", "revise"],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "1"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "User Actions",
+      "item": [
+        {
+          "name": "Get Inbox",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/inbox",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "inbox"]
+            }
+          }
+        },
+        {
+          "name": "Dashboard Summary",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/dashboard/summary",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "dashboard", "summary"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin",
+      "item": [
+        {
+          "name": "Modules",
+          "item": [
+            {
+              "name": "List Modules",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/api/v1/admin/modules",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "v1", "admin", "modules"]
+                }
+              }
+            },
+            {
+              "name": "Create Module",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"name\": \"New Module\",\n    \"description\": \"Module description\"\n}",
+                  "options": {"raw": {"language": "json"}}
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/v1/admin/modules",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "v1", "admin", "modules"]
+                }
+              }
+            },
+            {
+              "name": "Get Module",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/api/v1/admin/modules/:id",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "v1", "admin", "modules", ":id"],
+                  "variable": [{"key": "id", "value": "1"}]
+                }
+              }
+            },
+            {
+              "name": "Update Module",
+              "request": {
+                "method": "PUT",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"name\": \"Updated Module\",\n    \"description\": \"Updated description\"\n}",
+                  "options": {"raw": {"language": "json"}}
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/v1/admin/modules/:id",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "v1", "admin", "modules", ":id"],
+                  "variable": [{"key": "id", "value": "1"}]
+                }
+              }
+            },
+            {
+              "name": "Delete Module",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/api/v1/admin/modules/:id",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "v1", "admin", "modules", ":id"],
+                  "variable": [{"key": "id", "value": "1"}]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Roles",
+          "item": [
+            {
+              "name": "List Roles",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/api/v1/admin/roles",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "v1", "admin", "roles"]
+                }
+              }
+            },
+            {
+              "name": "Create Role",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"name\": \"New Role\",\n    \"description\": \"Role description\"\n}",
+                  "options": {"raw": {"language": "json"}}
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/v1/admin/roles",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "v1", "admin", "roles"]
+                }
+              }
+            },
+            {
+              "name": "Get Role",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/api/v1/admin/roles/:id",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "v1", "admin", "roles", ":id"],
+                  "variable": [{"key": "id", "value": "1"}]
+                }
+              }
+            },
+            {
+              "name": "Update Role",
+              "request": {
+                "method": "PUT",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"name\": \"Updated Role\",\n    \"description\": \"Updated description\"\n}",
+                  "options": {"raw": {"language": "json"}}
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/v1/admin/roles/:id",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "v1", "admin", "roles", ":id"],
+                  "variable": [{"key": "id", "value": "1"}]
+                }
+              }
+            },
+            {
+              "name": "Delete Role",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/api/v1/admin/roles/:id",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "v1", "admin", "roles", ":id"],
+                  "variable": [{"key": "id", "value": "1"}]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Users",
+          "item": [
+            {
+              "name": "List Users",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/api/v1/admin/users",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "v1", "admin", "users"]
+                }
+              }
+            },
+            {
+              "name": "Create User",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"username\": \"newuser\",\n    \"email\": \"newuser@example.com\",\n    \"password\": \"password123\",\n    \"first_name\": \"New\",\n    \"last_name\": \"User\",\n    \"department\": \"IT\",\n    \"role_ids\": [1]\n}",
+                  "options": {"raw": {"language": "json"}}
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/v1/admin/users",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "v1", "admin", "users"]
+                }
+              }
+            },
+            {
+              "name": "Get User",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/api/v1/admin/users/:id",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "v1", "admin", "users", ":id"],
+                  "variable": [{"key": "id", "value": "1"}]
+                }
+              }
+            },
+            {
+              "name": "Update User",
+              "request": {
+                "method": "PUT",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"username\": \"updateduser\",\n    \"email\": \"updated@example.com\",\n    \"first_name\": \"Updated\",\n    \"last_name\": \"User\",\n    \"department\": \"HR\",\n    \"role_ids\": [1, 2]\n}",
+                  "options": {"raw": {"language": "json"}}
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/v1/admin/users/:id",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "v1", "admin", "users", ":id"],
+                  "variable": [{"key": "id", "value": "1"}]
+                }
+              }
+            },
+            {
+              "name": "Delete User",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/api/v1/admin/users/:id",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "v1", "admin", "users", ":id"],
+                  "variable": [{"key": "id", "value": "1"}]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Workflow Definitions",
+          "item": [
+             {
+              "name": "List Workflow Definitions",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/api/v1/admin/workflows",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "v1", "admin", "workflows"]
+                }
+              }
+            },
+            {
+              "name": "Create Workflow Definition",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"name\": \"Leave Request\",\n    \"description\": \"Standard leave request process\",\n    \"module_id\": 1,\n    \"is_active\": true,\n    \"steps\": [\n        {\n            \"step_order\": 1,\n            \"name\": \"Manager Approval\",\n            \"approver_role_id\": 2,\n            \"is_final\": false\n        },\n        {\n            \"step_order\": 2,\n            \"name\": \"HR Approval\",\n            \"approver_role_id\": 3,\n            \"is_final\": true\n        }\n    ]\n}",
+                  "options": {"raw": {"language": "json"}}
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/v1/admin/workflows",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "v1", "admin", "workflows"]
+                }
+              }
+            },
+             {
+              "name": "Get Workflow Definition",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/api/v1/admin/workflows/:id",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "v1", "admin", "workflows", ":id"],
+                  "variable": [{"key": "id", "value": "1"}]
+                }
+              }
+            },
+             {
+              "name": "Update Workflow Definition",
+              "request": {
+                "method": "PUT",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"name\": \"Leave Request (Updated)\",\n    \"description\": \"Updated Standard leave request process\",\n    \"module_id\": 1,\n    \"is_active\": true,\n    \"steps\": [\n        {\n            \"id\": 1,\n            \"step_order\": 1,\n            \"name\": \"Manager Approval\",\n            \"approver_role_id\": 2,\n            \"is_final\": false\n        },\n        {\n            \"id\": 2,\n            \"step_order\": 2,\n            \"name\": \"Director Approval\",\n            \"approver_role_id\": 4,\n            \"is_final\": true\n        }\n    ]\n}",
+                  "options": {"raw": {"language": "json"}}
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/v1/admin/workflows/:id",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "v1", "admin", "workflows", ":id"],
+                  "variable": [{"key": "id", "value": "1"}]
+                }
+              }
+            },
+             {
+              "name": "Delete Workflow Definition",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/api/v1/admin/workflows/:id",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "v1", "admin", "workflows", ":id"],
+                  "variable": [{"key": "id", "value": "1"}]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Approval Requests",
+          "item": [
+            {
+              "name": "List All Approval Requests (Admin)",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/api/v1/requests",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "v1", "requests"]
+                }
+              }
+            },
+            {
+              "name": "Get Approval Request (Admin)",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/api/v1/requests/:id",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "v1", "requests", ":id"],
+                  "variable": [{"key": "id", "value": "1"}]
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8000"
+    }
+  ]
+}

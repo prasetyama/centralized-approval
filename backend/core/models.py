@@ -1,0 +1,316 @@
+"""
+Core Models - Django ORM
+========================
+Unified database schema for the Centralized Approval Workflow engine.
+Includes all models: Module, Role, User, WorkflowDefinition, WorkflowStepDefinition,
+ApprovalRequest, ApprovalStep, and AuditLog.
+"""
+from django.db import models
+from django.contrib.auth.models import AbstractUser
+
+
+class Role(models.Model):
+    """
+    User roles for approval routing.
+    Examples: Manager, Director, VP, Finance_Head, HR_Head.
+    """
+    name = models.CharField(max_length=100, unique=True, help_text="Display name of the role")
+    code = models.CharField(max_length=50, unique=True, help_text="Unique code identifier (e.g., 'MGR', 'DIR')")
+    description = models.TextField(blank=True, default='', help_text="Optional description of this role")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'aw_role'
+        ordering = ['name']
+
+    def __str__(self):
+        return f"{self.name} ({self.code})"
+
+
+class User(AbstractUser):
+    """
+    Extended user model with role assignment and department.
+    Extends Django's AbstractUser for compatibility with Django's auth system.
+    """
+    role = models.ForeignKey(
+        Role,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='users',
+        help_text="Assigned role for approval routing"
+    )
+    department = models.CharField(max_length=100, blank=True, default='')
+    phone = models.CharField(max_length=20, blank=True, default='')
+    is_approver = models.BooleanField(default=False, help_text="Whether this user can approve requests")
+
+    class Meta:
+        db_table = 'aw_user'
+        ordering = ['username']
+
+    def __str__(self):
+        return f"{self.get_full_name() or self.username}"
+
+
+class Module(models.Model):
+    """
+    Registered source modules that can send approval requests.
+    Examples: E-Order, Finance, HR.
+    """
+    name = models.CharField(max_length=100, unique=True, help_text="Module display name")
+    code = models.CharField(max_length=50, unique=True, help_text="Unique code (e.g., 'EORDER', 'FINANCE', 'HR')")
+    description = models.TextField(blank=True, default='')
+    is_active = models.BooleanField(default=True)
+    icon = models.CharField(max_length=50, blank=True, default='package', help_text="Lucide icon name")
+    color = models.CharField(max_length=20, blank=True, default='#3B82F6', help_text="Display color hex")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'aw_module'
+        ordering = ['name']
+
+    def __str__(self):
+        return f"{self.name} ({self.code})"
+
+
+class WorkflowDefinition(models.Model):
+    """
+    Template defining the approval workflow for a module.
+    Each module can have multiple workflow definitions (e.g., different for PO vs Invoice).
+    """
+    module = models.ForeignKey(
+        Module,
+        on_delete=models.CASCADE,
+        related_name='workflows',
+        help_text="Module this workflow belongs to"
+    )
+    name = models.CharField(max_length=200, help_text="Workflow name (e.g., 'Purchase Order Approval')")
+    description = models.TextField(blank=True, default='')
+    total_steps = models.PositiveIntegerField(default=1, help_text="Total number of approval steps")
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'aw_workflow_definition'
+        ordering = ['module', 'name']
+        indexes = [
+            models.Index(fields=['module', 'is_active'], name='idx_wfdef_module_active'),
+        ]
+
+    def __str__(self):
+        return f"{self.module.code} - {self.name}"
+
+
+class WorkflowStepDefinition(models.Model):
+    """
+    Each step in a workflow template.
+    Defines the order, name, and required role for approval at that step.
+    """
+    workflow = models.ForeignKey(
+        WorkflowDefinition,
+        on_delete=models.CASCADE,
+        related_name='steps',
+        help_text="Parent workflow definition"
+    )
+    step_order = models.PositiveIntegerField(help_text="Step sequence number (1-based)")
+    name = models.CharField(max_length=200, help_text="Step name (e.g., 'Manager Review')")
+    role_required = models.ForeignKey(
+        Role,
+        on_delete=models.PROTECT,
+        related_name='step_definitions',
+        help_text="Role required to approve this step"
+    )
+    is_optional = models.BooleanField(default=False, help_text="If true, step can be skipped")
+
+    class Meta:
+        db_table = 'aw_workflow_step_definition'
+        ordering = ['workflow', 'step_order']
+        unique_together = ['workflow', 'step_order']
+        indexes = [
+            models.Index(fields=['workflow', 'step_order'], name='idx_stepdef_wf_order'),
+        ]
+
+    def __str__(self):
+        return f"Step {self.step_order}: {self.name} ({self.role_required.code})"
+
+
+class ApprovalRequest(models.Model):
+    """
+    Main transaction: stores payload from sending module.
+    This is the central entity that tracks an approval process from submission to completion.
+    Uses a state machine pattern for status management.
+    """
+    class Status(models.TextChoices):
+        DRAFT = 'DRAFT', 'Draft'
+        PENDING = 'PENDING', 'Pending'
+        IN_PROGRESS = 'IN_PROGRESS', 'In Progress'
+        APPROVED = 'APPROVED', 'Approved'
+        REJECTED = 'REJECTED', 'Rejected'
+        REVISED = 'REVISED', 'Revised'
+
+    reference_id = models.CharField(
+        max_length=100,
+        help_text="External reference ID from the source module"
+    )
+    module = models.ForeignKey(
+        Module,
+        on_delete=models.PROTECT,
+        related_name='approval_requests'
+    )
+    workflow = models.ForeignKey(
+        WorkflowDefinition,
+        on_delete=models.PROTECT,
+        related_name='approval_requests'
+    )
+    requester = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        related_name='submitted_requests',
+        help_text="User who submitted this request"
+    )
+    title = models.CharField(max_length=300, help_text="Brief title for the approval request")
+    description = models.TextField(blank=True, default='', help_text="Optional description")
+    payload = models.JSONField(
+        default=dict,
+        help_text="JSON payload from the source module containing all relevant data"
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.DRAFT,
+        db_index=True
+    )
+    current_step = models.PositiveIntegerField(
+        default=1,
+        help_text="Current step number in the approval workflow"
+    )
+    priority = models.CharField(
+        max_length=10,
+        choices=[('LOW', 'Low'), ('MEDIUM', 'Medium'), ('HIGH', 'High'), ('URGENT', 'Urgent')],
+        default='MEDIUM'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'aw_approval_request'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['status', 'current_step'], name='idx_req_status_step'),
+            models.Index(fields=['module', 'status'], name='idx_req_module_status'),
+            models.Index(fields=['requester', 'status'], name='idx_req_requester_status'),
+            models.Index(fields=['reference_id', 'module'], name='idx_req_ref_module'),
+        ]
+
+    def __str__(self):
+        return f"[{self.module.code}] {self.title} - {self.status}"
+
+
+class ApprovalStep(models.Model):
+    """
+    Instance of a workflow step being executed for a specific request.
+    Created when a request is submitted, based on WorkflowStepDefinition.
+    """
+    class StepStatus(models.TextChoices):
+        PENDING = 'PENDING', 'Pending'
+        WAITING = 'WAITING', 'Waiting for Approval'
+        APPROVED = 'APPROVED', 'Approved'
+        REJECTED = 'REJECTED', 'Rejected'
+        SKIPPED = 'SKIPPED', 'Skipped'
+
+    request = models.ForeignKey(
+        ApprovalRequest,
+        on_delete=models.CASCADE,
+        related_name='steps'
+    )
+    step_order = models.PositiveIntegerField(help_text="Step sequence number")
+    name = models.CharField(max_length=200)
+    assigned_to = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='assigned_steps',
+        help_text="User assigned to approve this step"
+    )
+    role_required = models.ForeignKey(
+        Role,
+        on_delete=models.PROTECT,
+        related_name='approval_steps',
+        help_text="Role required for this step"
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=StepStatus.choices,
+        default=StepStatus.PENDING
+    )
+    comments = models.TextField(blank=True, default='', help_text="Approver comments")
+    acted_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'aw_approval_step'
+        ordering = ['request', 'step_order']
+        unique_together = ['request', 'step_order']
+        indexes = [
+            models.Index(fields=['assigned_to', 'status'], name='idx_step_assignee_status'),
+            models.Index(fields=['request', 'step_order'], name='idx_step_req_order'),
+        ]
+
+    def __str__(self):
+        return f"Step {self.step_order}: {self.name} - {self.status}"
+
+
+class AuditLog(models.Model):
+    """
+    Immutable audit trail for all approval actions.
+    Records who did what, when, from where, and a snapshot of the payload at that time.
+    """
+    class Action(models.TextChoices):
+        SUBMITTED = 'SUBMITTED', 'Submitted'
+        APPROVED = 'APPROVED', 'Approved'
+        REJECTED = 'REJECTED', 'Rejected'
+        REVISED = 'REVISED', 'Revised'
+        REASSIGNED = 'REASSIGNED', 'Reassigned'
+        CANCELLED = 'CANCELLED', 'Cancelled'
+        COMMENT = 'COMMENT', 'Comment Added'
+
+    request = models.ForeignKey(
+        ApprovalRequest,
+        on_delete=models.CASCADE,
+        related_name='audit_logs'
+    )
+    step = models.ForeignKey(
+        ApprovalStep,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='audit_logs'
+    )
+    actor = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        related_name='audit_actions'
+    )
+    action = models.CharField(max_length=50, choices=Action.choices)
+    details = models.TextField(blank=True, default='', help_text="Human-readable action details")
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.TextField(blank=True, default='')
+    payload_snapshot = models.JSONField(
+        default=dict,
+        help_text="Snapshot of the request payload at this point in time"
+    )
+    timestamp = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        db_table = 'aw_audit_log'
+        ordering = ['-timestamp']
+        indexes = [
+            models.Index(fields=['request', 'timestamp'], name='idx_audit_req_time'),
+            models.Index(fields=['actor', 'timestamp'], name='idx_audit_actor_time'),
+        ]
+
+    def __str__(self):
+        return f"[{self.timestamp}] {self.actor} - {self.action} on {self.request}"
