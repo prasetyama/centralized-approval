@@ -5,8 +5,11 @@ Central engine that processes all approval workflow operations.
 Handles: submit_request, approve_step, reject_step, revise_request.
 All approval logic is centralized here — modules should NOT implement their own approval logic.
 """
+import json
+import urllib.request
 from django.db import transaction
 from django.utils import timezone
+from django.conf import settings
 from rest_framework.exceptions import ValidationError
 
 from core.models import (
@@ -22,6 +25,52 @@ class WorkflowEngine:
     Implements DRY principle: all approval logic resides here,
     not in individual modules.
     """
+
+    @staticmethod
+    def notify_external_system(approval_request):
+        """
+        Send a notification to the source module's callback URL.
+        """
+        module = approval_request.module
+        if not module.callback_url:
+            return
+
+        payload = {
+            'request_id': approval_request.id,
+            'reference_id': approval_request.reference_id,
+            'module_code': module.code,
+            'status': approval_request.status,
+            'current_step': approval_request.current_step,
+            'updated_at': approval_request.updated_at.isoformat(),
+        }
+
+        # Include details of the current step
+        current_step = approval_request.steps.filter(
+            step_order=approval_request.current_step
+        ).first()
+
+        if current_step:
+            payload['step'] = {
+                'order': current_step.step_order,
+                'name': current_step.name,
+                'status': current_step.status,
+                'approver': current_step.assigned_to.username if current_step.assigned_to else None,
+                'comments': current_step.comments,
+            }
+
+        try:
+            req = urllib.request.Request(
+                module.callback_url,
+                data=json.dumps(payload).encode('utf-8'),
+                headers={'Content-Type': 'application/json'},
+                method='POST'
+            )
+            with urllib.request.urlopen(req, timeout=10) as response:
+                pass
+        except Exception as e:
+            # We don't want to fail the transaction if the notification fails,
+            # but we should probably log it. For now, just print.
+            print(f"Failed to notify external system: {e}")
 
     @staticmethod
     @transaction.atomic
@@ -205,6 +254,9 @@ class WorkflowEngine:
             payload_snapshot=approval_request.payload,
         )
 
+        # Notify external system after commit
+        transaction.on_commit(lambda: WorkflowEngine.notify_external_system(approval_request))
+
         return approval_request
 
     @staticmethod
@@ -274,6 +326,9 @@ class WorkflowEngine:
             ip_address=ip_address,
             payload_snapshot=approval_request.payload,
         )
+
+        # Notify external system after commit
+        transaction.on_commit(lambda: WorkflowEngine.notify_external_system(approval_request))
 
         return approval_request
 

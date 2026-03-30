@@ -64,6 +64,7 @@ class Module(models.Model):
     is_active = models.BooleanField(default=True)
     icon = models.CharField(max_length=50, blank=True, default='package', help_text="Lucide icon name")
     color = models.CharField(max_length=20, blank=True, default='#3B82F6', help_text="Display color hex")
+    callback_url = models.URLField(max_length=500, blank=True, null=True, help_text="URL to notify when approval status changes")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
