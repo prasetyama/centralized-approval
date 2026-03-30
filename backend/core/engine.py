@@ -7,6 +7,11 @@ All approval logic is centralized here — modules should NOT implement their ow
 """
 import json
 import urllib.request
+try:
+    import MySQLdb
+except ImportError:
+    MySQLdb = None
+
 from django.db import transaction
 from django.utils import timezone
 from django.conf import settings
@@ -29,8 +34,22 @@ class WorkflowEngine:
     @staticmethod
     def notify_external_system(approval_request):
         """
-        Send a notification to the source module's callback URL.
+        Send a notification to the source module based on its strategy.
+        Supports: WEBHOOK, DATABASE
         """
+        module = approval_request.module
+        
+        if module.notification_strategy == Module.NotificationStrategy.NONE:
+            return
+
+        if module.notification_strategy == Module.NotificationStrategy.WEBHOOK:
+            WorkflowEngine._send_webhook_notification(approval_request)
+        elif module.notification_strategy == Module.NotificationStrategy.DATABASE:
+            WorkflowEngine._update_external_database(approval_request)
+
+    @staticmethod
+    def _send_webhook_notification(approval_request):
+        """Send a standard HTTP webhook notification."""
         module = approval_request.module
         if not module.callback_url:
             return
@@ -44,7 +63,6 @@ class WorkflowEngine:
             'updated_at': approval_request.updated_at.isoformat(),
         }
 
-        # Include details of the current step
         current_step = approval_request.steps.filter(
             step_order=approval_request.current_step
         ).first()
@@ -68,9 +86,58 @@ class WorkflowEngine:
             with urllib.request.urlopen(req, timeout=10) as response:
                 pass
         except Exception as e:
-            # We don't want to fail the transaction if the notification fails,
-            # but we should probably log it. For now, just print.
-            print(f"Failed to notify external system: {e}")
+            print(f"Webhook notification failed: {e}")
+
+    @staticmethod
+    def _update_external_database(approval_request):
+        """Perform a direct database update on the external system."""
+        module = approval_request.module
+        
+        if not all([module.db_host, module.db_name, module.db_user, module.db_table_name, module.db_flag_column, module.db_reference_column]):
+            print("Direct DB Update: Missing configuration fields.")
+            return
+
+        if not MySQLdb:
+            print("Direct DB Update: MySQLdb not installed.")
+            return
+
+        # Mapping Workflow steps to flags (Example logic, can be customized or made dynamic)
+        # For E-Order specific mapping:
+        new_flag = 0
+        if approval_request.status == ApprovalRequest.Status.APPROVED:
+            new_flag = 6 # Final Approved
+        elif approval_request.status == ApprovalRequest.Status.REJECTED:
+            new_flag = 3 if approval_request.current_step == 1 else 5
+        elif approval_request.status == ApprovalRequest.Status.IN_PROGRESS:
+            current_step = approval_request.steps.filter(step_order=approval_request.current_step).first()
+            if current_step and current_step.status == ApprovalStep.StepStatus.APPROVED:
+                if current_step.step_order == 1:
+                    new_flag = 2 # Approved Step 1
+                elif current_step.step_order == 2:
+                    new_flag = 4 # Approved Step 2
+
+        if new_flag == 0:
+            return
+
+        try:
+            db = MySQLdb.connect(
+                host=module.db_host,
+                port=module.db_port or 3306,
+                user=module.db_user,
+                passwd=module.db_password or '',
+                db=module.db_name
+            )
+            cursor = db.cursor()
+            
+            sql = f"UPDATE {module.db_table_name} SET {module.db_flag_column} = %s WHERE {module.db_reference_column} = %s"
+            cursor.execute(sql, (new_flag, approval_request.reference_id))
+            
+            db.commit()
+            cursor.close()
+            db.close()
+            print(f"Direct DB Update successful for {approval_request.reference_id} -> flag={new_flag}")
+        except Exception as e:
+            print(f"Direct DB Update failed: {e}")
 
     @staticmethod
     @transaction.atomic

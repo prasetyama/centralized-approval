@@ -64,7 +64,33 @@ class Module(models.Model):
     is_active = models.BooleanField(default=True)
     icon = models.CharField(max_length=50, blank=True, default='package', help_text="Lucide icon name")
     color = models.CharField(max_length=20, blank=True, default='#3B82F6', help_text="Display color hex")
-    callback_url = models.URLField(max_length=500, blank=True, null=True, help_text="URL to notify when approval status changes")
+    
+    # Notification Settings
+    class NotificationStrategy(models.TextChoices):
+        WEBHOOK = 'WEBHOOK', 'HTTP Webhook'
+        DATABASE = 'DATABASE', 'Direct Database Update'
+        NONE = 'NONE', 'None'
+
+    notification_strategy = models.CharField(
+        max_length=20, 
+        choices=NotificationStrategy.choices, 
+        default=NotificationStrategy.WEBHOOK
+    )
+    callback_url = models.URLField(max_length=500, blank=True, null=True, help_text="URL for WEBHOOK strategy")
+    
+    # Direct DB Settings (for DATABASE strategy)
+    db_type = models.CharField(max_length=20, default='mysql', help_text="mysql, postgres, etc.")
+    db_host = models.CharField(max_length=255, blank=True, null=True)
+    db_port = models.IntegerField(blank=True, null=True)
+    db_user = models.CharField(max_length=255, blank=True, null=True)
+    db_password = models.CharField(max_length=255, blank=True, null=True)
+    db_name = models.CharField(max_length=255, blank=True, null=True)
+    
+    # Update Target Configuration
+    db_table_name = models.CharField(max_length=255, blank=True, null=True, help_text="Table name in external DB")
+    db_flag_column = models.CharField(max_length=255, blank=True, null=True, help_text="Column name for status/flag")
+    db_reference_column = models.CharField(max_length=255, blank=True, null=True, help_text="Column name for reference ID")
+    
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
