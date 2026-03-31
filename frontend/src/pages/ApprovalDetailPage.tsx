@@ -1,6 +1,6 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Share2, Printer, MoreVertical, Clock, History } from 'lucide-react';
+import { ArrowLeft, Clock, History } from 'lucide-react';
 import api from '@/services/api';
 import { Button } from '@/components/atoms/Button';
 import { Badge } from '@/components/atoms/Badge';
