@@ -96,6 +96,13 @@ class Module(models.Model):
     db_table_name = models.CharField(max_length=255, blank=True, null=True, help_text="Table to update on approval")
     db_flag_column = models.CharField(max_length=255, blank=True, null=True, help_text="Column to update (e.g., status, release_flag)")
     db_reference_column = models.CharField(max_length=255, blank=True, null=True, help_text="Column to match reference_id (e.g., order_no)")
+    
+    status_mapping = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Optional mapping from internal status to external status (e.g., {'APPROVED': '6'})"
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

@@ -110,17 +110,14 @@ class WorkflowEngine:
 
             cursor = conn.cursor()
             
-            # Map workflow steps to external status values if needed
-            # For now, we'll use a simple mapping for EORDER
-            update_value = approval_request.status
-            if module.code == 'EORDER' and approval_request.status == ApprovalRequest.Status.APPROVED:
-                # EORDER uses 1, 2, 4, 6 for release_flag
-                # This logic should be moved to a more dynamic mapping eventually
-                update_value = '6' 
-            elif module.code == 'EORDER' and approval_request.status == ApprovalRequest.Status.IN_PROGRESS:
-                 # Map current step to flag
-                 flag_map = {1: '1', 2: '2', 3: '4'}
-                 update_value = flag_map.get(approval_request.current_step, '0')
+            # Map workflow steps to external status values using module.status_mapping
+            status_key = approval_request.status
+            if status_key == ApprovalRequest.Status.IN_PROGRESS:
+                # Support granular mapping per step (e.g., "IN_PROGRESS_1")
+                status_key = f"IN_PROGRESS_{approval_request.current_step}"
+            
+            # Use mapped value if exists, otherwise fallback to original status
+            update_value = module.status_mapping.get(status_key, approval_request.status)
 
             query = f"UPDATE {module.db_table_name} SET {module.db_flag_column} = %s WHERE {module.db_reference_column} = %s"
             cursor.execute(query, (update_value, approval_request.reference_id))
