@@ -12,6 +12,7 @@ from core.models import (
 
 class RoleSerializer(serializers.ModelSerializer):
     """Serializer for Role model."""
+    
     class Meta:
         model = Role
         fields = ['id', 'name', 'code', 'description', 'created_at', 'updated_at']
@@ -20,30 +21,44 @@ class RoleSerializer(serializers.ModelSerializer):
 
 class UserListSerializer(serializers.ModelSerializer):
     """Lightweight user serializer for list views."""
-    role_name = serializers.CharField(source='role.name', read_only=True, default=None)
+    role_name = serializers.SerializerMethodField()
+    role_code = serializers.SerializerMethodField()
 
     class Meta:
         model = User
         fields = [
             'id', 'username', 'email', 'first_name', 'last_name',
-            'role', 'role_name', 'department', 'is_approver', 'is_active',
+            'role', 'role_name', 'role_code', 'department', 'is_approver', 'is_active',
         ]
+
+    def get_role_name(self, obj):
+        return obj.role.name if obj.role else None
+
+    def get_role_code(self, obj):
+        return obj.role.code if obj.role else None
 
 
 class UserDetailSerializer(serializers.ModelSerializer):
     """Full user serializer for detail/create/update views."""
-    role_name = serializers.CharField(source='role.name', read_only=True, default=None)
-    role_code = serializers.CharField(source='role.code', read_only=True, default=None)
+    role_details = RoleSerializer(source='role', read_only=True)
+    role_name = serializers.SerializerMethodField()
+    role_code = serializers.SerializerMethodField()
     password = serializers.CharField(write_only=True, required=False, min_length=6)
 
     class Meta:
         model = User
         fields = [
             'id', 'username', 'email', 'first_name', 'last_name',
-            'role', 'role_name', 'role_code', 'department', 'phone',
+            'role', 'role_name', 'role_code', 'role_details', 'department', 'phone',
             'is_approver', 'is_active', 'password', 'date_joined',
         ]
         read_only_fields = ['date_joined']
+
+    def get_role_name(self, obj):
+        return obj.role.name if obj.role else None
+
+    def get_role_code(self, obj):
+        return obj.role.code if obj.role else None
 
     def create(self, validated_data):
         password = validated_data.pop('password', None)
@@ -229,4 +244,10 @@ class SubmitRequestSerializer(serializers.Serializer):
 
 class ActionSerializer(serializers.Serializer):
     """Serializer for approve/reject actions."""
+    comments = serializers.CharField(required=False, default='', allow_blank=True)
+
+
+class DelegateRequestSerializer(serializers.Serializer):
+    """Serializer for the delegate step endpoint."""
+    new_assignee_id = serializers.IntegerField()
     comments = serializers.CharField(required=False, default='', allow_blank=True)

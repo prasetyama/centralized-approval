@@ -20,12 +20,13 @@ class ModuleAdmin(admin.ModelAdmin):
 @admin.register(Role)
 class RoleAdmin(admin.ModelAdmin):
     list_display = ['name', 'code', 'created_at']
+    list_filter = []
     search_fields = ['name', 'code']
 
 
 @admin.register(User)
 class UserAdmin(admin.ModelAdmin):
-    list_display = ['username', 'email', 'first_name', 'last_name', 'role', 'department', 'is_approver', 'is_active']
+    list_display = ['username', 'email', 'role', 'department', 'is_approver', 'is_active']
     list_filter = ['role', 'is_approver', 'is_active']
     search_fields = ['username', 'email', 'first_name', 'last_name']
 

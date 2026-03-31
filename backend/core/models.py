@@ -36,9 +36,9 @@ class User(AbstractUser):
     role = models.ForeignKey(
         Role,
         on_delete=models.SET_NULL,
+        related_name='users',
         null=True,
         blank=True,
-        related_name='users',
         help_text="Assigned role for approval routing"
     )
     department = models.CharField(max_length=100, blank=True, default='')
@@ -65,6 +65,37 @@ class Module(models.Model):
     icon = models.CharField(max_length=50, blank=True, default='package', help_text="Lucide icon name")
     color = models.CharField(max_length=20, blank=True, default='#3B82F6', help_text="Display color hex")
     callback_url = models.URLField(max_length=500, blank=True, null=True, help_text="URL to notify when approval status changes")
+    
+    # Notification & Sync Strategies
+    NOTIFICATION_STRATEGY_CHOICES = [
+        ('WEBHOOK', 'Webhook (Direct Callback)'),
+        ('DATABASE', 'Direct Database Update'),
+        ('POLLING', 'Polling (None)'),
+    ]
+    notification_strategy = models.CharField(
+        max_length=20,
+        choices=NOTIFICATION_STRATEGY_CHOICES,
+        default='WEBHOOK',
+        help_text="Method to notify the external system"
+    )
+
+    # Database connection details (for DATABASE strategy)
+    db_type = models.CharField(
+        max_length=20,
+        choices=[('postgresql', 'PostgreSQL'), ('mysql', 'MySQL'), ('mssql', 'MSSQL')],
+        default='mysql',
+        help_text="External database type"
+    )
+    db_host = models.CharField(max_length=255, blank=True, null=True)
+    db_port = models.IntegerField(blank=True, null=True)
+    db_name = models.CharField(max_length=255, blank=True, null=True)
+    db_user = models.CharField(max_length=255, blank=True, null=True)
+    db_password = models.CharField(max_length=255, blank=True, null=True)
+    
+    # Update target (for DATABASE strategy)
+    db_table_name = models.CharField(max_length=255, blank=True, null=True, help_text="Table to update on approval")
+    db_flag_column = models.CharField(max_length=255, blank=True, null=True, help_text="Column to update (e.g., status, release_flag)")
+    db_reference_column = models.CharField(max_length=255, blank=True, null=True, help_text="Column to match reference_id (e.g., order_no)")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

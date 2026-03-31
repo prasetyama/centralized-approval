@@ -29,12 +29,20 @@ class WorkflowEngine:
     @staticmethod
     def notify_external_system(approval_request):
         """
-        Send a notification to the source module's callback URL.
+        Notify the external system about a status change.
+        Supports WEBHOOK (HTTP POST) and DATABASE (Direct SQL Update).
         """
         module = approval_request.module
-        if not module.callback_url:
-            return
+        
+        if module.notification_strategy == 'WEBHOOK' and module.callback_url:
+            WorkflowEngine._notify_webhook(approval_request)
+        elif module.notification_strategy == 'DATABASE' and module.db_type:
+            WorkflowEngine._notify_database(approval_request)
 
+    @staticmethod
+    def _notify_webhook(approval_request):
+        """Send a notification to the source module's callback URL."""
+        module = approval_request.module
         payload = {
             'request_id': approval_request.id,
             'reference_id': approval_request.reference_id,
@@ -68,9 +76,58 @@ class WorkflowEngine:
             with urllib.request.urlopen(req, timeout=10) as response:
                 pass
         except Exception as e:
-            # We don't want to fail the transaction if the notification fails,
-            # but we should probably log it. For now, just print.
-            print(f"Failed to notify external system: {e}")
+            print(f"Failed to notify external system (WEBHOOK): {e}")
+
+    @staticmethod
+    def _notify_database(approval_request):
+        """Directly update the external system's database."""
+        module = approval_request.module
+        
+        # This requires additional drivers (e.g., mysqlclient, psycopg2)
+        # For now, we'll implement logic that can be extended
+        try:
+            if module.db_type == 'mysql':
+                import MySQLdb
+                conn = MySQLdb.connect(
+                    host=module.db_host,
+                    port=module.db_port or 3306,
+                    user=module.db_user,
+                    passwd=module.db_password,
+                    db=module.db_name
+                )
+            elif module.db_type == 'postgresql':
+                import psycopg2
+                conn = psycopg2.connect(
+                    host=module.db_host,
+                    port=module.db_port or 5432,
+                    user=module.db_user,
+                    password=module.db_password,
+                    dbname=module.db_name
+                )
+            else:
+                print(f"Unsupported database type: {module.db_type}")
+                return
+
+            cursor = conn.cursor()
+            
+            # Map workflow steps to external status values if needed
+            # For now, we'll use a simple mapping for EORDER
+            update_value = approval_request.status
+            if module.code == 'EORDER' and approval_request.status == ApprovalRequest.Status.APPROVED:
+                # EORDER uses 1, 2, 4, 6 for release_flag
+                # This logic should be moved to a more dynamic mapping eventually
+                update_value = '6' 
+            elif module.code == 'EORDER' and approval_request.status == ApprovalRequest.Status.IN_PROGRESS:
+                 # Map current step to flag
+                 flag_map = {1: '1', 2: '2', 3: '4'}
+                 update_value = flag_map.get(approval_request.current_step, '0')
+
+            query = f"UPDATE {module.db_table_name} SET {module.db_flag_column} = %s WHERE {module.db_reference_column} = %s"
+            cursor.execute(query, (update_value, approval_request.reference_id))
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            print(f"Failed to notify external system (DATABASE): {e}")
 
     @staticmethod
     @transaction.atomic
@@ -137,6 +194,7 @@ class WorkflowEngine:
         # Create approval steps from definitions
         for step_def in step_defs:
             # Auto-assign to first user with the required role
+            # (Note: Role is already module-scoped)
             assignee = User.objects.filter(
                 role=step_def.role_required, is_active=True, is_approver=True
             ).first()
@@ -329,6 +387,61 @@ class WorkflowEngine:
 
         # Notify external system after commit
         transaction.on_commit(lambda: WorkflowEngine.notify_external_system(approval_request))
+
+        return approval_request
+
+    @staticmethod
+    @transaction.atomic
+    def delegate_step(request_id, current_user, new_assignee, comments='', ip_address=None):
+        """
+        Delegate/reassign an approval step to another user.
+        Can be done by the current assignee or an admin.
+
+        Args:
+            request_id (int): ID of the ApprovalRequest.
+            current_user (User): User performing the delegation.
+            new_assignee (User): User to whom the step is delegated.
+            comments (str): Optional reason for delegation.
+            ip_address (str): IP address.
+        """
+        try:
+            approval_request = ApprovalRequest.objects.select_for_update().get(id=request_id)
+        except ApprovalRequest.DoesNotExist:
+            raise ValidationError(f"Approval request {request_id} not found.")
+
+        # Get the current active step
+        try:
+            current_step = ApprovalStep.objects.get(
+                request=approval_request,
+                step_order=approval_request.current_step,
+                status=ApprovalStep.StepStatus.WAITING,
+            )
+        except ApprovalStep.DoesNotExist:
+            raise ValidationError("No active step found for this request.")
+
+        # Authorization: Only current assignee or someone with the right role can delegate
+        if current_step.assigned_to and current_step.assigned_to != current_user:
+             if not current_user.is_staff and current_user.role != current_step.role_required:
+                raise ValidationError("You are not authorized to delegate this step.")
+
+        # Validate new assignee has the required role
+        if new_assignee.role != current_step.role_required:
+            raise ValidationError(f"User '{new_assignee.username}' does not have the required role.")
+
+        old_assignee = current_step.assigned_to
+        current_step.assigned_to = new_assignee
+        current_step.save(update_fields=['assigned_to'])
+
+        # Audit log
+        AuditLog.objects.create(
+            request=approval_request,
+            step=current_step,
+            actor=current_user,
+            action=AuditLog.Action.REASSIGNED,
+            details=f"Step {current_step.step_order} reassigned from {old_assignee} to {new_assignee}. Reason: {comments}".strip(),
+            ip_address=ip_address,
+            payload_snapshot=approval_request.payload,
+        )
 
         return approval_request
 

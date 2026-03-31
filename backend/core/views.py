@@ -20,6 +20,7 @@ from core.serializers import (
     WorkflowDefinitionSerializer, WorkflowDefinitionWriteSerializer,
     ApprovalRequestListSerializer, ApprovalRequestDetailSerializer,
     SubmitRequestSerializer, ActionSerializer, AuditLogSerializer,
+    DelegateRequestSerializer,
 )
 from core.engine import WorkflowEngine
 
@@ -161,6 +162,38 @@ class WorkflowReviseView(generics.GenericAPIView):
         })
 
 
+class WorkflowDelegateView(generics.GenericAPIView):
+    """
+    POST /api/v1/workflow/<id>/delegate
+    Delegate/reassign the current step to another user.
+    """
+    serializer_class = DelegateRequestSerializer
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            new_assignee = User.objects.get(id=serializer.validated_data['new_assignee_id'])
+        except User.DoesNotExist:
+            return Response({'error': 'New assignee not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        approval_request = WorkflowEngine.delegate_step(
+            request_id=pk,
+            current_user=request.user,
+            new_assignee=new_assignee,
+            comments=serializer.validated_data.get('comments', ''),
+            ip_address=_get_client_ip(request),
+        )
+
+        return Response({
+            'success': True,
+            'data': ApprovalRequestDetailSerializer(approval_request).data,
+            'message': f'Step delegated to {new_assignee.username}.',
+        })
+
+
 # ─────────────────────────────────────────────
 # Inbox Endpoint
 # ─────────────────────────────────────────────
@@ -182,7 +215,7 @@ class InboxView(generics.ListAPIView):
         """
         user = self.request.user
 
-        # Requests where user is assigned or role matches
+        # Requests where user is assigned or has the required role
         request_ids = ApprovalStep.objects.filter(
             status=ApprovalStep.StepStatus.WAITING
         ).filter(
@@ -246,7 +279,14 @@ def dashboard_summary(request):
     my_requests_count = ApprovalRequest.objects.filter(requester=user).count()
 
     # Recent activity (last 10 audit logs)
-    recent_logs = AuditLog.objects.select_related('request', 'actor')[:10]
+    recent_logs = AuditLog.objects.select_related('request', 'actor', 'request__module')[:10]
+    activity_serializer = AuditLogSerializer(recent_logs, many=True)
+
+    # Module counts
+    module_counts = [
+        {'code': m['code'], 'name': m['name'], 'count': m['request_count']}
+        for m in Module.objects.annotate(request_count=Count('approval_requests')).values('code', 'name', 'request_count')
+    ]
 
     return Response({
         'success': True,
@@ -320,7 +360,11 @@ class ApprovalRequestViewSet(viewsets.ReadOnlyModelViewSet):
         'module', 'workflow', 'requester'
     ).prefetch_related('steps', 'audit_logs').all()
     permission_classes = [IsAuthenticated]
-    filterset_fields = ['module', 'status', 'priority', 'requester']
+    filterset_fields = {
+        'module__code': ['exact'],
+        'status': ['exact'],
+        'updated_at': ['gt', 'gte'],
+    }
     search_fields = ['title', 'reference_id']
 
     def get_serializer_class(self):

@@ -8,13 +8,12 @@ interface ActionButtonsProps {
     requestId: number;
     onApprove: (comments: string) => Promise<void>;
     onReject: (comments: string) => Promise<void>;
-    onRevise: (comments: string) => Promise<void>;
     isLoading: boolean;
     canAction: boolean;
 }
 
-export const ActionButtons = ({ onApprove, onReject, onRevise, isLoading, canAction }: Omit<ActionButtonsProps, 'requestId'>) => {
-    const [showModal, setShowModal] = useState<'APPROVE' | 'REJECT' | 'REVISE' | null>(null);
+export const ActionButtons = ({ onApprove, onReject, isLoading, canAction }: Omit<ActionButtonsProps, 'requestId'>) => {
+    const [showModal, setShowModal] = useState<'APPROVE' | 'REJECT' | null>(null);
     const [comments, setComments] = useState('');
 
     const handleAction = async () => {
@@ -23,7 +22,6 @@ export const ActionButtons = ({ onApprove, onReject, onRevise, isLoading, canAct
         try {
             if (showModal === 'APPROVE') await onApprove(comments);
             if (showModal === 'REJECT') await onReject(comments);
-            if (showModal === 'REVISE') await onRevise(comments);
             setShowModal(null);
             setComments('');
         } catch (error) {
@@ -50,14 +48,6 @@ export const ActionButtons = ({ onApprove, onReject, onRevise, isLoading, canAct
                 loading={isLoading}
             >
                 <XCircle size={18} className="mr-2" /> Reject
-            </Button>
-            <Button
-                variant="outline"
-                className="flex-1 border-amber-200 text-amber-700 hover:bg-amber-50"
-                onClick={() => setShowModal('REVISE')}
-                loading={isLoading}
-            >
-                <RefreshCcw size={18} className="mr-2" /> Revise
             </Button>
 
             {showModal && (
@@ -107,7 +97,6 @@ export const ActionButtons = ({ onApprove, onReject, onRevise, isLoading, canAct
                                     className={cn(
                                         "flex-1",
                                         showModal === 'APPROVE' && "bg-emerald-600 hover:bg-emerald-700",
-                                        showModal === 'REVISE' && "border-amber-200 text-amber-700 hover:bg-amber-50"
                                     )}
                                     onClick={handleAction}
                                     loading={isLoading}

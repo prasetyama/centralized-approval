@@ -36,7 +36,6 @@ export const ApprovalDetailPage = () => {
             case 'APPROVED': return 'success';
             case 'REJECTED': return 'error';
             case 'IN_PROGRESS': return 'info';
-            case 'REVISED': return 'warning';
             default: return 'outline';
         }
     };
@@ -80,11 +79,11 @@ export const ApprovalDetailPage = () => {
                         </p>
                     </div>
                 </div>
-                <div className="flex items-center gap-2">
+                {/* <div className="flex items-center gap-2">
                     <Button variant="outline" size="icon"><Share2 size={18} /></Button>
                     <Button variant="outline" size="icon"><Printer size={18} /></Button>
                     <Button variant="outline" size="icon"><MoreVertical size={18} /></Button>
-                </div>
+                </div> */}
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -152,7 +151,6 @@ export const ApprovalDetailPage = () => {
                     <ActionButtons
                         onApprove={async (comments) => { await actionMutation.mutateAsync({ action: 'approve', comments }); }}
                         onReject={async (comments) => { await actionMutation.mutateAsync({ action: 'reject', comments }); }}
-                        onRevise={async (comments) => { await actionMutation.mutateAsync({ action: 'revise', comments }); }}
                         isLoading={actionMutation.isPending}
                         canAction={isApprover === true}
                     />
