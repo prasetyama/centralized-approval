@@ -10,6 +10,7 @@ export interface User {
     role_code: string;
     department: string;
     is_approver: boolean;
+    role: number
 }
 
 export interface LoginResponse {

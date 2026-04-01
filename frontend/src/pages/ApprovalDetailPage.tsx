@@ -57,7 +57,7 @@ export const ApprovalDetailPage = () => {
 
     const isApprover = detail?.steps?.some((s: any) =>
         s.step_order === detail.current_step &&
-        s.assigned_to === user?.id &&
+        s.role_required === user?.role &&
         detail.status === 'IN_PROGRESS'
     );
 
