@@ -12,7 +12,7 @@ import { useAuth } from '@/context/AuthContext';
 
 const navItems = [
     { name: 'Dashboard', href: '/', icon: LayoutDashboard },
-    { name: 'Unified Inbox', href: '/inbox', icon: Inbox },
+    { name: 'Approval', href: '/approval', icon: Inbox },
     { name: 'Workflows', href: '/admin/workflows', icon: GitBranch, adminOnly: true },
     { name: 'User Management', href: '/admin/users', icon: Users, adminOnly: true },
     { name: 'Settings', href: '/settings', icon: Settings },

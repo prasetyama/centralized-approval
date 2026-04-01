@@ -43,11 +43,19 @@ class WorkflowEngine:
     def _notify_webhook(approval_request):
         """Send a notification to the source module's callback URL."""
         module = approval_request.module
+        # Dynamic status mapping
+        status_key = approval_request.status
+        if status_key == ApprovalRequest.Status.IN_PROGRESS:
+            status_key = f"IN_PROGRESS_{approval_request.current_step}"
+        
+        external_status = module.status_mapping.get(status_key, approval_request.status)
+
         payload = {
             'request_id': approval_request.id,
             'reference_id': approval_request.reference_id,
             'module_code': module.code,
             'status': approval_request.status,
+            'external_status': external_status,
             'current_step': approval_request.current_step,
             'updated_at': approval_request.updated_at.isoformat(),
         }

@@ -54,7 +54,7 @@ export const InboxPage = () => {
         <div className="space-y-8">
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-3xl font-bold tracking-tight text-slate-900">Unified Inbox</h1>
+                    <h1 className="text-3xl font-bold tracking-tight text-slate-900">Approval</h1>
                     <p className="mt-1 text-slate-500">Review and approve tasks from all departments.</p>
                 </div>
                 <div className="flex gap-3">

@@ -33,7 +33,7 @@ const AppRoutes = () => {
                 }
             >
                 <Route index element={<DashboardPage />} />
-                <Route path="inbox" element={<InboxPage />} />
+                <Route path="approval" element={<InboxPage />} />
                 <Route path="workflow/:id" element={<ApprovalDetailPage />} />
                 <Route path="admin/users" element={<AdminUserPage />} />
                 <Route path="admin/workflows" element={<AdminWorkflowPage />} />

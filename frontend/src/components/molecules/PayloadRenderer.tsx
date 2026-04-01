@@ -14,7 +14,7 @@ export const PayloadRenderer = ({ moduleCode, payload }: PayloadRendererProps) =
             <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
                     <p className="text-xs font-semibold text-slate-500 uppercase">Distributor</p>
-                    <p className="font-medium text-slate-900">{payload.distributor_name || '-'}</p>
+                    <p className="font-medium text-slate-900">{payload.distributor || '-'}</p>
                 </div>
                 <div className="space-y-1">
                     <p className="text-xs font-semibold text-slate-500 uppercase">Order Type</p>
@@ -35,11 +35,11 @@ export const PayloadRenderer = ({ moduleCode, payload }: PayloadRendererProps) =
                     <tbody className="divide-y divide-slate-100">
                         {(payload.items || []).map((item: any, i: number) => (
                             <tr key={i} className="hover:bg-slate-50/50">
-                                <td className="px-4 py-3 font-medium text-slate-800">{item.product_name}</td>
-                                <td className="px-4 py-3 text-right text-slate-600">{item.quantity} {item.uom}</td>
+                                <td className="px-4 py-3 font-medium text-slate-800">{item.name}</td>
+                                <td className="px-4 py-3 text-right text-slate-600">{item.qty}</td>
                                 <td className="px-4 py-3 text-right text-slate-600">{formatCurrency(item.price)}</td>
                                 <td className="px-4 py-3 text-right font-semibold text-slate-900">
-                                    {formatCurrency(item.quantity * item.price)}
+                                    {formatCurrency(item.qty * item.price)}
                                 </td>
                             </tr>
                         ))}
