@@ -13,7 +13,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 
 from core.models import (
     Module, Role, User, WorkflowDefinition,
-    ApprovalRequest, ApprovalStep, AuditLog
+    ApprovalRequest, ApprovalStep, AuditLog, WorkflowStepDefinition
 )
 from core.serializers import (
     ModuleSerializer, RoleSerializer, UserListSerializer, UserDetailSerializer,
@@ -279,7 +279,18 @@ def dashboard_summary(request):
     my_requests_count = ApprovalRequest.objects.filter(requester=user).count()
 
     # Recent activity (last 10 audit logs)
-    recent_logs = AuditLog.objects.select_related('request', 'actor', 'request__module')[:10]
+    if user.is_superuser:
+        recent_logs = AuditLog.objects.all()
+    else:
+        # Modules where the user's role is an approver
+        relevant_module_ids = WorkflowStepDefinition.objects.filter(
+            role_required=user.role
+        ).values_list('workflow__module_id', flat=True).distinct()
+        
+        recent_logs = AuditLog.objects.filter(
+            Q(request__module_id__in=relevant_module_ids) | Q(request__requester=user)
+        ).distinct()
+    recent_logs = recent_logs.select_related('request', 'actor', 'request__module')[:10]
     activity_serializer = AuditLogSerializer(recent_logs, many=True)
 
     # Module counts
