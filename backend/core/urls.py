@@ -9,7 +9,7 @@ from rest_framework.routers import DefaultRouter
 from core.views import (
     WorkflowSubmitView, WorkflowDetailView,
     WorkflowApproveView, WorkflowRejectView, WorkflowReviseView, WorkflowDelegateView,
-    InboxView, dashboard_summary,
+    InboxView, HistoryView, dashboard_summary,
     ModuleViewSet, RoleViewSet, UserViewSet,
     WorkflowDefinitionViewSet, ApprovalRequestViewSet,
 )
@@ -30,8 +30,9 @@ urlpatterns = [
     path('workflow/<int:pk>/revise', WorkflowReviseView.as_view(), name='workflow-revise'),
     path('workflow/<int:pk>/delegate', WorkflowDelegateView.as_view(), name='workflow-delegate'),
 
-    # Inbox
+    # Inbox & History
     path('inbox', InboxView.as_view(), name='inbox'),
+    path('history', HistoryView.as_view(), name='history'),
 
     # Dashboard
     path('dashboard/summary', dashboard_summary, name='dashboard-summary'),

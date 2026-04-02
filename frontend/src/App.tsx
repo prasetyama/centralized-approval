@@ -5,6 +5,7 @@ import { MainLayout } from './components/organisms/MainLayout';
 import { LoginPage } from './pages/LoginPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { InboxPage } from './pages/InboxPage';
+import { HistoryPage } from './pages/HistoryPage';
 import { ApprovalDetailPage } from './pages/ApprovalDetailPage';
 import { AdminUserPage } from './pages/AdminUserPage';
 import { AdminWorkflowPage } from './pages/AdminWorkflowPage';
@@ -34,6 +35,7 @@ const AppRoutes = () => {
             >
                 <Route index element={<DashboardPage />} />
                 <Route path="approval" element={<InboxPage />} />
+                <Route path="history" element={<HistoryPage />} />
                 <Route path="workflow/:id" element={<ApprovalDetailPage />} />
                 <Route path="admin/users" element={<AdminUserPage />} />
                 <Route path="admin/workflows" element={<AdminWorkflowPage />} />

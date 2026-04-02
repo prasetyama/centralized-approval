@@ -6,13 +6,15 @@ import {
     Users,
     GitBranch,
     LogOut,
+    History,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
 
 const navItems = [
     { name: 'Dashboard', href: '/', icon: LayoutDashboard },
-    { name: 'Approval', href: '/approval', icon: Inbox },
+    { name: 'Approval Inbox', href: '/approval', icon: Inbox },
+    { name: 'History', href: '/history', icon: History, userOnly: true },
     { name: 'Workflows', href: '/admin/workflows', icon: GitBranch, adminOnly: true },
     { name: 'User Management', href: '/admin/users', icon: Users, adminOnly: true },
     { name: 'Settings', href: '/settings', icon: Settings },
@@ -42,6 +44,7 @@ export const Sidebar = () => {
                 <nav className="flex-1 space-y-1">
                     {navItems.map((item) => {
                         if (item.adminOnly && user?.role_code !== 'ADMIN') return null;
+                        if (item.userOnly && user?.role_code === 'ADMIN') return null;
 
                         return (
                             <NavLink

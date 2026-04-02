@@ -248,6 +248,56 @@ class InboxView(generics.ListAPIView):
 
 
 # ─────────────────────────────────────────────
+# History Endpoint
+# ─────────────────────────────────────────────
+
+class HistoryView(generics.ListAPIView):
+    """
+    GET /api/v1/history
+    Unified history: returns all approval tasks the user has approved or rejected.
+    Supports filtering by module, priority, and search.
+    """
+    serializer_class = ApprovalRequestListSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+
+        relevant_module_ids = WorkflowStepDefinition.objects.filter(
+            role_required=user.role
+        ).values_list('workflow__module_id', flat=True).distinct()
+
+        # Requests where user is the actor for APPROVED or REJECTED actions
+        request_ids = AuditLog.objects.filter(
+            Q(request__module_id__in=relevant_module_ids) | Q(request__requester=user),
+            step__role_required=user.role,
+            action__in=[AuditLog.Action.APPROVED, AuditLog.Action.REJECTED]
+        ).values_list('request_id', flat=True).distinct()
+
+        queryset = ApprovalRequest.objects.filter(
+            id__in=request_ids
+        ).select_related('module', 'requester')
+
+        # Filtering
+        module_code = self.request.query_params.get('module')
+        if module_code:
+            queryset = queryset.filter(module__code=module_code)
+
+        status_param = self.request.query_params.get('status')
+        if status_param:
+            queryset = queryset.filter(status=status_param)
+
+        search = self.request.query_params.get('search')
+        if search:
+            queryset = queryset.filter(
+                Q(title__icontains=search) |
+                Q(reference_id__icontains=search)
+            )
+
+        return queryset
+
+
+# ─────────────────────────────────────────────
 # Dashboard Summary
 # ─────────────────────────────────────────────
 
