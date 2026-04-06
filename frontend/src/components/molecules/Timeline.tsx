@@ -70,11 +70,11 @@ export const Timeline = ({ steps, currentStep }: TimelineProps) => {
                             <p className="text-xs text-slate-500 font-medium">
                                 {step.assigned_to_name ? (
                                     <>
-                                        {step.status === 'APPROVED' ? 'Approved by' : 'Rejected by'}: <span className="text-slate-700">{step.assigned_to_name}</span>
+                                        {step.status === 'APPROVED' ? 'Approved by' : step.status === 'REJECTED' ? 'Rejected by' : 'Waiting for'}: <span className="text-slate-700">{step.assigned_to_name}</span>
                                     </>
                                 ) : (
                                     <>
-                                        Assigned to: <span className="text-slate-700">{step.role_name}</span>
+                                        Assigned to <span className="text-slate-700">{step.role_name}</span>
                                     </>
                                 )}
                             </p>
