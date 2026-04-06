@@ -171,6 +171,9 @@ class WorkflowDelegateView(generics.GenericAPIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, pk):
+        if not request.user.is_superuser:
+            return Response({'error': 'Only superusers can delegate steps.'}, status=status.HTTP_403_FORBIDDEN)
+
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -215,10 +218,14 @@ class InboxView(generics.ListAPIView):
         """
         user = self.request.user
 
-        # Requests where user is assigned or has the required role
-        request_ids = ApprovalStep.objects.filter(
-            status=ApprovalStep.StepStatus.WAITING
-        ).filter(
+        if (user.is_superuser):
+            request_ids = ApprovalStep.objects.filter(
+            ).values_list('request_id', flat=True).distinct()
+        else:
+            # Requests where user is assigned or has the required role
+            request_ids = ApprovalStep.objects.filter(
+                status=ApprovalStep.StepStatus.WAITING
+            ).filter(
             Q(assigned_to=user) |
             Q(assigned_to__isnull=True, role_required=user.role)
         ).values_list('request_id', flat=True).distinct()

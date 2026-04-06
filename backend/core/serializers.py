@@ -29,6 +29,7 @@ class UserListSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'username', 'email', 'first_name', 'last_name',
             'role', 'role_name', 'role_code', 'department', 'is_approver', 'is_active',
+            'is_superuser', 'is_staff',
         ]
 
     def get_role_name(self, obj):
@@ -50,7 +51,7 @@ class UserDetailSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'username', 'email', 'first_name', 'last_name',
             'role', 'role_name', 'role_code', 'role_details', 'department', 'phone',
-            'is_approver', 'is_active', 'password', 'date_joined',
+            'is_approver', 'is_active', 'is_superuser', 'is_staff', 'password', 'date_joined',
         ]
         read_only_fields = ['date_joined']
 
