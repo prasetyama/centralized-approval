@@ -22,10 +22,10 @@ import {
 import { formatDate } from '@/lib/utils';
 import { Link } from 'react-router-dom';
 
-export const InboxPage = () => {
-    const { data: inbox, isLoading } = useQuery({
-        queryKey: ['inbox'],
-        queryFn: () => api.get('/inbox') as Promise<any>,
+export const HistoryPage = () => {
+    const { data: history, isLoading } = useQuery<any>({
+        queryKey: ['history'],
+        queryFn: () => api.get('/history'),
     });
 
     const getModuleIcon = (code: string) => {
@@ -46,16 +46,26 @@ export const InboxPage = () => {
         }
     };
 
+    const getStatusBadge = (status: string) => {
+        switch (status) {
+            case 'APPROVED': return <Badge variant="success">Approved</Badge>;
+            case 'REJECTED': return <Badge variant="error">Rejected</Badge>;
+            case 'IN_PROGRESS': return <Badge variant="info">In Progress</Badge>;
+            case 'REVISED': return <Badge variant="warning">Revised</Badge>;
+            default: return <Badge variant="secondary">{status}</Badge>;
+        }
+    };
+
     if (isLoading) {
-        return <div className="p-8 text-center text-slate-500 animate-pulse">Loading inbox...</div>;
+        return <div className="p-8 text-center text-slate-500 animate-pulse">Loading history...</div>;
     }
 
     return (
         <div className="space-y-8">
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-3xl font-bold tracking-tight text-slate-900">Approval</h1>
-                    <p className="mt-1 text-slate-500">Review and approve tasks from all departments.</p>
+                    <h1 className="text-3xl font-bold tracking-tight text-slate-900">Approval History</h1>
+                    <p className="mt-1 text-slate-500">Review your past approval actions across all departments.</p>
                 </div>
                 <div className="flex gap-3">
                     <Button variant="outline" className="gap-2">
@@ -75,12 +85,13 @@ export const InboxPage = () => {
                             <TableHead>Request Title</TableHead>
                             <TableHead>Requester</TableHead>
                             <TableHead>Priority</TableHead>
+                            <TableHead>Status</TableHead>
                             <TableHead>Date Received</TableHead>
                             <TableHead className="text-right">Action</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {(inbox?.results || []).map((item: any) => (
+                        {(history?.results || []).map((item: any) => (
                             <TableRow key={item.id}>
                                 <TableCell>
                                     <div className="flex items-center gap-2">
@@ -107,25 +118,28 @@ export const InboxPage = () => {
                                 <TableCell>
                                     {getPriorityBadge(item.priority)}
                                 </TableCell>
+                                <TableCell>
+                                    {getStatusBadge(item.status)}
+                                </TableCell>
                                 <TableCell className="text-slate-500 text-xs">
                                     {formatDate(item.created_at)}
                                 </TableCell>
                                 <TableCell className="text-right">
                                     <Link to={`/workflow/${item.id}`}>
                                         <Button variant="outline" size="sm" className="gap-2">
-                                            Review <ArrowUpRight size={14} />
+                                            View Details <ArrowUpRight size={14} />
                                         </Button>
                                     </Link>
                                 </TableCell>
                             </TableRow>
                         ))}
-                        {(!inbox?.results || inbox.results.length === 0) && (
+                        {(!history?.results || history.results.length === 0) && (
                             <TableRow>
-                                <TableCell colSpan={6} className="h-64 text-center">
+                                <TableCell colSpan={7} className="h-64 text-center">
                                     <div className="flex flex-col items-center justify-center text-slate-400">
                                         <Inbox className="h-12 w-12 opacity-10 mb-4" />
-                                        <p className="text-lg font-medium">All caught up!</p>
-                                        <p className="text-sm">You have no pending approval tasks.</p>
+                                        <p className="text-lg font-medium">No history</p>
+                                        <p className="text-sm">You haven't processed any approval requests yet.</p>
                                     </div>
                                 </TableCell>
                             </TableRow>

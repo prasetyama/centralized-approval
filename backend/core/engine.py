@@ -200,9 +200,9 @@ class WorkflowEngine:
         for step_def in step_defs:
             # Auto-assign to first user with the required role
             # (Note: Role is already module-scoped)
-            assignee = User.objects.filter(
-                role=step_def.role_required, is_active=True, is_approver=True
-            ).first()
+            # assignee = User.objects.filter(
+            #     role=step_def.role_required, is_active=True, is_approver=True
+            # ).first()
 
             step_status = (
                 ApprovalStep.StepStatus.WAITING
@@ -214,7 +214,7 @@ class WorkflowEngine:
                 request=approval_request,
                 step_order=step_def.step_order,
                 name=step_def.name,
-                assigned_to=assignee,
+                # assigned_to=assignee,
                 role_required=step_def.role_required,
                 status=step_status,
             )

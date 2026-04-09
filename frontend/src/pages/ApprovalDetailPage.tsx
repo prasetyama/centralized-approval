@@ -1,6 +1,7 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Clock, History } from 'lucide-react';
+import { ArrowLeft, Clock, History, User } from 'lucide-react';
+import { useState } from 'react';
 import api from '@/services/api';
 import { Button } from '@/components/atoms/Button';
 import { Badge } from '@/components/atoms/Badge';
@@ -8,6 +9,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/atoms/Car
 import { PayloadRenderer } from '@/components/molecules/PayloadRenderer';
 import { Timeline } from '@/components/molecules/Timeline';
 import { ActionButtons } from '@/components/molecules/ActionButtons';
+import { DelegateModal } from '@/components/molecules/DelegateModal';
 import { useAuth } from '@/context/AuthContext';
 import { formatDate } from '@/lib/utils';
 
@@ -16,6 +18,7 @@ export const ApprovalDetailPage = () => {
     const navigate = useNavigate();
     const queryClient = useQueryClient();
     const { user } = useAuth();
+    const [isDelegateModalOpen, setIsDelegateModalOpen] = useState(false);
     const { data: request, isLoading } = useQuery({
         queryKey: ['workflow-detail', id],
         queryFn: () => api.get(`/workflow/${id}`),
@@ -28,6 +31,17 @@ export const ApprovalDetailPage = () => {
             queryClient.invalidateQueries({ queryKey: ['workflow-detail', id] });
             queryClient.invalidateQueries({ queryKey: ['inbox'] });
             queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
+        },
+    });
+
+    const delegateMutation = useMutation({
+        mutationFn: ({ new_assignee_id, comments }: { new_assignee_id: number, comments: string }) =>
+            api.post(`/workflow/${id}/delegate`, { new_assignee_id, comments }),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['workflow-detail', id] });
+            queryClient.invalidateQueries({ queryKey: ['inbox'] });
+            queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
+            setIsDelegateModalOpen(false);
         },
     });
 
@@ -57,9 +71,11 @@ export const ApprovalDetailPage = () => {
 
     const isApprover = detail?.steps?.some((s: any) =>
         s.step_order === detail.current_step &&
-        s.assigned_to === user?.id &&
+        s.role_required === user?.role &&
         detail.status === 'IN_PROGRESS'
     );
+
+    const activeStep = detail?.steps?.find((s: any) => s.step_order === detail.current_step);
 
     return (
         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -79,11 +95,18 @@ export const ApprovalDetailPage = () => {
                         </p>
                     </div>
                 </div>
-                {/* <div className="flex items-center gap-2">
-                    <Button variant="outline" size="icon"><Share2 size={18} /></Button>
-                    <Button variant="outline" size="icon"><Printer size={18} /></Button>
-                    <Button variant="outline" size="icon"><MoreVertical size={18} /></Button>
-                </div> */}
+                <div className="flex items-center gap-2">
+                    {user?.is_superuser && detail.status === 'IN_PROGRESS' && (
+                        <Button 
+                            variant="outline" 
+                            className="bg-purple-50 text-purple-600 border-purple-200 hover:bg-purple-100 hover:text-purple-700 font-bold"
+                            onClick={() => setIsDelegateModalOpen(true)}
+                        >
+                            <User size={18} className="mr-2" />
+                            Delegate Task
+                        </Button>
+                    )}
+                </div>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -163,6 +186,19 @@ export const ApprovalDetailPage = () => {
                     )}
                 </div>
             </div>
+
+            {activeStep && (
+                <DelegateModal
+                    isOpen={isDelegateModalOpen}
+                    onClose={() => setIsDelegateModalOpen(false)}
+                    onSubmit={async (new_assignee_id, comments) => {
+                        await delegateMutation.mutateAsync({ new_assignee_id, comments });
+                    }}
+                    roleRequiredId={activeStep.role_required}
+                    roleName={activeStep.role_name}
+                    isLoading={delegateMutation.isPending}
+                />
+            )}
         </div>
     );
 };

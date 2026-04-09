@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { Users, UserPlus, Shield, Mail, Building, MoreVertical, Edit2, Trash2, Search, Filter } from 'lucide-react';
+import { Users, UserPlus, Shield, Building, MoreVertical, Edit2, Trash2, Search, Filter } from 'lucide-react';
 import api from '@/services/api';
 import { Card } from '@/components/atoms/Card';
 import { Button } from '@/components/atoms/Button';
@@ -12,11 +12,23 @@ import {
     TableHeader,
     TableRow
 } from '@/components/atoms/Table';
+import { useState, useEffect } from 'react';
 
 export const AdminUserPage = () => {
+    const [search, setSearch] = useState('');
+    const [debouncedSearch, setDebouncedSearch] = useState('');
+
+    // Debounce search input
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setDebouncedSearch(search);
+        }, 500);
+        return () => clearTimeout(timer);
+    }, [search]);
+
     const { data: users, isLoading: usersLoading } = useQuery({
-        queryKey: ['admin-users'],
-        queryFn: () => api.get('/admin/users'),
+        queryKey: ['admin-users', debouncedSearch],
+        queryFn: () => api.get('/admin/users', { params: { search: debouncedSearch } }) as Promise<any>,
     });
 
     if (usersLoading) {
@@ -60,6 +72,8 @@ export const AdminUserPage = () => {
                         <input
                             type="text"
                             placeholder="Search users..."
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
                             className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all font-medium"
                         />
                     </div>
