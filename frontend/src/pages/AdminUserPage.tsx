@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { Users, UserPlus, Shield, Mail, Building, MoreVertical, Edit2, Trash2, Search, Filter } from 'lucide-react';
+import { Users, UserPlus, Shield, Building, MoreVertical, Edit2, Trash2, Search, Filter } from 'lucide-react';
 import api from '@/services/api';
 import { Card } from '@/components/atoms/Card';
 import { Button } from '@/components/atoms/Button';
@@ -28,7 +28,7 @@ export const AdminUserPage = () => {
 
     const { data: users, isLoading: usersLoading } = useQuery({
         queryKey: ['admin-users', debouncedSearch],
-        queryFn: () => api.get('/admin/users', { params: { search: debouncedSearch } }),
+        queryFn: () => api.get('/admin/users', { params: { search: debouncedSearch } }) as Promise<any>,
     });
 
     if (usersLoading) {

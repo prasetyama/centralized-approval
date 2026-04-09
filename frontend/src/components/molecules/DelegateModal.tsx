@@ -95,7 +95,7 @@ export const DelegateModal = ({
                                         { value: '', label: 'Select a new approver...' },
                                         ...users.results.map((u: any) => ({
                                             value: u.id.toString(),
-                                            label: `${u.first_name} ${u.last_name} (@${u.username})`
+                                            label: `${u.first_name} ${u.last_name}`
                                         }))
                                     ]}
                                 />

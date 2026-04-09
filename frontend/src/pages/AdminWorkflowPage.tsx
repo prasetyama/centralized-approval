@@ -13,7 +13,7 @@ export const AdminWorkflowPage = () => {
 
     const { data: workflows, isLoading } = useQuery({
         queryKey: ['admin-workflows'],
-        queryFn: () => api.get('/admin/workflows'),
+        queryFn: () => api.get('/admin/workflows') as Promise<any>,
     });
 
     if (isLoading) {
@@ -23,16 +23,16 @@ export const AdminWorkflowPage = () => {
     if (isAdding || editingWorkflow) {
         return (
             <div className="space-y-6">
-                <Button 
-                    variant="ghost" 
+                <Button
+                    variant="ghost"
                     onClick={() => { setIsAdding(false); setEditingWorkflow(null); }}
                     className="gap-2 text-slate-500 hover:text-slate-900"
                 >
                     <ArrowLeft size={16} /> Back to List
                 </Button>
-                <WorkflowForm 
-                    initialData={editingWorkflow} 
-                    onClose={() => { setIsAdding(false); setEditingWorkflow(null); }} 
+                <WorkflowForm
+                    initialData={editingWorkflow}
+                    onClose={() => { setIsAdding(false); setEditingWorkflow(null); }}
                 />
             </div>
         );
@@ -99,9 +99,9 @@ export const AdminWorkflowPage = () => {
                         </div>
 
                         <div className="bg-slate-50 p-4 border-t border-slate-100 flex gap-2">
-                            <Button 
-                                variant="outline" 
-                                size="sm" 
+                            <Button
+                                variant="outline"
+                                size="sm"
                                 className="flex-1 gap-2 bg-white"
                                 onClick={() => setEditingWorkflow(wf)}
                             >
@@ -114,7 +114,7 @@ export const AdminWorkflowPage = () => {
                     </Card>
                 ))}
 
-                <button 
+                <button
                     onClick={() => setIsAdding(true)}
                     className="border-2 border-dashed border-slate-200 rounded-2xl p-8 flex flex-col items-center justify-center gap-4 hover:border-blue-400 hover:bg-blue-50/50 transition-all group min-h-[300px]"
                 >

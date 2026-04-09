@@ -25,7 +25,7 @@ import { Link } from 'react-router-dom';
 export const InboxPage = () => {
     const { data: inbox, isLoading } = useQuery({
         queryKey: ['inbox'],
-        queryFn: () => api.get('/inbox'),
+        queryFn: () => api.get('/inbox') as Promise<any>,
     });
 
     const getModuleIcon = (code: string) => {
