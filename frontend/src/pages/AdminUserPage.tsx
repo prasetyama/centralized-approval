@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { Users, UserPlus, Shield, Building, MoreVertical, Edit2, Trash2, Search, Filter } from 'lucide-react';
+import { Users, UserPlus, Shield, Building, Edit2, Trash2, Search, Filter, ArrowLeft } from 'lucide-react';
 import api from '@/services/api';
 import { Card } from '@/components/atoms/Card';
 import { Button } from '@/components/atoms/Button';
@@ -13,10 +13,14 @@ import {
     TableRow
 } from '@/components/atoms/Table';
 import { useState, useEffect } from 'react';
+import { UserForm } from '@/components/organisms/UserForm';
 
 export const AdminUserPage = () => {
     const [search, setSearch] = useState('');
     const [debouncedSearch, setDebouncedSearch] = useState('');
+
+    const [isAdding, setIsAdding] = useState(false);
+    const [editingUser, setEditingUser] = useState<any>(null);
 
     // Debounce search input
     useEffect(() => {
@@ -35,6 +39,24 @@ export const AdminUserPage = () => {
         return <div className="p-8 text-center text-slate-500 animate-pulse">Loading user management...</div>;
     }
 
+    if (isAdding || editingUser) {
+        return (
+            <div className="space-y-6">
+                <Button
+                    variant="ghost"
+                    onClick={() => { setIsAdding(false); setEditingUser(null); }}
+                    className="gap-2 text-slate-500 hover:text-slate-900"
+                >
+                    <ArrowLeft size={16} /> Back to List
+                </Button>
+                <UserForm
+                    initialData={editingUser}
+                    onClose={() => { setIsAdding(false); setEditingUser(null); }}
+                />
+            </div>
+        );
+    }
+
     return (
         <div className="space-y-8 animate-in fade-in duration-500">
             <div className="flex items-center justify-between">
@@ -46,7 +68,7 @@ export const AdminUserPage = () => {
                     <Button variant="outline" className="gap-2">
                         <Shield size={16} /> Manage Roles
                     </Button>
-                    <Button className="gap-2">
+                    <Button className="gap-2" onClick={() => setIsAdding(true)}>
                         <UserPlus size={16} /> Add User
                     </Button>
                 </div>
@@ -128,14 +150,11 @@ export const AdminUserPage = () => {
                                 </TableCell>
                                 <TableCell className="text-right">
                                     <div className="flex justify-end gap-1">
-                                        <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-blue-600">
+                                        <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-blue-600" onClick={() => { setEditingUser(user); setIsAdding(true); }}>
                                             <Edit2 size={16} />
                                         </Button>
                                         <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-red-600">
                                             <Trash2 size={16} />
-                                        </Button>
-                                        <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400">
-                                            <MoreVertical size={16} />
                                         </Button>
                                     </div>
                                 </TableCell>
