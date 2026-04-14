@@ -14,7 +14,7 @@ from rest_framework.exceptions import ValidationError
 
 from core.models import (
     Module, WorkflowDefinition, WorkflowStepDefinition,
-    ApprovalRequest, ApprovalStep, AuditLog, User
+    ApprovalRequest, ApprovalStep, AuditLog, User, Division
 )
 from core.state_machine import can_transition
 
@@ -137,21 +137,23 @@ class WorkflowEngine:
     @staticmethod
     @transaction.atomic
     def submit_request(module_code, workflow_id, requester, title, payload,
-                       description='', priority='MEDIUM', reference_id='', ip_address=None):
+                       description='', priority='MEDIUM', reference_id='', 
+                       division_id=None, ip_address=None):
         """
         Submit a new approval request from any module.
         Creates the ApprovalRequest and generates all ApprovalStep instances
         based on the WorkflowDefinition.
 
         Args:
-            module_code (str): Code of the source module (e.g., 'EORDER').
+            module_code (str): Code identifying the source module.
             workflow_id (int): ID of the WorkflowDefinition to use.
-            requester (User): User submitting the request.
+            requester (User): The user submitting the request.
             title (str): Brief title for the request.
-            payload (dict): JSON payload from the source module.
-            description (str): Optional description.
-            priority (str): Priority level (LOW/MEDIUM/HIGH/URGENT).
+            payload (dict): JSON data from the source module.
+            description (str): Optional longer description.
+            priority (str): Priority level (LOW, MEDIUM, HIGH, URGENT).
             reference_id (str): External reference ID.
+            division (str): Optional division/brand CODE (e.g., 'BRAND_A').
             ip_address (str): IP address of the requester.
 
         Returns:
@@ -194,15 +196,21 @@ class WorkflowEngine:
             status=ApprovalRequest.Status.PENDING,
             current_step=1,
             priority=priority,
+            division=division_id, # Store the code string
         )
 
         # Create approval steps from definitions
         for step_def in step_defs:
-            # Auto-assign to first user with the required role
-            # (Note: Role is already module-scoped)
-            assignee = User.objects.filter(
+            # Auto-assign to first user with the required role and matching division
+            assignee_qs = User.objects.filter(
                 role=step_def.role_required, is_active=True, is_approver=True
-            ).first()
+            )
+            
+            if division_id:
+                # User.division is now a CharField, so we filter by the code string directly
+                assignee_qs = assignee_qs.filter(division=division_id)
+                
+            assignee = assignee_qs.first()
 
             step_status = (
                 ApprovalStep.StepStatus.WAITING
@@ -279,6 +287,11 @@ class WorkflowEngine:
         if current_step.assigned_to and current_step.assigned_to != approver:
             if approver.role != current_step.role_required:
                 raise ValidationError("You are not authorized to approve this step.")
+            
+            # Contextual check: if the request has a division, approver must belong to that division
+            if approval_request.division and (not approver.division or approver.division.code != approval_request.division):
+                div_name = approval_request.division
+                raise ValidationError(f"You are not authorized to approve requests for division '{div_name}'.")
 
         # Approve the current step
         current_step.status = ApprovalStep.StepStatus.APPROVED
@@ -365,6 +378,11 @@ class WorkflowEngine:
         if current_step.assigned_to and current_step.assigned_to != approver:
             if approver.role != current_step.role_required:
                 raise ValidationError("You are not authorized to reject this step.")
+
+            # Contextual check: if the request has a division, approver must belong to that division
+            if approval_request.division and (not approver.division or approver.division.code != approval_request.division):
+                div_name = approval_request.division
+                raise ValidationError(f"You are not authorized to reject requests for division '{div_name}'.")
 
         # Reject the step
         current_step.status = ApprovalStep.StepStatus.REJECTED

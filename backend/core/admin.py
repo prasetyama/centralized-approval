@@ -6,8 +6,14 @@ Registers all models with the Django admin for easy data management.
 from django.contrib import admin
 from core.models import (
     Module, Role, User, WorkflowDefinition, WorkflowStepDefinition,
-    ApprovalRequest, ApprovalStep, AuditLog
+    ApprovalRequest, ApprovalStep, AuditLog, Division
 )
+
+
+@admin.register(Division)
+class DivisionAdmin(admin.ModelAdmin):
+    list_display = ['name', 'code', 'created_at']
+    search_fields = ['name', 'code']
 
 
 @admin.register(Module)
@@ -26,8 +32,8 @@ class RoleAdmin(admin.ModelAdmin):
 
 @admin.register(User)
 class UserAdmin(admin.ModelAdmin):
-    list_display = ['username', 'email', 'role', 'department', 'is_approver', 'is_active']
-    list_filter = ['role', 'is_approver', 'is_active']
+    list_display = ['username', 'email', 'role', 'division', 'department', 'is_approver', 'is_active']
+    list_filter = ['role', 'division', 'is_approver', 'is_active']
     search_fields = ['username', 'email', 'first_name', 'last_name']
 
 
@@ -54,8 +60,8 @@ class ApprovalStepInline(admin.TabularInline):
 
 @admin.register(ApprovalRequest)
 class ApprovalRequestAdmin(admin.ModelAdmin):
-    list_display = ['title', 'module', 'status', 'priority', 'requester', 'current_step', 'created_at']
-    list_filter = ['module', 'status', 'priority']
+    list_display = ['title', 'module', 'division', 'status', 'priority', 'requester', 'current_step', 'created_at']
+    list_filter = ['module', 'division', 'status', 'priority']
     search_fields = ['title', 'reference_id']
     readonly_fields = ['created_at', 'updated_at']
     inlines = [ApprovalStepInline]

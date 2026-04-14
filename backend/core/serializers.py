@@ -6,8 +6,16 @@ DRF serializers for all core models.
 from rest_framework import serializers
 from core.models import (
     Module, Role, User, WorkflowDefinition, WorkflowStepDefinition,
-    ApprovalRequest, ApprovalStep, AuditLog
+    ApprovalRequest, ApprovalStep, AuditLog, Division
 )
+
+
+class DivisionSerializer(serializers.ModelSerializer):
+    """Serializer for Division model."""
+    class Meta:
+        model = Division
+        fields = ['id', 'name', 'code', 'description', 'created_at', 'updated_at']
+        read_only_fields = ['created_at', 'updated_at']
 
 
 class RoleSerializer(serializers.ModelSerializer):
@@ -23,12 +31,13 @@ class UserListSerializer(serializers.ModelSerializer):
     """Lightweight user serializer for list views."""
     role_name = serializers.SerializerMethodField()
     role_code = serializers.SerializerMethodField()
+    division_name = serializers.SerializerMethodField()
 
     class Meta:
         model = User
         fields = [
             'id', 'username', 'email', 'first_name', 'last_name',
-            'role', 'role_name', 'role_code', 'department', 'is_approver', 'is_active',
+            'role', 'role_name', 'role_code', 'division', 'division_name', 'department', 'is_approver', 'is_active',
             'is_superuser', 'is_staff',
         ]
 
@@ -38,10 +47,20 @@ class UserListSerializer(serializers.ModelSerializer):
     def get_role_code(self, obj):
         return obj.role.code if obj.role else None
 
+    def get_division_name(self, obj):
+        """Look up division name by its code string."""
+        if obj.division:
+            try:
+                return Division.objects.get(code=obj.division).name
+            except Division.DoesNotExist:
+                return obj.division
+        return None
+
 
 class UserDetailSerializer(serializers.ModelSerializer):
     """Full user serializer for detail/create/update views."""
     role_details = RoleSerializer(source='role', read_only=True)
+    division_details = serializers.SerializerMethodField()
     role_name = serializers.SerializerMethodField()
     role_code = serializers.SerializerMethodField()
     password = serializers.CharField(write_only=True, required=False, min_length=6)
@@ -50,7 +69,7 @@ class UserDetailSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             'id', 'username', 'email', 'first_name', 'last_name',
-            'role', 'role_name', 'role_code', 'role_details', 'department', 'phone',
+            'role', 'role_name', 'role_code', 'role_details', 'division', 'division_details', 'department', 'phone',
             'is_approver', 'is_active', 'is_superuser', 'is_staff', 'password', 'date_joined',
         ]
         read_only_fields = ['date_joined']
@@ -60,6 +79,16 @@ class UserDetailSerializer(serializers.ModelSerializer):
 
     def get_role_code(self, obj):
         return obj.role.code if obj.role else None
+
+    def get_division_details(self, obj):
+        """Look up full division details by its code string."""
+        if obj.division:
+            try:
+                div = Division.objects.get(code=obj.division)
+                return DivisionSerializer(div).data
+            except Division.DoesNotExist:
+                return {"code": obj.division, "name": obj.division}
+        return None
 
     def create(self, validated_data):
         password = validated_data.pop('password', None)
@@ -185,6 +214,7 @@ class ApprovalRequestListSerializer(serializers.ModelSerializer):
     module_color = serializers.CharField(source='module.color', read_only=True)
     module_icon = serializers.CharField(source='module.icon', read_only=True)
     requester_name = serializers.SerializerMethodField()
+    division_name = serializers.CharField(source='division.name', read_only=True)
     current_step_name = serializers.SerializerMethodField()
 
     class Meta:
@@ -193,7 +223,7 @@ class ApprovalRequestListSerializer(serializers.ModelSerializer):
             'id', 'reference_id', 'module', 'module_name', 'module_code',
             'module_color', 'module_icon', 'title', 'status', 'priority',
             'current_step', 'current_step_name', 'requester', 'requester_name',
-            'created_at', 'updated_at',
+            'division', 'division_name', 'created_at', 'updated_at',
         ]
 
     def get_requester_name(self, obj):
@@ -202,6 +232,15 @@ class ApprovalRequestListSerializer(serializers.ModelSerializer):
     def get_current_step_name(self, obj):
         step = obj.steps.filter(step_order=obj.current_step).first()
         return step.name if step else None
+
+    def get_division_name(self, obj):
+        """Look up division name by its code."""
+        if obj.division:
+            try:
+                return Division.objects.get(code=obj.division).name
+            except Division.DoesNotExist:
+                return obj.division # Fallback to code if name not found
+        return None
 
 
 class ApprovalRequestDetailSerializer(serializers.ModelSerializer):
@@ -213,6 +252,7 @@ class ApprovalRequestDetailSerializer(serializers.ModelSerializer):
     workflow_name = serializers.CharField(source='workflow.name', read_only=True)
     requester_name = serializers.SerializerMethodField()
     steps = ApprovalStepSerializer(many=True, read_only=True)
+    division_details = serializers.SerializerMethodField()
     audit_logs = AuditLogSerializer(many=True, read_only=True)
 
     class Meta:
@@ -221,12 +261,22 @@ class ApprovalRequestDetailSerializer(serializers.ModelSerializer):
             'id', 'reference_id', 'module', 'module_name', 'module_code',
             'module_color', 'module_icon', 'workflow', 'workflow_name',
             'requester', 'requester_name', 'title', 'description',
-            'payload', 'status', 'current_step', 'priority',
+            'payload', 'status', 'current_step', 'priority', 'division', 'division_details',
             'steps', 'audit_logs', 'created_at', 'updated_at',
         ]
 
     def get_requester_name(self, obj):
         return obj.requester.get_full_name() or obj.requester.username
+
+    def get_division_details(self, obj):
+        """Look up full division details by its code."""
+        if obj.division:
+            try:
+                div = Division.objects.get(code=obj.division)
+                return DivisionSerializer(div).data
+            except Division.DoesNotExist:
+                return {"code": obj.division, "name": obj.division}
+        return None
 
 
 class SubmitRequestSerializer(serializers.Serializer):
@@ -240,6 +290,7 @@ class SubmitRequestSerializer(serializers.Serializer):
         choices=['LOW', 'MEDIUM', 'HIGH', 'URGENT'],
         default='MEDIUM'
     )
+    division_id = serializers.CharField(max_length=50, required=False, allow_null=True)
     reference_id = serializers.CharField(max_length=100, required=False, default='')
 
 

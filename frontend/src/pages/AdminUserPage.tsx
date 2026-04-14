@@ -120,7 +120,7 @@ export const AdminUserPage = () => {
                                 <TableCell>
                                     <div className="flex items-center gap-3">
                                         <div className="h-10 w-10 rounded-full bg-slate-100 flex items-center justify-center font-bold text-slate-600 border border-slate-200">
-                                            {user.first_name[0].toUpperCase()}
+                                            {user.first_name[0]?.toUpperCase()}
                                         </div>
                                         <div>
                                             <p className="font-bold text-slate-900">{user.first_name} {user.last_name}</p>

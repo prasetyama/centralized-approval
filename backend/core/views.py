@@ -13,14 +13,14 @@ from django_filters.rest_framework import DjangoFilterBackend
 
 from core.models import (
     Module, Role, User, WorkflowDefinition,
-    ApprovalRequest, ApprovalStep, AuditLog, WorkflowStepDefinition
+    ApprovalRequest, ApprovalStep, AuditLog, WorkflowStepDefinition, Division
 )
 from core.serializers import (
     ModuleSerializer, RoleSerializer, UserListSerializer, UserDetailSerializer,
     WorkflowDefinitionSerializer, WorkflowDefinitionWriteSerializer,
     ApprovalRequestListSerializer, ApprovalRequestDetailSerializer,
     SubmitRequestSerializer, ActionSerializer, AuditLogSerializer,
-    DelegateRequestSerializer,
+    DelegateRequestSerializer, DivisionSerializer,
 )
 from core.engine import WorkflowEngine
 
@@ -61,6 +61,7 @@ class WorkflowSubmitView(generics.CreateAPIView):
             description=serializer.validated_data.get('description', ''),
             priority=serializer.validated_data.get('priority', 'MEDIUM'),
             reference_id=serializer.validated_data.get('reference_id', ''),
+            division_id=serializer.validated_data.get('division_id'),
             ip_address=_get_client_ip(request),
         )
 
@@ -379,6 +380,14 @@ def dashboard_summary(request):
 # Admin CRUD ViewSets
 # ─────────────────────────────────────────────
 
+class DivisionViewSet(viewsets.ModelViewSet):
+    """CRUD for Divisions."""
+    queryset = Division.objects.all()
+    serializer_class = DivisionSerializer
+    permission_classes = [IsAuthenticated]
+    search_fields = ['name', 'code']
+
+
 class ModuleViewSet(viewsets.ModelViewSet):
     """CRUD for Modules."""
     queryset = Module.objects.all()
@@ -401,7 +410,7 @@ class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.select_related('role').all()
     permission_classes = [IsAuthenticated]
     search_fields = ['username', 'first_name', 'last_name', 'email']
-    filterset_fields = ['role', 'is_active', 'is_approver']
+    filterset_fields = ['role', 'division', 'is_active', 'is_approver']
 
     def get_serializer_class(self):
         if self.action == 'list':

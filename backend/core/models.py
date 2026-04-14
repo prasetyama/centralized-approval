@@ -9,6 +9,26 @@ from django.db import models
 from django.contrib.auth.models import AbstractUser
 
 
+class Division(models.Model):
+    """
+    Subdivisions or Brands.
+    Used for contextual approval routing.
+    """
+    name = models.CharField(max_length=100, unique=True, help_text="Division or Brand name")
+    code = models.CharField(max_length=50, unique=True, help_text="Unique code (e.g., 'BRAND_A', 'DIV_IT')")
+    description = models.TextField(blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'aw_division'
+        verbose_name_plural = 'Divisions'
+        ordering = ['name']
+
+    def __str__(self):
+        return f"{self.name} ({self.code})"
+
+
 class Role(models.Model):
     """
     User roles for approval routing.
@@ -41,6 +61,7 @@ class User(AbstractUser):
         blank=True,
         help_text="Assigned role for approval routing"
     )
+    division = models.CharField(max_length=50, blank=True, default='')
     department = models.CharField(max_length=100, blank=True, default='')
     phone = models.CharField(max_length=20, blank=True, default='')
     is_approver = models.BooleanField(default=False, help_text="Whether this user can approve requests")
@@ -225,6 +246,12 @@ class ApprovalRequest(models.Model):
     current_step = models.PositiveIntegerField(
         default=1,
         help_text="Current step number in the approval workflow"
+    )
+    division = models.CharField(
+        max_length=50,
+        null=True,
+        blank=True,
+        help_text="Target division/brand code for this request"
     )
     priority = models.CharField(
         max_length=10,
