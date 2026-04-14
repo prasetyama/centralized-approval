@@ -15,11 +15,18 @@ interface ActionButtonsProps {
 export const ActionButtons = ({ onApprove, onReject, isLoading, canAction }: Omit<ActionButtonsProps, 'requestId'>) => {
     const [showModal, setShowModal] = useState<'APPROVE' | 'REJECT' | null>(null);
     const [comments, setComments] = useState('');
+    const [error, setError] = useState<string | null>(null);
 
     const handleAction = async () => {
         if (!showModal) return;
 
+        if (!comments.trim()) {
+            setError('Comments are required');
+            return;
+        }
+
         try {
+            setError(null);
             if (showModal === 'APPROVE') await onApprove(comments);
             if (showModal === 'REJECT') await onReject(comments);
             setShowModal(null);
@@ -74,12 +81,23 @@ export const ActionButtons = ({ onApprove, onReject, isLoading, canAction }: Omi
                             </p>
 
                             <div className="space-y-2">
-                                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Comments</label>
+                                <div className="flex justify-between items-center">
+                                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Comments</label>
+                                    {error && <span className="text-[10px] font-bold text-red-500 uppercase animate-pulse">{error}</span>}
+                                </div>
                                 <textarea
-                                    className="w-full min-h-[120px] rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm focus:bg-white focus:outline-none focus:ring-4 focus:ring-blue-100 transition-all placeholder:text-slate-400"
+                                    className={cn(
+                                        "w-full min-h-[120px] rounded-xl border p-4 text-sm transition-all placeholder:text-slate-400 focus:outline-none focus:ring-4",
+                                        error
+                                            ? "border-red-200 bg-red-50/30 focus:bg-white focus:ring-red-100 placeholder:text-red-300"
+                                            : "border-slate-200 bg-slate-50 focus:bg-white focus:ring-blue-100"
+                                    )}
                                     placeholder="Type your feedback here..."
                                     value={comments}
-                                    onChange={(e) => setComments(e.target.value)}
+                                    onChange={(e) => {
+                                        setComments(e.target.value);
+                                        if (e.target.value.trim()) setError(null);
+                                    }}
                                     autoFocus
                                 />
                             </div>

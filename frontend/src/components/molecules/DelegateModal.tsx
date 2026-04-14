@@ -6,6 +6,7 @@ import { Button } from '@/components/atoms/Button';
 import { Card } from '@/components/atoms/Card';
 import { Select } from '@/components/atoms/Select';
 import { Textarea } from '@/components/atoms/Textarea';
+import { cn } from '@/lib/utils';
 
 interface DelegateModalProps {
     isOpen: boolean;
@@ -26,6 +27,7 @@ export const DelegateModal = ({
 }: DelegateModalProps) => {
     const [selectedUserId, setSelectedUserId] = useState<string>('');
     const [comments, setComments] = useState('');
+    const [error, setError] = useState<string | null>(null);
 
     const { data: usersData, isLoading: isLoadingUsers } = useQuery({
         queryKey: ['users-by-role', roleRequiredId],
@@ -40,6 +42,13 @@ export const DelegateModal = ({
 
     const handleConfirm = async () => {
         if (!selectedUserId) return;
+
+        if (!comments.trim()) {
+            setError('Delegation notes are required.');
+            return;
+        }
+
+        setError(null);
         await onSubmit(Number(selectedUserId), comments);
         onClose();
         setSelectedUserId('');
@@ -103,14 +112,23 @@ export const DelegateModal = ({
                         </div>
 
                         <div className="space-y-2">
-                            <label className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                                <MessageSquare size={14} /> Delegation Notes
-                            </label>
+                            <div className="flex justify-between items-center">
+                                <label className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                                    <MessageSquare size={14} /> Delegation Notes
+                                </label>
+                                {error && <span className="text-[10px] font-bold text-red-500 uppercase animate-pulse">{error}</span>}
+                            </div>
                             <Textarea
                                 value={comments}
-                                onChange={(e) => setComments(e.target.value)}
+                                onChange={(e) => {
+                                    setComments(e.target.value);
+                                    if (e.target.value.trim()) setError(null);
+                                }}
                                 placeholder="E.g., Reassigning due to leave of absence..."
-                                className="min-h-[100px] resize-none"
+                                className={cn(
+                                    "min-h-[100px] resize-none transition-all",
+                                    error && "border-red-200 bg-red-50/30 focus:ring-red-100 placeholder:text-red-300"
+                                )}
                             />
                         </div>
                     </div>
