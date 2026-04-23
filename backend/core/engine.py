@@ -201,16 +201,21 @@ class WorkflowEngine:
 
         # Create approval steps from definitions
         for step_def in step_defs:
-            # Auto-assign to first user with the required role and matching division
-            assignee_qs = User.objects.filter(
-                role=step_def.role_required, is_active=True, is_approver=True
-            )
-            
-            if division_id:
-                # User.division is now a CharField, so we filter by the code string directly
-                assignee_qs = assignee_qs.filter(division=division_id)
+            assignee = None
+            if step_def.approver_type == WorkflowStepDefinition.ApproverType.USER:
+                # Direct user assignment
+                assignee = step_def.user_required
+            else:
+                # Role-based assignment: Auto-assign to first user with the required role and matching division
+                assignee_qs = User.objects.filter(
+                    role=step_def.role_required, is_active=True, is_approver=True
+                )
                 
-            assignee = assignee_qs.first()
+                if division_id:
+                    # User.division is a CharField, filter by the code string directly
+                    assignee_qs = assignee_qs.filter(division=division_id)
+                    
+                assignee = assignee_qs.first()
 
             step_status = (
                 ApprovalStep.StepStatus.WAITING
@@ -222,8 +227,10 @@ class WorkflowEngine:
                 request=approval_request,
                 step_order=step_def.step_order,
                 name=step_def.name,
+                approver_type=step_def.approver_type,
                 assigned_to=assignee,
                 role_required=step_def.role_required,
+                user_required=step_def.user_required,
                 status=step_status,
             )
 
@@ -283,15 +290,28 @@ class WorkflowEngine:
         except ApprovalStep.DoesNotExist:
             raise ValidationError("No active step found for this request.")
 
-        # Verify the approver has the right role or is directly assigned
-        if current_step.assigned_to and current_step.assigned_to != approver:
-            if approver.role != current_step.role_required:
-                raise ValidationError("You are not authorized to approve this step.")
-            
-            # Contextual check: if the request has a division, approver must belong to that division
-            if approval_request.division and (not approver.division or approver.division.code != approval_request.division):
-                div_name = approval_request.division
-                raise ValidationError(f"You are not authorized to approve requests for division '{div_name}'.")
+        # Verify the approver is authorized
+        is_authorized = False
+        
+        # 1. Check if user is specifically required/assigned
+        if current_step.user_required:
+            if current_step.user_required == approver:
+                is_authorized = True
+        elif current_step.assigned_to:
+            if current_step.assigned_to == approver:
+                is_authorized = True
+        
+        # 2. Check if user has the required role (unless specifically assigned to someone else)
+        if not is_authorized and current_step.role_required:
+            if approver.role == current_step.role_required:
+                # Role matches, now check division if necessary
+                if not approval_request.division or approver.division == approval_request.division:
+                    is_authorized = True
+                else:
+                    raise ValidationError(f"You are not authorized to approve requests for division '{approval_request.division}'.")
+
+        if not is_authorized:
+            raise ValidationError("You are not authorized to approve this step.")
 
         # Approve the current step
         current_step.status = ApprovalStep.StepStatus.APPROVED
@@ -374,15 +394,25 @@ class WorkflowEngine:
         except ApprovalStep.DoesNotExist:
             raise ValidationError("No active step found for this request.")
 
-        # Verify authorization
-        if current_step.assigned_to and current_step.assigned_to != approver:
-            if approver.role != current_step.role_required:
-                raise ValidationError("You are not authorized to reject this step.")
+        # Verify the approver is authorized
+        is_authorized = False
+        
+        if current_step.user_required:
+            if current_step.user_required == approver:
+                is_authorized = True
+        elif current_step.assigned_to:
+            if current_step.assigned_to == approver:
+                is_authorized = True
+        
+        if not is_authorized and current_step.role_required:
+            if approver.role == current_step.role_required:
+                if not approval_request.division or approver.division == approval_request.division:
+                    is_authorized = True
+                else:
+                    raise ValidationError(f"You are not authorized to reject requests for division '{approval_request.division}'.")
 
-            # Contextual check: if the request has a division, approver must belong to that division
-            if approval_request.division and (not approver.division or approver.division.code != approval_request.division):
-                div_name = approval_request.division
-                raise ValidationError(f"You are not authorized to reject requests for division '{div_name}'.")
+        if not is_authorized:
+            raise ValidationError("You are not authorized to reject this step.")
 
         # Reject the step
         current_step.status = ApprovalStep.StepStatus.REJECTED
@@ -442,14 +472,25 @@ class WorkflowEngine:
         except ApprovalStep.DoesNotExist:
             raise ValidationError("No active step found for this request.")
 
-        # Authorization: Only current assignee or someone with the right role can delegate
-        if current_step.assigned_to and current_step.assigned_to != current_user:
-             if not current_user.is_staff and current_user.role != current_step.role_required:
-                raise ValidationError("You are not authorized to delegate this step.")
+        # Authorization: Only current assignee or someone with the right role/id can delegate
+        is_authorized = current_user.is_staff
+        
+        if not is_authorized:
+            if current_step.user_required:
+                is_authorized = (current_step.user_required == current_user)
+            elif current_step.assigned_to:
+                is_authorized = (current_step.assigned_to == current_user)
+            
+            if not is_authorized and current_step.role_required:
+                is_authorized = (current_user.role == current_step.role_required)
 
-        # Validate new assignee has the required role
-        if new_assignee.role != current_step.role_required:
-            raise ValidationError(f"User '{new_assignee.username}' does not have the required role.")
+        if not is_authorized:
+            raise ValidationError("You are not authorized to delegate this step.")
+
+        # Validate new assignee has the required role (if role-based)
+        if current_step.role_required and not current_step.user_required:
+            if new_assignee.role != current_step.role_required:
+                raise ValidationError(f"User '{new_assignee.username}' does not have the required role.")
 
         old_assignee = current_step.assigned_to
         current_step.assigned_to = new_assignee

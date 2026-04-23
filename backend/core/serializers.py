@@ -121,10 +121,20 @@ class ModuleSerializer(serializers.ModelSerializer):
 class WorkflowStepDefinitionSerializer(serializers.ModelSerializer):
     """Serializer for WorkflowStepDefinition."""
     role_name = serializers.CharField(source='role_required.name', read_only=True)
+    user_name = serializers.SerializerMethodField()
 
     class Meta:
         model = WorkflowStepDefinition
-        fields = ['id', 'step_order', 'name', 'role_required', 'role_name', 'is_optional']
+        fields = [
+            'id', 'step_order', 'name', 'approver_type', 
+            'role_required', 'role_name', 'user_required', 'user_name', 
+            'is_optional'
+        ]
+
+    def get_user_name(self, obj):
+        if obj.user_required:
+            return obj.user_required.get_full_name() or obj.user_required.username
+        return None
 
 
 class WorkflowDefinitionSerializer(serializers.ModelSerializer):
@@ -176,18 +186,25 @@ class ApprovalStepSerializer(serializers.ModelSerializer):
     """Serializer for ApprovalStep instances."""
     assigned_to_name = serializers.SerializerMethodField()
     role_name = serializers.CharField(source='role_required.name', read_only=True)
-
+    user_required_name = serializers.SerializerMethodField()
+ 
     class Meta:
         model = ApprovalStep
         fields = [
-            'id', 'step_order', 'name', 'assigned_to', 'assigned_to_name',
-            'role_required', 'role_name', 'status', 'comments', 'acted_at',
+            'id', 'step_order', 'name', 'approver_type', 'assigned_to', 'assigned_to_name',
+            'role_required', 'role_name', 'user_required', 'user_required_name',
+            'status', 'comments', 'acted_at',
         ]
-
+ 
     def get_assigned_to_name(self, obj):
         """Get display name for the assigned approver."""
         if obj.assigned_to:
             return obj.assigned_to.get_full_name() or obj.assigned_to.username
+        return None
+
+    def get_user_required_name(self, obj):
+        if obj.user_required:
+            return obj.user_required.get_full_name() or obj.user_required.username
         return None
 
 

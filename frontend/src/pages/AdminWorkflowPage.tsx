@@ -77,7 +77,9 @@ export const AdminWorkflowPage = () => {
                                         <div key={idx} className="flex items-center gap-2">
                                             <div className="bg-white border border-slate-200 rounded-lg px-3 py-2 flex flex-col items-center min-w-[100px] shadow-sm group-hover:border-blue-200 transition-all">
                                                 <span className="text-[10px] font-black text-slate-400 uppercase leading-none mb-1">Step {idx + 1}</span>
-                                                <span className="text-xs font-bold text-slate-700">{step.role_name}</span>
+                                                <span className="text-xs font-bold text-slate-700">
+                                                    {step.approver_type === 'USER' ? step.user_name : step.role_name}
+                                                </span>
                                             </div>
                                             {idx < wf.steps.length - 1 && <ChevronRight size={14} className="text-slate-300" />}
                                         </div>
