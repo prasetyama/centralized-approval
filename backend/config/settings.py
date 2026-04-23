@@ -134,3 +134,6 @@ JWT_EXPIRATION_HOURS = int(os.getenv('JWT_EXPIRATION_HOURS', '24'))
 
 # Frontend URL
 FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:5173')
+
+# SSO Settings
+SSO_URL = os.getenv('SSO_URL')

@@ -17,25 +17,13 @@ class MockAuthService(AuthInterface):
     """
     Mock OAuth/OpenID Connect provider.
     Uses JWT tokens for session management.
-    In production, this would be replaced with a real SSO provider
-    (e.g., Keycloak, Auth0, Azure AD).
     """
 
     # In-memory blacklist for invalidated tokens (in production, use Redis)
     _blacklisted_tokens = set()
 
     def authenticate(self, username: str, password: str) -> AuthResult:
-        """
-        Authenticate user with username/password.
-        Issues a JWT token on success.
-
-        Args:
-            username: User's username.
-            password: User's password.
-
-        Returns:
-            AuthResult with JWT token if credentials are valid.
-        """
+        """Authenticate user with username/password. Issues a JWT token on success."""
         try:
             user = User.objects.get(username=username, is_active=True)
         except User.DoesNotExist:
@@ -72,15 +60,7 @@ class MockAuthService(AuthInterface):
         )
 
     def validate_token(self, token: str) -> Optional[dict]:
-        """
-        Validate JWT token and return decoded payload.
-
-        Args:
-            token: JWT token string.
-
-        Returns:
-            Decoded token payload dict, or None if invalid.
-        """
+        """Validate JWT token and return decoded payload."""
         if token in self._blacklisted_tokens:
             return None
 
@@ -97,18 +77,60 @@ class MockAuthService(AuthInterface):
             return None
 
     def logout(self, token: str) -> bool:
-        """
-        Invalidate token by adding to blacklist.
-
-        Args:
-            token: Token to invalidate.
-
-        Returns:
-            Always True.
-        """
+        """Invalidate token by adding to blacklist."""
         self._blacklisted_tokens.add(token)
         return True
 
 
-# Singleton instance
-auth_service = MockAuthService()
+class ExternalSSOAuthService(MockAuthService):
+    """
+    Real SSO implementation that calls an external provider.
+    Inherits local authentication from MockAuthService.
+    """
+
+    def validate_token(self, token: str) -> Optional[dict]:
+        """
+        Validate token: try local validation first, then external SSO.
+        """
+        # Try local validation first (for tokens issued via /login)
+        payload = super().validate_token(token)
+        if payload:
+            return payload
+
+        # If not a local token, try external SSO
+        import json
+        import urllib.request
+        import urllib.error
+
+        sso_url = getattr(settings, 'SSO_URL', None)
+        if not sso_url:
+            return None
+
+        try:
+            url = f"{sso_url}/api/validate-token"
+            data = json.dumps({'token': token}).encode('utf-8')
+            req = urllib.request.Request(url, data=data, headers={'Content-Type': 'application/json'}, method='POST')
+            
+            with urllib.request.urlopen(req, timeout=10) as response:
+                if response.status == 200:
+                    res_data = json.loads(response.read().decode('utf-8'))
+                    # Ensure we return a payload that has at least 'username'
+                    return res_data.get('data') or res_data
+            return None
+        except urllib.error.HTTPError as e:
+            print(f"SSO HTTP Error: {e.code} {e.reason}")
+            return None
+        except Exception as e:
+            print(f"SSO Validation Error: {str(e)}")
+            return None
+
+    def logout(self, token: str) -> bool:
+        # Handle logout if supported by external SSO
+        return True
+
+
+# Singleton instance initialization based on configuration
+if getattr(settings, 'SSO_URL', None):
+    auth_service = ExternalSSOAuthService()
+else:
+    auth_service = MockAuthService()
