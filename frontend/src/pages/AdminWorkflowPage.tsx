@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { GitBranch, Plus, Trash2, Edit2, ChevronRight, ArrowLeft } from 'lucide-react';
 import api from '@/services/api';
@@ -8,13 +9,24 @@ import { Badge } from '@/components/atoms/Badge';
 import { WorkflowForm } from '@/components/organisms/WorkflowForm';
 
 export const AdminWorkflowPage = () => {
-    const [isAdding, setIsAdding] = useState(false);
+    const { id } = useParams();
+    const navigate = useNavigate();
     const [editingWorkflow, setEditingWorkflow] = useState<any>(null);
+    const isAdding = window.location.pathname.endsWith('/new');
 
     const { data: workflows, isLoading } = useQuery({
         queryKey: ['admin-workflows'],
         queryFn: () => api.get('/admin/workflows') as Promise<any>,
     });
+
+    useEffect(() => {
+        if (id && workflows?.results) {
+            const wf = workflows.results.find((w: any) => w.id === parseInt(id));
+            if (wf) setEditingWorkflow(wf);
+        } else {
+            setEditingWorkflow(null);
+        }
+    }, [id, workflows]);
 
     if (isLoading) {
         return <div className="p-8 text-center text-slate-500 animate-pulse">Loading workflow definitions...</div>;
@@ -25,14 +37,14 @@ export const AdminWorkflowPage = () => {
             <div className="space-y-6">
                 <Button
                     variant="ghost"
-                    onClick={() => { setIsAdding(false); setEditingWorkflow(null); }}
+                    onClick={() => navigate('/admin/workflows')}
                     className="gap-2 text-slate-500 hover:text-slate-900"
                 >
                     <ArrowLeft size={16} /> Back to List
                 </Button>
                 <WorkflowForm
                     initialData={editingWorkflow}
-                    onClose={() => { setIsAdding(false); setEditingWorkflow(null); }}
+                    onClose={() => navigate('/admin/workflows')}
                 />
             </div>
         );
@@ -45,7 +57,7 @@ export const AdminWorkflowPage = () => {
                     <h1 className="text-3xl font-bold tracking-tight text-slate-900">Workflow Definitions</h1>
                     <p className="mt-1 text-slate-500">Configure approval steps and rules for each registered module.</p>
                 </div>
-                <Button className="gap-2 bg-blue-600 hover:bg-blue-700" onClick={() => setIsAdding(true)}>
+                <Button className="gap-2 bg-blue-600 hover:bg-blue-700" onClick={() => navigate('/admin/workflows/new')}>
                     <Plus size={16} /> New Workflow
                 </Button>
             </div>
@@ -105,7 +117,7 @@ export const AdminWorkflowPage = () => {
                                 variant="outline"
                                 size="sm"
                                 className="flex-1 gap-2 bg-white"
-                                onClick={() => setEditingWorkflow(wf)}
+                                onClick={() => navigate(`/admin/workflows/${wf.id}/edit`)}
                             >
                                 <Edit2 size={14} /> Configure
                             </Button>
@@ -117,7 +129,7 @@ export const AdminWorkflowPage = () => {
                 ))}
 
                 <button
-                    onClick={() => setIsAdding(true)}
+                    onClick={() => navigate('/admin/workflows/new')}
                     className="border-2 border-dashed border-slate-200 rounded-2xl p-8 flex flex-col items-center justify-center gap-4 hover:border-blue-400 hover:bg-blue-50/50 transition-all group min-h-[300px]"
                 >
                     <div className="h-16 w-16 bg-slate-50 rounded-full flex items-center justify-center group-hover:bg-blue-100 transition-all">
