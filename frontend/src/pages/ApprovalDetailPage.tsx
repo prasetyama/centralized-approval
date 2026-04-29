@@ -10,8 +10,11 @@ import { PayloadRenderer } from '@/components/molecules/PayloadRenderer';
 import { Timeline } from '@/components/molecules/Timeline';
 import { ActionButtons } from '@/components/molecules/ActionButtons';
 import { DelegateModal } from '@/components/molecules/DelegateModal';
+import { FeedbackList } from '@/components/molecules/FeedbackList';
+import { FeedbackForm } from '@/components/molecules/FeedbackForm';
 import { useAuth } from '@/context/AuthContext';
 import { formatDate } from '@/lib/utils';
+import { MessageSquare, ListTodo } from 'lucide-react';
 
 export const ApprovalDetailPage = () => {
     const { id } = useParams();
@@ -19,6 +22,7 @@ export const ApprovalDetailPage = () => {
     const queryClient = useQueryClient();
     const { user } = useAuth();
     const [isDelegateModalOpen, setIsDelegateModalOpen] = useState(false);
+    const [activeTab, setActiveTab] = useState<'timeline' | 'discussion'>('timeline');
     const { data: request, isLoading } = useQuery({
         queryKey: ['workflow-detail', id],
         queryFn: () => api.get(`/workflow/${id}`),
@@ -42,6 +46,14 @@ export const ApprovalDetailPage = () => {
             queryClient.invalidateQueries({ queryKey: ['inbox'] });
             queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
             setIsDelegateModalOpen(false);
+        },
+    });
+
+    const feedbackMutation = useMutation({
+        mutationFn: ({ content, mentionedUserId }: { content: string, mentionedUserId: number | null }) =>
+            api.post(`/feedback/`, { request: id, content, user: mentionedUserId }),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['workflow-detail', id] });
         },
     });
 
@@ -97,8 +109,8 @@ export const ApprovalDetailPage = () => {
                 </div>
                 <div className="flex items-center gap-2">
                     {user?.is_superuser && detail.status === 'IN_PROGRESS' && (
-                        <Button 
-                            variant="outline" 
+                        <Button
+                            variant="outline"
                             className="bg-purple-50 text-purple-600 border-purple-200 hover:bg-purple-100 hover:text-purple-700 font-bold"
                             onClick={() => setIsDelegateModalOpen(true)}
                         >
@@ -159,15 +171,61 @@ export const ApprovalDetailPage = () => {
                 </div>
 
                 <div className="space-y-8">
-                    <Card className="shadow-lg border-slate-100 bg-white">
-                        <CardHeader className="border-b border-slate-100 pb-4">
-                            <CardTitle className="text-lg">Approval Timeline</CardTitle>
-                        </CardHeader>
-                        <CardContent className="pt-6">
-                            <Timeline
-                                steps={detail.steps}
-                                currentStep={detail.current_step}
-                            />
+                    <Card className="shadow-lg border-slate-100 bg-white overflow-hidden">
+                        <div className="flex border-b border-slate-100">
+                            <button
+                                onClick={() => setActiveTab('timeline')}
+                                className={`flex-1 py-4 text-sm font-bold flex items-center justify-center gap-2 transition-all ${activeTab === 'timeline'
+                                    ? 'text-indigo-600 bg-indigo-50/30 border-b-2 border-indigo-600'
+                                    : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'
+                                    }`}
+                            >
+                                <ListTodo size={18} />
+                                Approval
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('discussion')}
+                                className={`flex-1 py-4 text-sm font-bold flex items-center justify-center gap-2 transition-all relative ${activeTab === 'discussion'
+                                    ? 'text-indigo-600 bg-indigo-50/30 border-b-2 border-indigo-600'
+                                    : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'
+                                    }`}
+                            >
+                                <MessageSquare size={18} />
+                                Discussion
+                                {detail.feedbacks?.length > 0 && (
+                                    <span className="absolute top-3 right-4 bg-indigo-600 text-white text-[10px] w-5 h-5 rounded-full flex items-center justify-center border-2 border-white shadow-sm">
+                                        {detail.feedbacks.length}
+                                    </span>
+                                )}
+                            </button>
+                        </div>
+                        <CardContent className="p-0">
+                            {activeTab === 'timeline' ? (
+                                <div className="p-6">
+                                    <Timeline
+                                        steps={detail.steps}
+                                        currentStep={detail.current_step}
+                                    />
+                                </div>
+                            ) : (
+                                <div className="p-6 space-y-8">
+                                    <FeedbackForm
+                                        onSubmit={async (content, mentionedUserId) => { await feedbackMutation.mutateAsync({ content, mentionedUserId }); }}
+                                        isLoading={feedbackMutation.isPending}
+                                    />
+                                    <div className="pt-6 border-t border-slate-100">
+                                        <h3 className="text-sm font-bold text-slate-900 mb-4 flex items-center gap-2">
+                                            Feedback
+                                            <Badge variant="secondary" className="rounded-full h-5 min-w-[20px] flex items-center justify-center p-0">
+                                                {detail.feedbacks?.length || 0}
+                                            </Badge>
+                                        </h3>
+                                        <FeedbackList
+                                            feedbacks={detail.feedbacks || []}
+                                        />
+                                    </div>
+                                </div>
+                            )}
                         </CardContent>
                     </Card>
 

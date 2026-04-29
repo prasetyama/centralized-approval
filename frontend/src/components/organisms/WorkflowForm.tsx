@@ -117,9 +117,9 @@ export const WorkflowForm: React.FC<WorkflowFormProps> = ({ initialData, onClose
 
     const moduleOptions = ((modules as any)?.results || []).map((m: any) => ({ value: m.id, label: m.name }));
     const roleOptions = ((roles as any)?.results || []).map((r: any) => ({ value: r.id, label: r.name }));
-    const userOptions = ((users as any)?.results || []).map((u: any) => ({ 
-        value: u.id, 
-        label: `${u.first_name} ${u.last_name}`.trim() || u.username 
+    const userOptions = ((users as any)?.results || []).map((u: any) => ({
+        value: u.id,
+        label: `${u.first_name} ${u.last_name}`.trim() || u.username
     }));
 
     return (
@@ -271,7 +271,7 @@ export const WorkflowForm: React.FC<WorkflowFormProps> = ({ initialData, onClose
                                             </button>
                                         </div>
                                     </div>
-                                    <div className="flex items-center gap-2 mt-3">
+                                    {/* <div className="flex items-center gap-2 mt-3">
                                         <input
                                             type="checkbox"
                                             id={`optional-${index}`}
@@ -282,7 +282,7 @@ export const WorkflowForm: React.FC<WorkflowFormProps> = ({ initialData, onClose
                                         <label htmlFor={`optional-${index}`} className="text-[10px] font-black text-slate-500 uppercase select-none">
                                             Optional Step
                                         </label>
-                                    </div>
+                                    </div> */}
                                 </Card>
                             </div>
                         ))}

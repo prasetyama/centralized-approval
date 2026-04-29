@@ -443,3 +443,40 @@ class AuditLog(models.Model):
 
     def __str__(self):
         return f"[{self.timestamp}] {self.actor} - {self.action} on {self.request}"
+
+class RequestFeedback(models.Model):
+    """
+    Non-blocking feedback/discussion for an approval request.
+    Can be used by SMEs or Observers to provide input without being part of the approval chain.
+    """
+    request = models.ForeignKey(
+        ApprovalRequest,
+        on_delete=models.CASCADE,
+        related_name='feedbacks',
+        help_text="The approval request this feedback belongs to"
+    )
+    user = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        related_name='feedbacks_targeted',
+        null=True,
+        blank=True,
+        help_text="The user mentioned/targeted in this feedback"
+    )
+    content = models.TextField(help_text="The feedback content")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        related_name='feedbacks_created',
+        default=1,
+        help_text="The user who created this feedback"
+    )
+
+    class Meta:
+        db_table = 'aw_request_feedback'
+        ordering = ['created_at']
+
+    def __str__(self):
+        return f"Feedback by {self.user} on {self.request}"

@@ -6,7 +6,7 @@ DRF serializers for all core models.
 from rest_framework import serializers
 from core.models import (
     Module, Role, User, WorkflowDefinition, WorkflowStepDefinition,
-    ApprovalRequest, ApprovalStep, AuditLog, Division
+    ApprovalRequest, ApprovalStep, AuditLog, Division, RequestFeedback
 )
 
 
@@ -224,6 +224,27 @@ class AuditLogSerializer(serializers.ModelSerializer):
         return obj.actor.get_full_name() or obj.actor.username
 
 
+class RequestFeedbackSerializer(serializers.ModelSerializer):
+    """Serializer for RequestFeedback model."""
+    user_name = serializers.SerializerMethodField()
+    created_by_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = RequestFeedback
+        fields = ['id', 'request', 'user', 'user_name', 'created_by', 'created_by_name', 'content', 'created_at', 'updated_at']
+        read_only_fields = ['created_by', 'created_at', 'updated_at']
+
+    def get_user_name(self, obj):
+        if obj.user:
+            return obj.user.get_full_name() or obj.user.username
+        return None
+
+    def get_created_by_name(self, obj):
+        if obj.created_by:
+            return obj.created_by.get_full_name() or obj.created_by.username
+        return "Unknown"
+
+
 class ApprovalRequestListSerializer(serializers.ModelSerializer):
     """Lightweight serializer for listing approval requests."""
     module_name = serializers.CharField(source='module.name', read_only=True)
@@ -271,6 +292,7 @@ class ApprovalRequestDetailSerializer(serializers.ModelSerializer):
     steps = ApprovalStepSerializer(many=True, read_only=True)
     division_details = serializers.SerializerMethodField()
     audit_logs = AuditLogSerializer(many=True, read_only=True)
+    feedbacks = RequestFeedbackSerializer(many=True, read_only=True)
 
     class Meta:
         model = ApprovalRequest
@@ -279,7 +301,7 @@ class ApprovalRequestDetailSerializer(serializers.ModelSerializer):
             'module_color', 'module_icon', 'workflow', 'workflow_name',
             'requester', 'requester_name', 'title', 'description',
             'payload', 'status', 'current_step', 'priority', 'division', 'division_details',
-            'steps', 'audit_logs', 'created_at', 'updated_at',
+            'steps', 'audit_logs', 'feedbacks', 'created_at', 'updated_at',
         ]
 
     def get_requester_name(self, obj):
