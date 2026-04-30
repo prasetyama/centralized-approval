@@ -21,6 +21,7 @@ interface User {
     last_name: string;
     role: number;
     is_active: boolean;
+    division: string;
     department: string;
     is_approver: boolean;
 
@@ -38,6 +39,7 @@ export const UserForm: React.FC<UserFormProps> = ({ initialData, onClose }) => {
         first_name: initialData?.first_name || '',
         last_name: initialData?.last_name || '',
         role: initialData?.role || '',
+        division: initialData?.division || '',
         is_active: initialData?.is_active || true,
         department: initialData?.department || '',
         is_approver: initialData?.is_approver || false,
@@ -138,6 +140,13 @@ export const UserForm: React.FC<UserFormProps> = ({ initialData, onClose }) => {
                             options={[{ value: '', label: 'Select Role' }, ...roleOptions]}
                             value={formData.role}
                             onChange={(e) => setFormData({ ...formData, role: parseInt(e.target.value) })}
+                            required
+                        />
+                        <Input
+                            label="Division"
+                            placeholder="Division"
+                            value={formData.division}
+                            onChange={(e) => setFormData({ ...formData, division: e.target.value })}
                             required
                         />
                         <Input
