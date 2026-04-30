@@ -225,8 +225,7 @@ class InboxView(generics.ListAPIView):
             waiting_ids = ApprovalStep.objects.filter(
                 status=ApprovalStep.StepStatus.WAITING
             ).filter(
-                Q(assigned_to=user) |
-                Q(assigned_to__isnull=True, role_required=user.role)
+                Q(assigned_to=user)
             ).values_list('request_id', flat=True)
 
             # 2. Requests where user has participated in the discussion
@@ -279,14 +278,9 @@ class HistoryView(generics.ListAPIView):
     def get_queryset(self):
         user = self.request.user
 
-        relevant_module_ids = WorkflowStepDefinition.objects.filter(
-            role_required=user.role
-        ).values_list('workflow__module_id', flat=True).distinct()
-
-        # Requests where user is the actor for APPROVED or REJECTED actions
+        # Requests where the logged-in user is the actor for APPROVED or REJECTED actions
         request_ids = AuditLog.objects.filter(
-            Q(request__module_id__in=relevant_module_ids) | Q(request__requester=user),
-            step__role_required=user.role,
+            actor=user,
             action__in=[AuditLog.Action.APPROVED, AuditLog.Action.REJECTED]
         ).values_list('request_id', flat=True).distinct()
 
@@ -326,10 +320,23 @@ def dashboard_summary(request):
     """
     user = request.user
 
-    # Count all requests by status
+    # Count requests by status, filtered by user involvement
+    if user.is_superuser:
+        relevant_requests = ApprovalRequest.objects.all()
+    else:
+        # 1. Tasks I have handled in the past (Approved/Rejected)
+        acted_request_ids = AuditLog.objects.filter(actor=user).values_list('request_id', flat=True)
+        print ("acted request id : ", acted_request_ids)
+        
+        # 2. Combined relevance filter:
+        relevant_requests = ApprovalRequest.objects.filter(
+            Q(requester=user) |                          # I am the requester
+            Q(id__in=acted_request_ids) 
+        ).distinct()
+
     status_counts = dict(
-        ApprovalRequest.objects.values_list('status')
-        .annotate(count=Count('id'))
+        relevant_requests.values_list('status')
+        .annotate(count=Count('id', distinct=True))
         .values_list('status', 'count')
     )
 
@@ -340,8 +347,7 @@ def dashboard_summary(request):
         waiting_ids = ApprovalStep.objects.filter(
             status=ApprovalStep.StepStatus.WAITING
         ).filter(
-            Q(assigned_to=user) |
-            Q(assigned_to__isnull=True, role_required=user.role)
+            Q(assigned_to=user)
         ).values_list('request_id', flat=True)
 
         discussion_ids = RequestFeedback.objects.filter(
