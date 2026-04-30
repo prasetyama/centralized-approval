@@ -119,7 +119,7 @@ export const AdminWorkflowPage = () => {
                                 className="flex-1 gap-2 bg-white"
                                 onClick={() => navigate(`/admin/workflows/${wf.id}/edit`)}
                             >
-                                <Edit2 size={14} /> Configure
+                                <Edit2 size={14} /> Edit
                             </Button>
                             <Button variant="ghost" size="icon" className="h-10 w-10 text-slate-400 hover:text-red-600">
                                 <Trash2 size={18} />

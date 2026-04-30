@@ -201,7 +201,7 @@ export const ApprovalDetailPage = () => {
                         </div>
                         <CardContent className="p-0">
                             {activeTab === 'timeline' ? (
-                                <div className="p-6">
+                                <div className="p-6 max-h-[400px] overflow-y-auto">
                                     <Timeline
                                         steps={detail.steps}
                                         currentStep={detail.current_step}
@@ -213,7 +213,7 @@ export const ApprovalDetailPage = () => {
                                         onSubmit={async (content, mentionedUserId) => { await feedbackMutation.mutateAsync({ content, mentionedUserId }); }}
                                         isLoading={feedbackMutation.isPending}
                                     />
-                                    <div className="pt-6 border-t border-slate-100">
+                                    <div className="pt-6 border-t border-slate-100 max-h-[400px] overflow-y-auto">
                                         <h3 className="text-sm font-bold text-slate-900 mb-4 flex items-center gap-2">
                                             Feedback
                                             <Badge variant="secondary" className="rounded-full h-5 min-w-[20px] flex items-center justify-center p-0">
