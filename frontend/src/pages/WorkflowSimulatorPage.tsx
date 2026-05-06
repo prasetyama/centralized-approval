@@ -2,8 +2,9 @@ import { useState } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/atoms/Card';
 import { Button } from '../components/atoms/Button';
 import { Textarea } from '../components/atoms/Textarea';
-import { CheckCircle, XCircle, Play } from 'lucide-react';
+import { CheckCircle, XCircle, Play, X } from 'lucide-react';
 import api from '../services/api';
+import { PayloadRenderer } from '@/components/molecules/PayloadRenderer';
 
 export const WorkflowSimulatorPage = () => {
     const defaultPayload = {
@@ -11,23 +12,25 @@ export const WorkflowSimulatorPage = () => {
         "workflow_id": 1,
         "title": "Order Submission PO Number C/FAD/U003/202604",
         "description": "Need approval for order PO Number C/FAD/U003/202604",
-        "reference_id": "25060020260330A00703F12",
         "priority": "URGENT",
-        "division": "JB",
         "payload": {
-            "filename": "1050020260330A00703U05",
+            "reference_id": "1050020260330A00703U05",
             "principle": "A00703",
             "po_number": "C/FAD/U003/202604",
+            "distributor": "PT. BINTANG SINAR JAYA",
             "total_quantity": 110,
             "total_sku": 1,
             "submitted_at": "2026-03-30T06:52:27.782Z",
+            "order_type": "3",
             "items": [
                 {
                     "sku": "F0000526",
                     "name": "DF FUNTIME LONG MILK VAN 12X20X26 G",
-                    "qty": 100
+                    "qty": 100,
+                    "price": 30000
                 }
-            ]
+            ],
+            "total_amount": 3000000
         }
     };
 
@@ -35,6 +38,7 @@ export const WorkflowSimulatorPage = () => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [simulationResult, setSimulationResult] = useState<any[] | null>(null);
+    const [simulatedData, setSimulatedData] = useState<any | null>(null);
 
     const handleSimulate = async () => {
         setError(null);
@@ -77,6 +81,7 @@ export const WorkflowSimulatorPage = () => {
                 });
 
                 setSimulationResult(simulatedSteps);
+                setSimulatedData(parsedPayload);
             } else {
                 setError("Invalid workflow definition format from server.");
             }
@@ -146,8 +151,11 @@ export const WorkflowSimulatorPage = () => {
                             spellCheck={false}
                         />
                         {error && (
-                            <div className="p-3 text-sm text-red-700 bg-red-50 border border-red-200 rounded-md">
-                                {error}
+                            <div className="p-3 text-sm text-red-700 bg-red-50 border border-red-200 rounded-md flex items-center justify-between">
+                                <div className='flex items-center gap-2'>
+                                    {error}
+                                </div>
+                                <X className="w-4 h-4 cursor-pointer hover:opacity-50 transition-opacity" onClick={() => setError('')} />
                             </div>
                         )}
                         <Button
@@ -156,7 +164,7 @@ export const WorkflowSimulatorPage = () => {
                             className="w-full flex items-center justify-center gap-2"
                         >
                             <Play className="w-4 h-4" />
-                            Run Simulation
+                            Run
                         </Button>
                     </CardContent>
                 </Card>
@@ -172,67 +180,84 @@ export const WorkflowSimulatorPage = () => {
                                 No Result
                             </div>
                         ) : (
-                            <div className="relative border-l-2 border-slate-200 ml-4 space-y-8">
-                                {simulationResult.map((step: any, index: number) => {
-                                    const isApproved = step.status === 'APPROVED';
-                                    const isRejected = step.status === 'REJECTED';
-                                    const isWaiting = step.status === 'WAITING';
+                            <div className="flex flex-col gap-8">
+                                {/* Preview Data Section */}
+                                <PayloadRenderer
+                                    moduleCode={simulatedData.module_code}
+                                    payload={simulatedData.payload}
+                                />
 
-                                    return (
-                                        <div key={index} className="relative pl-8 flex items-center min-h-[50px]">
-                                            {/* Icon Indicator */}
-                                            <div className="absolute -left-[17px] flex items-center justify-center w-8 h-8 rounded-full bg-white">
-                                                {isApproved ? (
-                                                    <CheckCircle className="w-8 h-8 text-emerald-500 bg-white" />
-                                                ) : isRejected ? (
-                                                    <XCircle className="w-8 h-8 text-red-500 bg-white" />
-                                                ) : (
-                                                    <div className="flex items-center justify-center w-8 h-8 rounded-full bg-slate-400 border-[3px] border-white text-white">
-                                                        <span className="text-[10px] font-bold">{index + 1}</span>
-                                                    </div>
+                                {/* Timeline */}
+                                <div className="relative ml-4 space-y-8 z-1">
+                                    {simulationResult.map((step: any, index: number) => {
+                                        const isApproved = step.status === 'APPROVED';
+                                        const isRejected = step.status === 'REJECTED';
+                                        const isWaiting = step.status === 'WAITING';
+
+                                        return (
+                                            <div key={index} className="relative pl-8 flex items-center min-h-[50px]">
+                                                {/* Timeline vertical lines */}
+                                                {index !== 0 && (
+                                                    <div className="absolute left-[-1px] top-0 h-1/2 w-[2px] bg-slate-200 z-10" />
                                                 )}
-                                            </div>
+                                                {index !== simulationResult.length - 1 && (
+                                                    <div className="absolute left-[-1px] top-1/2 bottom-[-32px] w-[2px] bg-slate-200 z-10" />
+                                                )}
 
-                                            {/* Content */}
-                                            <div className="flex-1 flex items-center justify-between">
-                                                <div>
-                                                    <p className="text-[15px] text-slate-700">
-                                                        {isApproved ? 'Approved by ' : isRejected ? 'Rejected by ' : isWaiting ? 'Waiting Approval ' : 'Pending Approval '}
-                                                        <span className="font-semibold text-slate-900">
-                                                            {step.user_name || step.role_users[0].name} ({step.role_name})
-                                                        </span>
-                                                    </p>
-                                                    {(step.condition_expression || step.condition) && (
-                                                        <p className="text-xs text-slate-400 mt-0.5">
-                                                            Condition: {step.condition_expression || step.condition}
-                                                        </p>
+                                                {/* Icon Indicator */}
+                                                <div className="absolute -left-[17px] flex items-center justify-center w-8 h-8 rounded-full bg-white z-10">
+                                                    {isApproved ? (
+                                                        <CheckCircle className="w-8 h-8 text-emerald-500 bg-white" />
+                                                    ) : isRejected ? (
+                                                        <XCircle className="w-8 h-8 text-red-500 bg-white" />
+                                                    ) : (
+                                                        <div className="flex items-center justify-center w-8 h-8 rounded-full bg-slate-400 border-[3px] border-white text-white">
+                                                            <span className="text-[10px] font-bold">{index + 1}</span>
+                                                        </div>
                                                     )}
                                                 </div>
 
-                                                {isWaiting && (
-                                                    <div className="flex gap-2 ml-4">
-                                                        <Button
-                                                            size="sm"
-                                                            variant="danger"
-                                                            className="rounded-full px-4 shadow-md"
-                                                            onClick={() => handleAction(index, 'REJECT')}
-                                                        >
-                                                            Reject
-                                                        </Button>
-                                                        <Button
-                                                            size="sm"
-                                                            variant="primary"
-                                                            className="rounded-full px-6 shadow-md"
-                                                            onClick={() => handleAction(index, 'APPROVE')}
-                                                        >
-                                                            Approve
-                                                        </Button>
+                                                {/* Content */}
+                                                <div className="flex-1 flex items-center justify-between">
+                                                    <div>
+                                                        <p className="text-[15px] text-slate-700">
+                                                            {isApproved ? 'Approved by ' : isRejected ? 'Rejected by ' : isWaiting ? 'Waiting Approval ' : 'Pending Approval '}
+                                                            <span className="font-semibold text-slate-900">
+                                                                {step.user_name || step.role_users[0].name} {step.role_required && `(${step.role_name})`}
+                                                            </span>
+                                                        </p>
+                                                        {(step.condition_expression || step.condition) && (
+                                                            <p className="text-xs text-slate-400 mt-0.5">
+                                                                Condition: {step.condition_expression || step.condition}
+                                                            </p>
+                                                        )}
                                                     </div>
-                                                )}
+
+                                                    {isWaiting && (
+                                                        <div className="flex gap-2 ml-4">
+                                                            <Button
+                                                                size="sm"
+                                                                variant="danger"
+                                                                className="rounded-full px-4 shadow-md"
+                                                                onClick={() => handleAction(index, 'REJECT')}
+                                                            >
+                                                                Reject
+                                                            </Button>
+                                                            <Button
+                                                                size="sm"
+                                                                variant="primary"
+                                                                className="rounded-full px-6 shadow-md"
+                                                                onClick={() => handleAction(index, 'APPROVE')}
+                                                            >
+                                                                Approve
+                                                            </Button>
+                                                        </div>
+                                                    )}
+                                                </div>
                                             </div>
-                                        </div>
-                                    );
-                                })}
+                                        );
+                                    })}
+                                </div>
                             </div>
                         )}
                     </CardContent>

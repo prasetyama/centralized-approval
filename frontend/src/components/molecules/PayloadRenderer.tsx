@@ -18,7 +18,11 @@ export const PayloadRenderer = ({ moduleCode, payload }: PayloadRendererProps) =
                 </div>
                 <div className="space-y-1">
                     <p className="text-xs font-semibold text-slate-500 uppercase">Order Type</p>
-                    <Badge variant="info">{payload.order_type === 1 ? 'Regular' : 'Additional'}</Badge>
+                    <Badge variant="info">
+                        {payload.order_type === '1' ? 'Fix Order' :
+                            payload.order_type === '2' ? 'Additional Order' :
+                                payload.order_type === '3' ? 'Urgent Order' : 'Unknown'}
+                    </Badge>
                 </div>
             </div>
 
@@ -92,7 +96,7 @@ export const PayloadRenderer = ({ moduleCode, payload }: PayloadRendererProps) =
                 <div className="space-y-2">
                     <p className="text-xs font-semibold text-slate-500 uppercase">Leave Type</p>
                     <Badge variant="secondary" className="px-3 py-1 font-bold text-sm">
-                        {payload.type === 'SICK' ? 'Sick Leave' : payload.type === 'ANNUAL' ? 'Annual Leave' : 'Permit'}
+                        {payload.leave_type.toUpperCase()}
                     </Badge>
                 </div>
                 <div className="space-y-2">
