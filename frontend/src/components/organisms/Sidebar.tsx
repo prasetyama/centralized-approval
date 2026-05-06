@@ -9,7 +9,8 @@ import {
     History,
     ChevronLeft,
     ChevronRight,
-    X
+    X,
+    Play
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
@@ -21,6 +22,7 @@ const navItems = [
     { name: 'Workflows', href: '/admin/workflows', icon: GitBranch, adminOnly: true },
     { name: 'User Management', href: '/admin/users', icon: Users, adminOnly: true },
     { name: 'Settings', href: '/settings', icon: Settings },
+    { name: 'Simulator', href: '/admin/workflow/simulator', icon: Play, adminOnly: true },
 ];
 
 type SidebarProps = {

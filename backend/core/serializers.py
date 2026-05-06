@@ -122,19 +122,34 @@ class WorkflowStepDefinitionSerializer(serializers.ModelSerializer):
     """Serializer for WorkflowStepDefinition."""
     role_name = serializers.CharField(source='role_required.name', read_only=True)
     user_name = serializers.SerializerMethodField()
+    role_users = serializers.SerializerMethodField()
 
     class Meta:
         model = WorkflowStepDefinition
         fields = [
             'id', 'step_order', 'name', 'approver_type', 
             'role_required', 'role_name', 'user_required', 'user_name', 
-            'is_optional'
+            'is_optional', 'role_users'
         ]
 
     def get_user_name(self, obj):
         if obj.user_required:
             return obj.user_required.get_full_name() or obj.user_required.username
         return None
+
+    def get_role_users(self, obj):
+        if obj.approver_type == 'ROLE' and obj.role_required:
+            users = obj.role_required.users.filter(is_active=True)
+            return [
+                {
+                    "id": user.id,
+                    "name": user.get_full_name() or user.username,
+                    "department": user.department,
+                    "division": user.division,
+                }
+                for user in users
+            ]
+        return []
 
 
 class WorkflowDefinitionSerializer(serializers.ModelSerializer):
