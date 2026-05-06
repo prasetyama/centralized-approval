@@ -7,6 +7,7 @@ import { Card } from '@/components/atoms/Card';
 import { Button } from '@/components/atoms/Button';
 import { Badge } from '@/components/atoms/Badge';
 import { WorkflowForm } from '@/components/organisms/WorkflowForm';
+import { Link } from 'react-router-dom';
 
 export const AdminWorkflowPage = () => {
     const { id } = useParams();
@@ -112,16 +113,18 @@ export const AdminWorkflowPage = () => {
                             </div>
                         </div>
 
-                        <div className="bg-slate-50 p-4 border-t border-slate-100 flex gap-2">
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                className="flex-1 gap-2 bg-white"
-                                onClick={() => navigate(`/admin/workflows/${wf.id}/edit`)}
-                            >
-                                <Edit2 size={14} /> Edit
-                            </Button>
-                            <Button variant="ghost" size="icon" className="h-10 w-10 text-slate-400 hover:text-red-600">
+                        <div className="bg-slate-50 p-4 border-t border-slate-100 flex gap-2 justify-center">
+                            <Link to={`/admin/workflows/${wf.id}/edit`} className='w-full'>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="flex-1 gap-2 bg-white w-full"
+                                >
+                                    <Edit2 size={14} /> Edit
+                                </Button>
+                            </Link>
+
+                            <Button variant="ghost" size="icon" className="w-10 text-slate-400 hover:text-red-600">
                                 <Trash2 size={18} />
                             </Button>
                         </div>

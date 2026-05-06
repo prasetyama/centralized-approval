@@ -195,7 +195,7 @@ export const WorkflowSimulatorPage = () => {
                                         const isWaiting = step.status === 'WAITING';
 
                                         return (
-                                            <div key={index} className="relative pl-8 flex items-center min-h-[50px]">
+                                            <div key={index} className="relative pl-8 flex flex-col min-h-[50px]">
                                                 {/* Timeline vertical lines */}
                                                 {index !== 0 && (
                                                     <div className="absolute left-[-1px] top-0 h-1/2 w-[2px] bg-slate-200 z-10" />
@@ -218,7 +218,7 @@ export const WorkflowSimulatorPage = () => {
                                                 </div>
 
                                                 {/* Content */}
-                                                <div className="flex-1 flex items-center justify-between">
+                                                <div className="flex-1 flex flex-col">
                                                     <div>
                                                         <p className="text-[15px] text-slate-700">
                                                             {isApproved ? 'Approved by ' : isRejected ? 'Rejected by ' : isWaiting ? 'Waiting Approval ' : 'Pending Approval '}
