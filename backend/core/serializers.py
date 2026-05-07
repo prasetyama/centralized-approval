@@ -375,7 +375,6 @@ class SubmitRequestSerializer(serializers.Serializer):
     )
     division_id = serializers.CharField(max_length=50, required=False, allow_null=True)
     reference_id = serializers.CharField(max_length=100, required=False, default='')
-    brand_code = serializers.CharField(max_length=50, required=False, allow_null=True)
 
 
 class ActionSerializer(serializers.Serializer):

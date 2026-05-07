@@ -67,7 +67,6 @@ class WorkflowSubmitView(generics.CreateAPIView):
             reference_id=serializer.validated_data.get('reference_id', ''),
             division_id=serializer.validated_data.get('division_id'),
             ip_address=_get_client_ip(request),
-            brand_code=serializer.validated_data.get('brand_code', ''),
         )
 
         return Response(

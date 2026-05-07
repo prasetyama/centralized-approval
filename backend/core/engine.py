@@ -139,7 +139,7 @@ class WorkflowEngine:
     @transaction.atomic
     def submit_request(module_code, workflow_id, requester, title, payload,
                        description='', priority='MEDIUM', reference_id='', 
-                       division_id=None, ip_address=None, brand_code=None):
+                       division_id=None, ip_address=None):
         """
         Submit a new approval request from any module.
         Creates the ApprovalRequest and generates all ApprovalStep instances
@@ -206,15 +206,13 @@ class WorkflowEngine:
             
             # 1. Check if step uses Brand-Specific Approval
             if step_def.is_brand_conditional:
-                print(f"[DEBUG] Brand code: {brand_code}")
+                brand_code = payload.get('brand_code')
                 if brand_code:
                     try:
                         brand = Brand.objects.get(code=brand_code)
-                        print(f"[DEBUG] Brand found: {brand.owner}")
                         if brand.owner:
                             assignee = brand.owner
                     except Brand.DoesNotExist:
-                        # Fallback to standard logic if brand not found
                         pass
             
             # 2. Fallback to standard logic if not brand-conditional or brand assignee not found
