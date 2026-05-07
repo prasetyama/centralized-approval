@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/atoms/Card';
 import { Button } from '../components/atoms/Button';
 import { Textarea } from '../components/atoms/Textarea';
-import { CheckCircle, XCircle, Play, X } from 'lucide-react';
+import { CheckCircle, XCircle, Play, X, Tag } from 'lucide-react';
 import api from '../services/api';
 import { PayloadRenderer } from '@/components/molecules/PayloadRenderer';
 
@@ -49,10 +49,14 @@ export const WorkflowSimulatorPage = () => {
             const parsedPayload = JSON.parse(payloadInput);
             const workflowId = parsedPayload.workflow_id;
 
-            // Call API to fetch workflow definition ONLY, do not create ticket
-            const response: any = await api.get(`/admin/workflows/${workflowId}/`);
+            // Call API to fetch workflow definition and brands
+            const [workflowResponse, brandsResponse]: any[] = await Promise.all([
+                api.get(`/admin/workflows/${workflowId}/`),
+                api.get('/admin/brands/')
+            ]);
 
-            const data = response.success !== undefined ? response.data : response;
+            const data = workflowResponse.success !== undefined ? workflowResponse.data : workflowResponse;
+            const brands = brandsResponse.results || brandsResponse;
 
             if (data && data.steps) {
                 let hasWaiting = false;
@@ -77,7 +81,22 @@ export const WorkflowSimulatorPage = () => {
                         hasWaiting = true;
                     }
 
-                    return { ...step, status };
+                    let simulatedAssignee = null;
+                    if (step.is_brand_conditional && !isSkipped) {
+                        const brandCode = parsedPayload.payload?.brand_code;
+                        if (brandCode) {
+                            const brand = brands.find((b: any) => b.code === brandCode);
+                            if (brand) {
+                                simulatedAssignee = brand.owner_full_name || brand.owner_name;
+                            } else {
+                                simulatedAssignee = "Brand not found";
+                            }
+                        } else {
+                            throw new Error("Missing brand_code in payload for brand-conditional step.");
+                        }
+                    }
+
+                    return { ...step, status, simulatedAssignee };
                 });
 
                 setSimulationResult(simulatedSteps);
@@ -223,9 +242,19 @@ export const WorkflowSimulatorPage = () => {
                                                         <p className="text-[15px] text-slate-700">
                                                             {isApproved ? 'Approved by ' : isRejected ? 'Rejected by ' : isWaiting ? 'Waiting Approval ' : 'Pending Approval '}
                                                             <span className="font-semibold text-slate-900">
-                                                                {step.user_name || step.role_users[0].name} {step.role_required && `(${step.role_name})`}
+                                                                {step.simulatedAssignee || step.user_name || (step.role_users && step.role_users[0]?.name) || "Unassigned"} {step.role_required && `(${step.role_name})`}
                                                             </span>
                                                         </p>
+                                                        {step.is_brand_conditional && (
+                                                            <div className="mt-1 flex items-center gap-2">
+                                                                <span className="px-2 py-0.5 bg-blue-50 text-blue-600 rounded text-[10px] font-bold uppercase tracking-wider border border-blue-100 flex items-center gap-1">
+                                                                    <Tag size={10} /> Brand Owner
+                                                                </span>
+                                                                <span className="text-[10px] text-slate-400 font-medium italic">
+                                                                    Resolved via code: <code className="text-slate-600 font-bold">{simulatedData?.payload?.brand_code || 'N/A'}</code>
+                                                                </span>
+                                                            </div>
+                                                        )}
                                                         {(step.condition_expression || step.condition) && (
                                                             <p className="text-xs text-slate-400 mt-0.5">
                                                                 Condition: {step.condition_expression || step.condition}

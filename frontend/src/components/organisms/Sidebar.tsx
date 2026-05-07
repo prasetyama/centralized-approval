@@ -24,7 +24,7 @@ const navItems = [
     { name: 'User Management', href: '/admin/users', icon: Users, adminOnly: true },
     { name: 'Settings', href: '/settings', icon: Settings },
     { name: 'Simulator', href: '/admin/workflow/simulator', icon: Play, adminOnly: true },
-    // { name: 'Brand Master', href: '/admin/workflow/brand-master', icon: Tag, adminOnly: true },
+    { name: 'Brand Master', href: '/admin/workflow/brand-master', icon: Tag, adminOnly: true },
 ];
 
 type SidebarProps = {
