@@ -205,6 +205,7 @@ class WorkflowStepDefinition(models.Model):
         blank=True,
         help_text="Specific user required to approve this step (if type is USER)"
     )
+    is_brand_conditional = models.BooleanField(default=False, help_text="If true, uses Brand-Specific Approval logic")
     is_optional = models.BooleanField(default=False, help_text="If true, step can be skipped")
 
     class Meta:
@@ -480,3 +481,53 @@ class RequestFeedback(models.Model):
 
     def __str__(self):
         return f"Feedback by {self.user} on {self.request}"
+
+
+class Brand(models.Model):
+    """
+    Brand management model.
+    Each brand has one owner who handles brand-conditional approval steps.
+    """
+    name = models.CharField(max_length=100, unique=True, help_text="Example: 'Apple', 'Samsung'")
+    code = models.CharField(max_length=50, unique=True, help_text="Unique code for identification")
+    owner = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='owned_brands',
+        help_text="The user who handles approval for this brand"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'aw_brand'
+        ordering = ['name']
+
+    def __str__(self):
+        return f"{self.name} ({self.code})"
+
+
+class UserBrand(models.Model):
+    """
+    Mapping users to brands.
+    Used to track which user is responsible for which brand.
+    """
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='user_brands'
+    )
+    brand = models.ForeignKey(
+        Brand,
+        on_delete=models.CASCADE,
+        related_name='brand_users'
+    )
+
+    class Meta:
+        db_table = 'aw_user_brand'
+        unique_together = ['user', 'brand']
+
+    def __str__(self):
+        return f"{self.user.username} -> {self.brand.name}"

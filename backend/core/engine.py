@@ -14,7 +14,8 @@ from rest_framework.exceptions import ValidationError
 
 from core.models import (
     Module, WorkflowDefinition, WorkflowStepDefinition,
-    ApprovalRequest, ApprovalStep, AuditLog, User, Division
+    ApprovalRequest, ApprovalStep, AuditLog, User, Division,
+    Brand
 )
 from core.state_machine import can_transition
 
@@ -138,7 +139,7 @@ class WorkflowEngine:
     @transaction.atomic
     def submit_request(module_code, workflow_id, requester, title, payload,
                        description='', priority='MEDIUM', reference_id='', 
-                       division_id=None, ip_address=None):
+                       division_id=None, ip_address=None, brand_code=None):
         """
         Submit a new approval request from any module.
         Creates the ApprovalRequest and generates all ApprovalStep instances
@@ -202,20 +203,36 @@ class WorkflowEngine:
         # Create approval steps from definitions
         for step_def in step_defs:
             assignee = None
-            if step_def.approver_type == WorkflowStepDefinition.ApproverType.USER:
-                # Direct user assignment
-                assignee = step_def.user_required
-            else:
-                # Role-based assignment: Auto-assign to first user with the required role and matching division
-                assignee_qs = User.objects.filter(
-                    role=step_def.role_required, is_active=True, is_approver=True
-                )
-                
-                if division_id:
-                    # User.division is a CharField, filter by the code string directly
-                    assignee_qs = assignee_qs.filter(division=division_id)
+            
+            # 1. Check if step uses Brand-Specific Approval
+            if step_def.is_brand_conditional:
+                print(f"[DEBUG] Brand code: {brand_code}")
+                if brand_code:
+                    try:
+                        brand = Brand.objects.get(code=brand_code)
+                        print(f"[DEBUG] Brand found: {brand.owner}")
+                        if brand.owner:
+                            assignee = brand.owner
+                    except Brand.DoesNotExist:
+                        # Fallback to standard logic if brand not found
+                        pass
+            
+            # 2. Fallback to standard logic if not brand-conditional or brand assignee not found
+            if assignee is None:
+                if step_def.approver_type == WorkflowStepDefinition.ApproverType.USER:
+                    # Direct user assignment
+                    assignee = step_def.user_required
+                else:
+                    # Role-based assignment: Auto-assign to first user with the required role and matching division
+                    assignee_qs = User.objects.filter(
+                        role=step_def.role_required, is_active=True, is_approver=True
+                    )
                     
-                assignee = assignee_qs.first()
+                    if division_id:
+                        # User.division is a CharField, filter by the code string directly
+                        assignee_qs = assignee_qs.filter(division=division_id)
+                        
+                    assignee = assignee_qs.first()
 
             step_status = (
                 ApprovalStep.StepStatus.WAITING

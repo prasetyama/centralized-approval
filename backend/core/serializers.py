@@ -6,7 +6,8 @@ DRF serializers for all core models.
 from rest_framework import serializers
 from core.models import (
     Module, Role, User, WorkflowDefinition, WorkflowStepDefinition,
-    ApprovalRequest, ApprovalStep, AuditLog, Division, RequestFeedback
+    ApprovalRequest, ApprovalStep, AuditLog, Division, RequestFeedback,
+    Brand, UserBrand
 )
 
 
@@ -16,6 +17,33 @@ class DivisionSerializer(serializers.ModelSerializer):
         model = Division
         fields = ['id', 'name', 'code', 'description', 'created_at', 'updated_at']
         read_only_fields = ['created_at', 'updated_at']
+
+
+class BrandSerializer(serializers.ModelSerializer):
+    """Serializer for Brand model."""
+    owner_name = serializers.CharField(source='owner.username', read_only=True)
+    owner_full_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Brand
+        fields = ['id', 'name', 'code', 'owner', 'owner_name', 'owner_full_name', 'created_at', 'updated_at']
+
+    def get_owner_full_name(self, obj):
+        return obj.owner.get_full_name() if obj.owner else None
+
+
+class UserBrandSerializer(serializers.ModelSerializer):
+    """Serializer for UserBrand mapping."""
+    user_name = serializers.CharField(source='user.username', read_only=True)
+    user_full_name = serializers.SerializerMethodField()
+    brand_name = serializers.CharField(source='brand.name', read_only=True)
+
+    class Meta:
+        model = UserBrand
+        fields = ['id', 'user', 'user_name', 'user_full_name', 'brand', 'brand_name']
+
+    def get_user_full_name(self, obj):
+        return obj.user.get_full_name() or obj.user.username
 
 
 class RoleSerializer(serializers.ModelSerializer):
@@ -129,6 +157,7 @@ class WorkflowStepDefinitionSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'step_order', 'name', 'approver_type', 
             'role_required', 'role_name', 'user_required', 'user_name', 
+            'is_brand_conditional',
             'is_optional', 'role_users'
         ]
 
@@ -346,6 +375,7 @@ class SubmitRequestSerializer(serializers.Serializer):
     )
     division_id = serializers.CharField(max_length=50, required=False, allow_null=True)
     reference_id = serializers.CharField(max_length=100, required=False, default='')
+    brand_code = serializers.CharField(max_length=50, required=False, allow_null=True)
 
 
 class ActionSerializer(serializers.Serializer):

@@ -15,6 +15,7 @@ interface Step {
     approver_type: 'ROLE' | 'USER';
     role_required?: number | null;
     user_required?: number | null;
+    is_brand_conditional: boolean;
     is_optional: boolean;
     role_name?: string;
     user_name?: string;
@@ -72,6 +73,7 @@ export const WorkflowForm: React.FC<WorkflowFormProps> = ({ initialData, onClose
             approver_type: 'ROLE',
             role_required: (roles as any)?.results?.[0]?.id || null,
             user_required: null,
+            is_brand_conditional: false,
             is_optional: false,
         };
         setFormData({ ...formData, steps: [...formData.steps, newStep] });
@@ -271,6 +273,22 @@ export const WorkflowForm: React.FC<WorkflowFormProps> = ({ initialData, onClose
                                             </button>
                                         </div>
                                     </div>
+                                    
+                                    <div className="flex items-center gap-6 mt-4 pt-3 border-t border-slate-50">
+                                        <div className="flex items-center gap-2">
+                                            <input
+                                                type="checkbox"
+                                                id={`brand-cond-${index}`}
+                                                checked={step.is_brand_conditional}
+                                                onChange={(e) => handleStepChange(index, { is_brand_conditional: e.target.checked })}
+                                                className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                                            />
+                                            <label htmlFor={`brand-cond-${index}`} className="text-xs font-bold text-slate-700 select-none">
+                                                Gunakan Kondisi Brand?
+                                            </label>
+                                        </div>
+                                    </div>
+
                                     {/* <div className="flex items-center gap-2 mt-3">
                                         <input
                                             type="checkbox"

@@ -5,10 +5,11 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
     variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger';
     size?: 'sm' | 'md' | 'lg' | 'icon';
     loading?: boolean;
+    fullWidth?: boolean;
 }
 
 export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-    ({ className, variant = 'primary', size = 'md', loading, children, ...props }, ref) => {
+    ({ className, variant = 'primary', size = 'md', loading, fullWidth, children, ...props }, ref) => {
         const variants: Record<string, string> = {
             primary: 'bg-blue-600 text-white hover:bg-blue-700 shadow-sm shadow-blue-200',
             secondary: 'bg-slate-900 text-white hover:bg-slate-800',
@@ -29,6 +30,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
                 ref={ref}
                 className={cn(
                     'inline-flex items-center justify-center rounded-md font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:opacity-50 disabled:pointer-events-none active:scale-[0.98]',
+                    fullWidth && 'w-full',
                     variants[variant] || variants.primary,
                     sizes[size] || sizes.md,
                     className

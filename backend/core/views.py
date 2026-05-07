@@ -8,19 +8,23 @@ from rest_framework import viewsets, status, generics
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from rest_framework.response import Response
+from django.db import transaction
 from django.db.models import Q, Count
 from django_filters.rest_framework import DjangoFilterBackend
 
 from core.models import (
-    Module, Role, User, WorkflowDefinition,
-    ApprovalRequest, ApprovalStep, AuditLog, WorkflowStepDefinition, Division, RequestFeedback
+    Module, Role, User, WorkflowDefinition, WorkflowStepDefinition,
+    ApprovalRequest, ApprovalStep, AuditLog, Division, RequestFeedback,
+    Brand, UserBrand
 )
 from core.serializers import (
     ModuleSerializer, RoleSerializer, UserListSerializer, UserDetailSerializer,
     WorkflowDefinitionSerializer, WorkflowDefinitionWriteSerializer,
-    ApprovalRequestListSerializer, ApprovalRequestDetailSerializer,
-    SubmitRequestSerializer, ActionSerializer, AuditLogSerializer,
-    DelegateRequestSerializer, DivisionSerializer, RequestFeedbackSerializer,
+    WorkflowStepDefinitionSerializer, ApprovalRequestListSerializer,
+    ApprovalRequestDetailSerializer, SubmitRequestSerializer,
+    ApprovalStepSerializer, AuditLogSerializer, ActionSerializer,
+    DivisionSerializer, DelegateRequestSerializer, RequestFeedbackSerializer,
+    BrandSerializer, UserBrandSerializer
 )
 from core.engine import WorkflowEngine
 
@@ -63,6 +67,7 @@ class WorkflowSubmitView(generics.CreateAPIView):
             reference_id=serializer.validated_data.get('reference_id', ''),
             division_id=serializer.validated_data.get('division_id'),
             ip_address=_get_client_ip(request),
+            brand_code=serializer.validated_data.get('brand_code', ''),
         )
 
         return Response(
@@ -483,5 +488,20 @@ class RequestFeedbackViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
     filterset_fields = ['request', 'user', 'type', 'is_resolved']
 
+    def get_queryset(self):
+        return RequestFeedback.objects.filter(request_id=self.kwargs['request_pk'])
+
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user)
+
+
+class BrandViewSet(viewsets.ModelViewSet):
+    """ViewSet for managing Brand."""
+    queryset = Brand.objects.all()
+    serializer_class = BrandSerializer
+
+
+class UserBrandViewSet(viewsets.ModelViewSet):
+    """ViewSet for managing UserBrand mapping."""
+    queryset = UserBrand.objects.all()
+    serializer_class = UserBrandSerializer
