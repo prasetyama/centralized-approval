@@ -6,7 +6,7 @@ DRF serializers for all core models.
 from rest_framework import serializers
 from core.models import (
     Module, Role, User, WorkflowDefinition, WorkflowStepDefinition,
-    ApprovalRequest, ApprovalStep, AuditLog, Division
+    ApprovalRequest, ApprovalStep, AuditLog, Division, RequestFeedback
 )
 
 
@@ -121,10 +121,35 @@ class ModuleSerializer(serializers.ModelSerializer):
 class WorkflowStepDefinitionSerializer(serializers.ModelSerializer):
     """Serializer for WorkflowStepDefinition."""
     role_name = serializers.CharField(source='role_required.name', read_only=True)
+    user_name = serializers.SerializerMethodField()
+    role_users = serializers.SerializerMethodField()
 
     class Meta:
         model = WorkflowStepDefinition
-        fields = ['id', 'step_order', 'name', 'role_required', 'role_name', 'is_optional']
+        fields = [
+            'id', 'step_order', 'name', 'approver_type', 
+            'role_required', 'role_name', 'user_required', 'user_name', 
+            'is_optional', 'role_users'
+        ]
+
+    def get_user_name(self, obj):
+        if obj.user_required:
+            return obj.user_required.get_full_name() or obj.user_required.username
+        return None
+
+    def get_role_users(self, obj):
+        if obj.approver_type == 'ROLE' and obj.role_required:
+            users = obj.role_required.users.filter(is_active=True)
+            return [
+                {
+                    "id": user.id,
+                    "name": user.get_full_name() or user.username,
+                    "department": user.department,
+                    "division": user.division,
+                }
+                for user in users
+            ]
+        return []
 
 
 class WorkflowDefinitionSerializer(serializers.ModelSerializer):
@@ -176,18 +201,25 @@ class ApprovalStepSerializer(serializers.ModelSerializer):
     """Serializer for ApprovalStep instances."""
     assigned_to_name = serializers.SerializerMethodField()
     role_name = serializers.CharField(source='role_required.name', read_only=True)
-
+    user_required_name = serializers.SerializerMethodField()
+ 
     class Meta:
         model = ApprovalStep
         fields = [
-            'id', 'step_order', 'name', 'assigned_to', 'assigned_to_name',
-            'role_required', 'role_name', 'status', 'comments', 'acted_at',
+            'id', 'step_order', 'name', 'approver_type', 'assigned_to', 'assigned_to_name',
+            'role_required', 'role_name', 'user_required', 'user_required_name',
+            'status', 'comments', 'acted_at',
         ]
-
+ 
     def get_assigned_to_name(self, obj):
         """Get display name for the assigned approver."""
         if obj.assigned_to:
             return obj.assigned_to.get_full_name() or obj.assigned_to.username
+        return None
+
+    def get_user_required_name(self, obj):
+        if obj.user_required:
+            return obj.user_required.get_full_name() or obj.user_required.username
         return None
 
 
@@ -205,6 +237,27 @@ class AuditLogSerializer(serializers.ModelSerializer):
     def get_actor_name(self, obj):
         """Get display name for the actor."""
         return obj.actor.get_full_name() or obj.actor.username
+
+
+class RequestFeedbackSerializer(serializers.ModelSerializer):
+    """Serializer for RequestFeedback model."""
+    user_name = serializers.SerializerMethodField()
+    created_by_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = RequestFeedback
+        fields = ['id', 'request', 'user', 'user_name', 'created_by', 'created_by_name', 'content', 'created_at', 'updated_at']
+        read_only_fields = ['created_by', 'created_at', 'updated_at']
+
+    def get_user_name(self, obj):
+        if obj.user:
+            return obj.user.get_full_name() or obj.user.username
+        return None
+
+    def get_created_by_name(self, obj):
+        if obj.created_by:
+            return obj.created_by.get_full_name() or obj.created_by.username
+        return "Unknown"
 
 
 class ApprovalRequestListSerializer(serializers.ModelSerializer):
@@ -254,6 +307,7 @@ class ApprovalRequestDetailSerializer(serializers.ModelSerializer):
     steps = ApprovalStepSerializer(many=True, read_only=True)
     division_details = serializers.SerializerMethodField()
     audit_logs = AuditLogSerializer(many=True, read_only=True)
+    feedbacks = RequestFeedbackSerializer(many=True, read_only=True)
 
     class Meta:
         model = ApprovalRequest
@@ -262,7 +316,7 @@ class ApprovalRequestDetailSerializer(serializers.ModelSerializer):
             'module_color', 'module_icon', 'workflow', 'workflow_name',
             'requester', 'requester_name', 'title', 'description',
             'payload', 'status', 'current_step', 'priority', 'division', 'division_details',
-            'steps', 'audit_logs', 'created_at', 'updated_at',
+            'steps', 'audit_logs', 'feedbacks', 'created_at', 'updated_at',
         ]
 
     def get_requester_name(self, obj):

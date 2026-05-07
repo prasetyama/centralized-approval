@@ -13,14 +13,14 @@ from django_filters.rest_framework import DjangoFilterBackend
 
 from core.models import (
     Module, Role, User, WorkflowDefinition,
-    ApprovalRequest, ApprovalStep, AuditLog, WorkflowStepDefinition, Division
+    ApprovalRequest, ApprovalStep, AuditLog, WorkflowStepDefinition, Division, RequestFeedback
 )
 from core.serializers import (
     ModuleSerializer, RoleSerializer, UserListSerializer, UserDetailSerializer,
     WorkflowDefinitionSerializer, WorkflowDefinitionWriteSerializer,
     ApprovalRequestListSerializer, ApprovalRequestDetailSerializer,
     SubmitRequestSerializer, ActionSerializer, AuditLogSerializer,
-    DelegateRequestSerializer, DivisionSerializer,
+    DelegateRequestSerializer, DivisionSerializer, RequestFeedbackSerializer,
 )
 from core.engine import WorkflowEngine
 
@@ -213,28 +213,35 @@ class InboxView(generics.ListAPIView):
 
     def get_queryset(self):
         """
-        Return requests where the current user has a WAITING step assigned.
-        Also includes requests where the step's required role matches the user's role
-        and no specific assignee is set.
+        Unified inbox: returns requests where the user is an active approver
+        OR a participant in the discussion.
         """
         user = self.request.user
 
-        if (user.is_superuser):
-            request_ids = ApprovalStep.objects.filter(
-            ).values_list('request_id', flat=True).distinct()
+        if user.is_superuser:
+            queryset = ApprovalRequest.objects.filter(status=ApprovalRequest.Status.IN_PROGRESS)
         else:
-            # Requests where user is assigned or has the required role
-            request_ids = ApprovalStep.objects.filter(
+            # 1. Requests where user is the active approver
+            waiting_ids = ApprovalStep.objects.filter(
                 status=ApprovalStep.StepStatus.WAITING
             ).filter(
-            Q(assigned_to=user) |
-            Q(assigned_to__isnull=True, role_required=user.role)
-        ).values_list('request_id', flat=True).distinct()
+                Q(assigned_to=user)
+            ).values_list('request_id', flat=True)
 
-        queryset = ApprovalRequest.objects.filter(
-            id__in=request_ids,
-            status=ApprovalRequest.Status.IN_PROGRESS,
-        ).select_related('module', 'requester')
+            # 2. Requests where user has participated in the discussion
+            discussion_ids = RequestFeedback.objects.filter(
+                user=user
+            ).values_list('request_id', flat=True)
+
+            # Combine all relevant request IDs
+            all_ids = set(waiting_ids) | set(discussion_ids)
+
+            queryset = ApprovalRequest.objects.filter(
+                id__in=all_ids,
+                status=ApprovalRequest.Status.IN_PROGRESS
+            )
+
+        queryset = queryset.select_related('module', 'requester').distinct()
 
         # Filtering
         module_code = self.request.query_params.get('module')
@@ -271,14 +278,9 @@ class HistoryView(generics.ListAPIView):
     def get_queryset(self):
         user = self.request.user
 
-        relevant_module_ids = WorkflowStepDefinition.objects.filter(
-            role_required=user.role
-        ).values_list('workflow__module_id', flat=True).distinct()
-
-        # Requests where user is the actor for APPROVED or REJECTED actions
+        # Requests where the logged-in user is the actor for APPROVED or REJECTED actions
         request_ids = AuditLog.objects.filter(
-            Q(request__module_id__in=relevant_module_ids) | Q(request__requester=user),
-            step__role_required=user.role,
+            actor=user,
             action__in=[AuditLog.Action.APPROVED, AuditLog.Action.REJECTED]
         ).values_list('request_id', flat=True).distinct()
 
@@ -318,20 +320,44 @@ def dashboard_summary(request):
     """
     user = request.user
 
-    # Count all requests by status
+    # Count requests by status, filtered by user involvement
+    if user.is_superuser:
+        relevant_requests = ApprovalRequest.objects.all()
+    else:
+        # 1. Tasks I have handled in the past (Approved/Rejected)
+        acted_request_ids = AuditLog.objects.filter(actor=user).values_list('request_id', flat=True)
+        print ("acted request id : ", acted_request_ids)
+        
+        # 2. Combined relevance filter:
+        relevant_requests = ApprovalRequest.objects.filter(
+            Q(requester=user) |                          # I am the requester
+            Q(id__in=acted_request_ids) 
+        ).distinct()
+
     status_counts = dict(
-        ApprovalRequest.objects.values_list('status')
-        .annotate(count=Count('id'))
+        relevant_requests.values_list('status')
+        .annotate(count=Count('id', distinct=True))
         .values_list('status', 'count')
     )
 
     # Pending for current user (inbox count)
-    inbox_count = ApprovalStep.objects.filter(
-        status=ApprovalStep.StepStatus.WAITING
-    ).filter(
-        Q(assigned_to=user) |
-        Q(assigned_to__isnull=True, role_required=user.role)
-    ).values_list('request_id', flat=True).distinct().count()
+    if user.is_superuser:
+        inbox_count = ApprovalRequest.objects.filter(status=ApprovalRequest.Status.IN_PROGRESS).count()
+    else:
+        waiting_ids = ApprovalStep.objects.filter(
+            status=ApprovalStep.StepStatus.WAITING
+        ).filter(
+            Q(assigned_to=user)
+        ).values_list('request_id', flat=True)
+
+        discussion_ids = RequestFeedback.objects.filter(
+            user=user
+        ).values_list('request_id', flat=True)
+
+        inbox_count = ApprovalRequest.objects.filter(
+            id__in=set(waiting_ids) | set(discussion_ids),
+            status=ApprovalRequest.Status.IN_PROGRESS
+        ).distinct().count()
 
     # My submitted requests
     my_requests_count = ApprovalRequest.objects.filter(requester=user).count()
@@ -448,3 +474,14 @@ class ApprovalRequestViewSet(viewsets.ReadOnlyModelViewSet):
         if self.action == 'retrieve':
             return ApprovalRequestDetailSerializer
         return ApprovalRequestListSerializer
+
+
+class RequestFeedbackViewSet(viewsets.ModelViewSet):
+    """ViewSet for RequestFeedback."""
+    queryset = RequestFeedback.objects.select_related('user', 'request').all()
+    serializer_class = RequestFeedbackSerializer
+    permission_classes = [IsAuthenticated]
+    filterset_fields = ['request', 'user', 'type', 'is_resolved']
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user)

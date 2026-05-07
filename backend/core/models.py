@@ -167,8 +167,12 @@ class WorkflowDefinition(models.Model):
 class WorkflowStepDefinition(models.Model):
     """
     Each step in a workflow template.
-    Defines the order, name, and required role for approval at that step.
+    Defines the order, name, and required role (or specific user) for approval at that step.
     """
+    class ApproverType(models.TextChoices):
+        ROLE = 'ROLE', 'Role-based'
+        USER = 'USER', 'Specific User'
+
     workflow = models.ForeignKey(
         WorkflowDefinition,
         on_delete=models.CASCADE,
@@ -177,11 +181,29 @@ class WorkflowStepDefinition(models.Model):
     )
     step_order = models.PositiveIntegerField(help_text="Step sequence number (1-based)")
     name = models.CharField(max_length=200, help_text="Step name (e.g., 'Manager Review')")
+    
+    approver_type = models.CharField(
+        max_length=10,
+        choices=ApproverType.choices,
+        default=ApproverType.ROLE,
+        help_text="Whether to assign by role or a specific user"
+    )
+    
     role_required = models.ForeignKey(
         Role,
         on_delete=models.PROTECT,
         related_name='step_definitions',
-        help_text="Role required to approve this step"
+        null=True,
+        blank=True,
+        help_text="Role required to approve this step (if type is ROLE)"
+    )
+    user_required = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        related_name='step_definitions',
+        null=True,
+        blank=True,
+        help_text="Specific user required to approve this step (if type is USER)"
     )
     is_optional = models.BooleanField(default=False, help_text="If true, step can be skipped")
 
@@ -193,8 +215,23 @@ class WorkflowStepDefinition(models.Model):
             models.Index(fields=['workflow', 'step_order'], name='idx_stepdef_wf_order'),
         ]
 
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        if self.approver_type == self.ApproverType.ROLE and not self.role_required:
+            raise ValidationError("role_required was not provided for ROLE-based step.")
+        if self.approver_type == self.ApproverType.USER and not self.user_required:
+            raise ValidationError("user_required was not provided for USER-based step.")
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
     def __str__(self):
-        return f"Step {self.step_order}: {self.name} ({self.role_required.code})"
+        if self.approver_type == self.ApproverType.ROLE:
+            approver = self.role_required.code if self.role_required else "No Role"
+        else:
+            approver = self.user_required.username if self.user_required else "No User"
+        return f"Step {self.step_order}: {self.name} ({approver})"
 
 
 class ApprovalRequest(models.Model):
@@ -294,6 +331,14 @@ class ApprovalStep(models.Model):
     )
     step_order = models.PositiveIntegerField(help_text="Step sequence number")
     name = models.CharField(max_length=200)
+    
+    approver_type = models.CharField(
+        max_length=10,
+        choices=WorkflowStepDefinition.ApproverType.choices,
+        default=WorkflowStepDefinition.ApproverType.ROLE,
+        help_text="Whether this step was assigned by role or specific user"
+    )
+
     assigned_to = models.ForeignKey(
         User,
         on_delete=models.SET_NULL,
@@ -306,7 +351,17 @@ class ApprovalStep(models.Model):
         Role,
         on_delete=models.PROTECT,
         related_name='approval_steps',
+        null=True,
+        blank=True,
         help_text="Role required for this step"
+    )
+    user_required = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        related_name='assigned_user_steps',
+        null=True,
+        blank=True,
+        help_text="Specific user required for this step"
     )
     status = models.CharField(
         max_length=20,
@@ -326,7 +381,15 @@ class ApprovalStep(models.Model):
         ]
 
     def __str__(self):
-        return f"Step {self.step_order}: {self.name} - {self.status}"
+        approver = "Unassigned"
+        if self.assigned_to:
+            approver = self.assigned_to.username
+        elif self.approver_type == WorkflowStepDefinition.ApproverType.ROLE and self.role_required:
+            approver = f"Role: {self.role_required.code}"
+        elif self.approver_type == WorkflowStepDefinition.ApproverType.USER and self.user_required:
+            approver = f"User: {self.user_required.username}"
+            
+        return f"Step {self.step_order}: {self.name} ({approver}) - {self.status}"
 
 
 class AuditLog(models.Model):
@@ -380,3 +443,40 @@ class AuditLog(models.Model):
 
     def __str__(self):
         return f"[{self.timestamp}] {self.actor} - {self.action} on {self.request}"
+
+class RequestFeedback(models.Model):
+    """
+    Non-blocking feedback/discussion for an approval request.
+    Can be used by SMEs or Observers to provide input without being part of the approval chain.
+    """
+    request = models.ForeignKey(
+        ApprovalRequest,
+        on_delete=models.CASCADE,
+        related_name='feedbacks',
+        help_text="The approval request this feedback belongs to"
+    )
+    user = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        related_name='feedbacks_targeted',
+        null=True,
+        blank=True,
+        help_text="The user mentioned/targeted in this feedback"
+    )
+    content = models.TextField(help_text="The feedback content")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        related_name='feedbacks_created',
+        default=1,
+        help_text="The user who created this feedback"
+    )
+
+    class Meta:
+        db_table = 'aw_request_feedback'
+        ordering = ['created_at']
+
+    def __str__(self):
+        return f"Feedback by {self.user} on {self.request}"

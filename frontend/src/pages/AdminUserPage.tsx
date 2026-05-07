@@ -109,6 +109,7 @@ export const AdminUserPage = () => {
                             <TableHead>User</TableHead>
                             <TableHead>Email</TableHead>
                             <TableHead>Role</TableHead>
+                            <TableHead>Division</TableHead>
                             <TableHead>Department</TableHead>
                             <TableHead>Status</TableHead>
                             <TableHead className="text-right">Action</TableHead>
@@ -136,6 +137,11 @@ export const AdminUserPage = () => {
                                     <Badge variant="secondary" className="font-bold tracking-tight">
                                         {user.role_name}
                                     </Badge>
+                                </TableCell>
+                                <TableCell>
+                                    <div className="flex items-center gap-1.5 text-slate-600">
+                                        <span className="text-sm font-medium">{user.division || '-'}</span>
+                                    </div>
                                 </TableCell>
                                 <TableCell>
                                     <div className="flex items-center gap-1.5 text-slate-600">

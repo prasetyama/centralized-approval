@@ -12,8 +12,12 @@ interface Step {
     id?: number;
     name: string;
     step_order: number;
-    role_required: number;
+    approver_type: 'ROLE' | 'USER';
+    role_required?: number | null;
+    user_required?: number | null;
     is_optional: boolean;
+    role_name?: string;
+    user_name?: string;
 }
 
 interface WorkflowFormProps {
@@ -43,6 +47,11 @@ export const WorkflowForm: React.FC<WorkflowFormProps> = ({ initialData, onClose
         queryFn: () => api.get('/admin/roles'),
     });
 
+    const { data: users } = useQuery<any>({
+        queryKey: ['admin-users'],
+        queryFn: () => api.get('/admin/users?is_approver=true'),
+    });
+
     const mutation = useMutation({
         mutationFn: (data: any) => {
             if (isEdit) {
@@ -60,7 +69,9 @@ export const WorkflowForm: React.FC<WorkflowFormProps> = ({ initialData, onClose
         const newStep: Step = {
             name: '',
             step_order: formData.steps.length + 1,
-            role_required: (roles as any)?.results?.[0]?.id || 0,
+            approver_type: 'ROLE',
+            role_required: (roles as any)?.results?.[0]?.id || null,
+            user_required: null,
             is_optional: false,
         };
         setFormData({ ...formData, steps: [...formData.steps, newStep] });
@@ -73,10 +84,12 @@ export const WorkflowForm: React.FC<WorkflowFormProps> = ({ initialData, onClose
         setFormData({ ...formData, steps: reorderedSteps });
     };
 
-    const handleStepChange = (index: number, field: keyof Step, value: any) => {
-        const newSteps = [...formData.steps];
-        newSteps[index] = { ...newSteps[index], [field]: value };
-        setFormData({ ...formData, steps: newSteps });
+    const handleStepChange = (index: number, updates: Partial<Step>) => {
+        setFormData(prev => {
+            const newSteps = [...prev.steps];
+            newSteps[index] = { ...newSteps[index], ...updates };
+            return { ...prev, steps: newSteps };
+        });
     };
 
     const moveStep = (index: number, direction: 'up' | 'down') => {
@@ -104,6 +117,10 @@ export const WorkflowForm: React.FC<WorkflowFormProps> = ({ initialData, onClose
 
     const moduleOptions = ((modules as any)?.results || []).map((m: any) => ({ value: m.id, label: m.name }));
     const roleOptions = ((roles as any)?.results || []).map((r: any) => ({ value: r.id, label: r.name }));
+    const userOptions = ((users as any)?.results || []).map((u: any) => ({
+        value: u.id,
+        label: `${u.first_name} ${u.last_name}`.trim() || u.username
+    }));
 
     return (
         <form onSubmit={handleSubmit} className="space-y-6 animate-in zoom-in-95 duration-300">
@@ -194,22 +211,57 @@ export const WorkflowForm: React.FC<WorkflowFormProps> = ({ initialData, onClose
                                     <div className="absolute -left-3 top-4 w-6 h-6 rounded-full bg-slate-900 text-white text-[10px] font-black flex items-center justify-center border-2 border-white shadow-sm">
                                         {index + 1}
                                     </div>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        <Input
-                                            label="Step Name"
-                                            placeholder="e.g. Supervisor Review"
-                                            value={step.name}
-                                            onChange={(e) => handleStepChange(index, 'name', e.target.value)}
-                                            required
-                                        />
-                                        <div className="flex gap-4 items-end">
-                                            <Select
-                                                label="Role Required"
-                                                options={roleOptions}
-                                                value={step.role_required}
-                                                onChange={(e) => handleStepChange(index, 'role_required', parseInt(e.target.value))}
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                        <div className="md:col-span-1">
+                                            <Input
+                                                label="Step Name"
+                                                placeholder="e.g. Supervisor Review"
+                                                value={step.name}
+                                                onChange={(e) => handleStepChange(index, { name: e.target.value })}
                                                 required
                                             />
+                                        </div>
+                                        <div className="md:col-span-1">
+                                            <Select
+                                                label="Approver Type"
+                                                options={[
+                                                    { value: 'ROLE', label: 'Role-based' },
+                                                    { value: 'USER', label: 'Specific User' }
+                                                ]}
+                                                value={step.approver_type}
+                                                onChange={(e) => {
+                                                    const type = e.target.value as 'ROLE' | 'USER';
+                                                    const updates: Partial<Step> = { approver_type: type };
+                                                    if (type === 'ROLE') {
+                                                        updates.role_required = (roles as any)?.results?.[0]?.id || null;
+                                                        updates.user_required = null;
+                                                    } else {
+                                                        updates.user_required = (users as any)?.results?.[0]?.id || null;
+                                                        updates.role_required = null;
+                                                    }
+                                                    handleStepChange(index, updates);
+                                                }}
+                                                required
+                                            />
+                                        </div>
+                                        <div className="md:col-span-1 flex gap-4 items-end">
+                                            {step.approver_type === 'ROLE' ? (
+                                                <Select
+                                                    label="Role Required"
+                                                    options={roleOptions}
+                                                    value={step.role_required || ''}
+                                                    onChange={(e) => handleStepChange(index, { role_required: parseInt(e.target.value) })}
+                                                    required
+                                                />
+                                            ) : (
+                                                <Select
+                                                    label="User Required"
+                                                    options={userOptions}
+                                                    value={step.user_required || ''}
+                                                    onChange={(e) => handleStepChange(index, { user_required: parseInt(e.target.value) })}
+                                                    required
+                                                />
+                                            )}
                                             <button
                                                 type="button"
                                                 onClick={() => handleRemoveStep(index)}
@@ -219,18 +271,18 @@ export const WorkflowForm: React.FC<WorkflowFormProps> = ({ initialData, onClose
                                             </button>
                                         </div>
                                     </div>
-                                    <div className="flex items-center gap-2 mt-3">
+                                    {/* <div className="flex items-center gap-2 mt-3">
                                         <input
                                             type="checkbox"
                                             id={`optional-${index}`}
                                             checked={step.is_optional}
-                                            onChange={(e) => handleStepChange(index, 'is_optional', e.target.checked)}
+                                            onChange={(e) => handleStepChange(index, { is_optional: e.target.checked })}
                                             className="h-3 w-3 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                                         />
                                         <label htmlFor={`optional-${index}`} className="text-[10px] font-black text-slate-500 uppercase select-none">
                                             Optional Step
                                         </label>
-                                    </div>
+                                    </div> */}
                                 </Card>
                             </div>
                         ))}

@@ -1,13 +1,21 @@
-import { Bell, Search } from 'lucide-react';
+import { Bell, Search, Menu } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 
-export const Header = () => {
+export const Header = ({ onMenuClick }: { onMenuClick?: () => void }) => {
     const { user } = useAuth();
 
     return (
-        <header className="sticky top-0 z-30 flex h-16 w-full items-center justify-between border-b border-slate-200 bg-white/80 px-8 backdrop-blur-md">
+        <header className="sticky top-0 z-30 flex h-16 w-full items-center justify-between border-b border-slate-200 bg-white/80 px-4 lg:px-8 backdrop-blur-md">
             <div className="flex flex-1 items-center max-w-xl">
-                <div className="relative w-full">
+                {onMenuClick && (
+                    <button 
+                        onClick={onMenuClick}
+                        className="mr-4 p-2 text-slate-500 hover:bg-slate-100 rounded-lg lg:hidden"
+                    >
+                        <Menu size={20} />
+                    </button>
+                )}
+                <div className="relative w-full hidden sm:block">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                     <input
                         type="text"

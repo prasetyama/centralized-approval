@@ -9,6 +9,7 @@ import { HistoryPage } from './pages/HistoryPage';
 import { ApprovalDetailPage } from './pages/ApprovalDetailPage';
 import { AdminUserPage } from './pages/AdminUserPage';
 import { AdminWorkflowPage } from './pages/AdminWorkflowPage';
+import { WorkflowSimulatorPage } from './pages/WorkflowSimulatorPage';
 
 const AppRoutes = () => {
     const { loading } = useAuth();
@@ -39,6 +40,9 @@ const AppRoutes = () => {
                 <Route path="workflow/:id" element={<ApprovalDetailPage />} />
                 <Route path="admin/users" element={<AdminUserPage />} />
                 <Route path="admin/workflows" element={<AdminWorkflowPage />} />
+                <Route path="admin/workflows/:id/edit" element={<AdminWorkflowPage />} />
+                <Route path="admin/workflows/new" element={<AdminWorkflowPage />} />
+                <Route path="admin/workflow/simulator" element={<WorkflowSimulatorPage />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
             </Route>
         </Routes>

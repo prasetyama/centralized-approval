@@ -11,7 +11,7 @@ from core.views import (
     WorkflowApproveView, WorkflowRejectView, WorkflowReviseView, WorkflowDelegateView,
     InboxView, HistoryView, dashboard_summary,
     ModuleViewSet, RoleViewSet, UserViewSet, DivisionViewSet,
-    WorkflowDefinitionViewSet, ApprovalRequestViewSet,
+    WorkflowDefinitionViewSet, ApprovalRequestViewSet, RequestFeedbackViewSet,
 )
 
 router = DefaultRouter()
@@ -21,6 +21,7 @@ router.register(r'admin/roles', RoleViewSet, basename='role')
 router.register(r'admin/users', UserViewSet, basename='user')
 router.register(r'admin/workflows', WorkflowDefinitionViewSet, basename='workflow-definition')
 router.register(r'requests', ApprovalRequestViewSet, basename='approval-request')
+router.register(r'feedback', RequestFeedbackViewSet, basename='request-feedback')
 
 urlpatterns = [
     # Workflow actions
