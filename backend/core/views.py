@@ -15,7 +15,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 from core.models import (
     Module, Role, User, WorkflowDefinition, WorkflowStepDefinition,
     ApprovalRequest, ApprovalStep, AuditLog, Division, RequestFeedback,
-    Brand, UserBrand
+    Brand, UserBrand, MasterWorkflowCriteria
 )
 from core.serializers import (
     ModuleSerializer, RoleSerializer, UserListSerializer, UserDetailSerializer,
@@ -24,7 +24,7 @@ from core.serializers import (
     ApprovalRequestDetailSerializer, SubmitRequestSerializer,
     ApprovalStepSerializer, AuditLogSerializer, ActionSerializer,
     DivisionSerializer, DelegateRequestSerializer, RequestFeedbackSerializer,
-    BrandSerializer, UserBrandSerializer
+    BrandSerializer, UserBrandSerializer, MasterWorkflowCriteriaSerializer
 )
 from core.engine import WorkflowEngine
 
@@ -504,3 +504,10 @@ class UserBrandViewSet(viewsets.ModelViewSet):
     """ViewSet for managing UserBrand mapping."""
     queryset = UserBrand.objects.all()
     serializer_class = UserBrandSerializer
+    
+
+class MasterWorkflowCriteriaViewSet(viewsets.ModelViewSet):
+    """ViewSet for managing MasterWorkflowCondition mapping."""
+    queryset = MasterWorkflowCriteria.objects.all()
+    serializer_class = MasterWorkflowCriteriaSerializer
+

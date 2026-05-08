@@ -7,7 +7,7 @@ from rest_framework import serializers
 from core.models import (
     Module, Role, User, WorkflowDefinition, WorkflowStepDefinition,
     ApprovalRequest, ApprovalStep, AuditLog, Division, RequestFeedback,
-    Brand, UserBrand
+    Brand, UserBrand, MasterWorkflowCriteria
 )
 
 
@@ -23,10 +23,11 @@ class BrandSerializer(serializers.ModelSerializer):
     """Serializer for Brand model."""
     owner_name = serializers.CharField(source='owner.username', read_only=True)
     owner_full_name = serializers.SerializerMethodField()
+    master_workflow_condition_name = serializers.CharField(source='master_workflow_condition.name', read_only=True)
 
     class Meta:
         model = Brand
-        fields = ['id', 'name', 'code', 'owner', 'owner_name', 'owner_full_name', 'created_at', 'updated_at']
+        fields = ['id', 'name', 'code', 'owner', 'owner_name', 'owner_full_name', 'master_workflow_condition', 'master_workflow_condition_name', 'created_at', 'updated_at']
 
     def get_owner_full_name(self, obj):
         return obj.owner.get_full_name() if obj.owner else None
@@ -44,6 +45,14 @@ class UserBrandSerializer(serializers.ModelSerializer):
 
     def get_user_full_name(self, obj):
         return obj.user.get_full_name() or obj.user.username
+
+class MasterWorkflowCriteriaSerializer(serializers.ModelSerializer):
+    """Serializer for MasterWorkflowCriteria mapping."""
+
+    class Meta:
+        model = MasterWorkflowCriteria
+        fields = ['id', 'name', 'description', 'key_param_json']
+
 
 
 class RoleSerializer(serializers.ModelSerializer):
@@ -151,13 +160,14 @@ class WorkflowStepDefinitionSerializer(serializers.ModelSerializer):
     role_name = serializers.CharField(source='role_required.name', read_only=True)
     user_name = serializers.SerializerMethodField()
     role_users = serializers.SerializerMethodField()
+    master_workflow_criteria_key_param_json = serializers.CharField(source='master_workflow_criteria.key_param_json', read_only=True)
 
     class Meta:
         model = WorkflowStepDefinition
         fields = [
             'id', 'step_order', 'name', 'approver_type', 
             'role_required', 'role_name', 'user_required', 'user_name', 
-            'is_brand_conditional',
+            'is_brand_conditional', 'master_workflow_criteria', 'master_workflow_criteria_key_param_json', 
             'is_optional', 'role_users'
         ]
 

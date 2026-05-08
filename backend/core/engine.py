@@ -205,15 +205,24 @@ class WorkflowEngine:
             assignee = None
             
             # 1. Check if step uses Brand-Specific Approval
-            if step_def.is_brand_conditional:
-                brand_code = payload.get('brand_code')
-                if brand_code:
+            if step_def.is_brand_conditional and step_def.master_workflow_criteria:
+                # Use the criteria to find the key in the payload
+                payload_key = step_def.master_workflow_criteria.key_param_json
+                master_code = payload.get(payload_key)
+                
+                if master_code:
                     try:
-                        brand = Brand.objects.get(code=brand_code)
-                        if brand.owner:
-                            assignee = brand.owner
+                        # Find matching master data entry (Brand/Zone/etc.)
+                        condition = Brand.objects.get(
+                            code=master_code,
+                            master_workflow_condition=step_def.master_workflow_criteria
+                        )
+                        if condition.owner:
+                            assignee = condition.owner
                     except Brand.DoesNotExist:
-                        pass
+                        raise ValidationError(f"Condition '{master_code}' not found for criteria '{step_def.master_workflow_criteria.name}'.")
+                else:
+                    raise ValidationError(f"Master workflow criteria value not found for key '{payload_key}'.")
             
             # 2. Fallback to standard logic if not brand-conditional or brand assignee not found
             if assignee is None:

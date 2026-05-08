@@ -22,6 +22,7 @@ export const WorkflowSimulatorPage = () => {
             "total_sku": 1,
             "submitted_at": "2026-03-30T06:52:27.782Z",
             "order_type": "3",
+            "brand_code": "SQ",
             "items": [
                 {
                     "sku": "F0000526",
@@ -83,16 +84,21 @@ export const WorkflowSimulatorPage = () => {
 
                     let simulatedAssignee = null;
                     if (step.is_brand_conditional && !isSkipped) {
-                        const brandCode = parsedPayload.payload?.brand_code;
-                        if (brandCode) {
-                            const brand = brands.find((b: any) => b.code === brandCode);
-                            if (brand) {
-                                simulatedAssignee = brand.owner_full_name || brand.owner_name;
+                        const masterWorkflowCriteriaKey = step.master_workflow_criteria_key_param_json;
+                        if (masterWorkflowCriteriaKey) {
+                            const criteriaValue = parsedPayload.payload?.[masterWorkflowCriteriaKey];
+                            if (criteriaValue) {
+                                const brand = brands.find((b: any) => b.code === criteriaValue);
+                                if (brand) {
+                                    simulatedAssignee = brand?.owner_name;
+                                } else {
+                                    throw new Error(`Condition '${criteriaValue}' not found.`);
+                                }
                             } else {
-                                simulatedAssignee = "Brand not found";
+                                throw new Error(`Master workflow criteria value not found for key ${masterWorkflowCriteriaKey}.`);
                             }
                         } else {
-                            throw new Error("Missing brand_code in payload for brand-conditional step.");
+                            throw new Error("Master workflow criteria key not found.");
                         }
                     }
 

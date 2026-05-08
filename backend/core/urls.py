@@ -12,7 +12,7 @@ from core.views import (
     InboxView, HistoryView, dashboard_summary,
     ModuleViewSet, RoleViewSet, UserViewSet, DivisionViewSet,
     WorkflowDefinitionViewSet, ApprovalRequestViewSet, RequestFeedbackViewSet,
-    BrandViewSet, UserBrandViewSet,
+    BrandViewSet, UserBrandViewSet, MasterWorkflowCriteriaViewSet
 )
 
 router = DefaultRouter()
@@ -25,6 +25,7 @@ router.register(r'requests', ApprovalRequestViewSet, basename='approval-request'
 router.register(r'feedback', RequestFeedbackViewSet, basename='request-feedback')
 router.register(r'admin/brands', BrandViewSet, basename='brand')
 router.register(r'admin/user-brands', UserBrandViewSet, basename='user-brand')
+router.register(r'admin/master-workflow-conditions', MasterWorkflowCriteriaViewSet, basename='master-condition')
 
 urlpatterns = [
     # Workflow actions

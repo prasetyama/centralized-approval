@@ -206,6 +206,14 @@ class WorkflowStepDefinition(models.Model):
         help_text="Specific user required to approve this step (if type is USER)"
     )
     is_brand_conditional = models.BooleanField(default=False, help_text="If true, uses Brand-Specific Approval logic")
+    master_workflow_criteria = models.ForeignKey(
+        'MasterWorkflowCriteria',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='workflow_steps',
+        help_text="Criteria to find the brand/owner for conditional approval"
+    )
     is_optional = models.BooleanField(default=False, help_text="If true, step can be skipped")
 
     class Meta:
@@ -482,6 +490,21 @@ class RequestFeedback(models.Model):
     def __str__(self):
         return f"Feedback by {self.user} on {self.request}"
 
+class MasterWorkflowCriteria(models.Model):
+    name = models.CharField(max_length=150, unique=True, help_text="Master Zone, Master Brand")
+    description = models.CharField(max_length=255, null=True, blank=True)
+    key_param_json = models.CharField(max_length=50, unique=True, help_text="brand_code, zone_code")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'aw_master_workflow_condition'
+        ordering = ['name']
+
+    def __str__(self):
+        return f"{self.name}"
+    
+
 
 class Brand(models.Model):
     """
@@ -500,6 +523,13 @@ class Brand(models.Model):
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    master_workflow_condition = models.ForeignKey(
+        MasterWorkflowCriteria,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='master_workflow_conditions'
+    )
 
     class Meta:
         db_table = 'aw_brand'
