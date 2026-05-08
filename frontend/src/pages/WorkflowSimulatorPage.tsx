@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/atoms/Card';
 import { Button } from '../components/atoms/Button';
 import { Textarea } from '../components/atoms/Textarea';
-import { CheckCircle, XCircle, Play, X, Tag } from 'lucide-react';
+import { CheckCircle, XCircle, Play, X } from 'lucide-react';
 import api from '../services/api';
 import { PayloadRenderer } from '@/components/molecules/PayloadRenderer';
 
@@ -242,19 +242,9 @@ export const WorkflowSimulatorPage = () => {
                                                         <p className="text-[15px] text-slate-700">
                                                             {isApproved ? 'Approved by ' : isRejected ? 'Rejected by ' : isWaiting ? 'Waiting Approval ' : 'Pending Approval '}
                                                             <span className="font-semibold text-slate-900">
-                                                                {step.simulatedAssignee || step.user_name || (step.role_users && step.role_users[0]?.name) || "Unassigned"} {step.role_required && `(${step.role_name})`}
+                                                                {step.simulatedAssignee || step.user_name || (step.role_users && step.role_users[0]?.name) || "Unassigned"}  ({step.name})
                                                             </span>
                                                         </p>
-                                                        {step.is_brand_conditional && (
-                                                            <div className="mt-1 flex items-center gap-2">
-                                                                <span className="px-2 py-0.5 bg-blue-50 text-blue-600 rounded text-[10px] font-bold uppercase tracking-wider border border-blue-100 flex items-center gap-1">
-                                                                    <Tag size={10} /> Brand Owner
-                                                                </span>
-                                                                <span className="text-[10px] text-slate-400 font-medium italic">
-                                                                    Resolved via code: <code className="text-slate-600 font-bold">{simulatedData?.payload?.brand_code || 'N/A'}</code>
-                                                                </span>
-                                                            </div>
-                                                        )}
                                                         {(step.condition_expression || step.condition) && (
                                                             <p className="text-xs text-slate-400 mt-0.5">
                                                                 Condition: {step.condition_expression || step.condition}
@@ -286,6 +276,44 @@ export const WorkflowSimulatorPage = () => {
                                             </div>
                                         );
                                     })}
+
+                                    {/* Final Result Card */}
+                                    {(() => {
+                                        const isRejected = simulationResult.some(s => s.status === 'REJECTED');
+                                        const isAllApproved = simulationResult.every(s => s.status === 'APPROVED' || s.status === 'SKIPPED');
+
+                                        if (isRejected) {
+                                            return (
+                                                <div className="mt-8 p-2 bg-red-50 border-2 border-red-200 rounded-2xl animate-in zoom-in duration-300">
+                                                    <div className="flex items-center gap-4">
+                                                        <div className="h-12 w-12 rounded-full bg-red-500 flex items-center justify-center text-white shadow-lg shadow-red-200">
+                                                            <XCircle size={28} />
+                                                        </div>
+                                                        <div>
+                                                            <h3 className="text-xl font-black text-red-900 leading-none">Workflow Rejected</h3>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        }
+
+                                        if (isAllApproved) {
+                                            return (
+                                                <div className="mt-8 p-2 bg-emerald-50 border-2 border-emerald-200 rounded-2xl animate-in zoom-in duration-300">
+                                                    <div className="flex items-center gap-4">
+                                                        <div className="h-8 w-8 rounded-full bg-emerald-500 flex items-center justify-center text-white shadow-lg shadow-emerald-200">
+                                                            <CheckCircle size={24} />
+                                                        </div>
+                                                        <div>
+                                                            <h3 className="text-xl font-black text-emerald-900 leading-none">Workflow Approved</h3>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        }
+
+                                        return null;
+                                    })()}
                                 </div>
                             </div>
                         )}
