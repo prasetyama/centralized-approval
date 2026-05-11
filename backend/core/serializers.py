@@ -7,7 +7,7 @@ from rest_framework import serializers
 from core.models import (
     Module, Role, User, WorkflowDefinition, WorkflowStepDefinition,
     ApprovalRequest, ApprovalStep, AuditLog, Division, RequestFeedback,
-    Brand, UserBrand, MasterWorkflowCriteria
+    Brand, UserBrand, MasterWorkflowCriteria, RequestWatcher
 )
 
 
@@ -278,6 +278,19 @@ class AuditLogSerializer(serializers.ModelSerializer):
         return obj.actor.get_full_name() or obj.actor.username
 
 
+class RequestWatcherSerializer(serializers.ModelSerializer):
+    """Serializer for RequestWatcher model."""
+    user_name = serializers.CharField(source='user.username', read_only=True)
+    user_full_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = RequestWatcher
+        fields = ['id', 'user', 'user_name', 'user_full_name', 'created_at']
+
+    def get_user_full_name(self, obj):
+        return obj.user.get_full_name() or obj.user.username
+
+
 class RequestFeedbackSerializer(serializers.ModelSerializer):
     """Serializer for RequestFeedback model."""
     user_name = serializers.SerializerMethodField()
@@ -347,6 +360,7 @@ class ApprovalRequestDetailSerializer(serializers.ModelSerializer):
     division_details = serializers.SerializerMethodField()
     audit_logs = AuditLogSerializer(many=True, read_only=True)
     feedbacks = RequestFeedbackSerializer(many=True, read_only=True)
+    watchers = RequestWatcherSerializer(many=True, read_only=True)
 
     class Meta:
         model = ApprovalRequest
@@ -355,7 +369,7 @@ class ApprovalRequestDetailSerializer(serializers.ModelSerializer):
             'module_color', 'module_icon', 'workflow', 'workflow_name',
             'requester', 'requester_name', 'title', 'description',
             'payload', 'status', 'current_step', 'priority', 'division', 'division_details',
-            'steps', 'audit_logs', 'feedbacks', 'created_at', 'updated_at',
+            'steps', 'audit_logs', 'feedbacks', 'watchers', 'created_at', 'updated_at',
         ]
 
     def get_requester_name(self, obj):
@@ -385,6 +399,12 @@ class SubmitRequestSerializer(serializers.Serializer):
     )
     division_id = serializers.CharField(max_length=50, required=False, allow_null=True)
     reference_id = serializers.CharField(max_length=100, required=False, default='')
+    watcher_ids = serializers.ListField(
+        child=serializers.IntegerField(),
+        required=False,
+        default=list,
+        help_text="List of user IDs to be added as watchers"
+    )
 
 
 class ActionSerializer(serializers.Serializer):

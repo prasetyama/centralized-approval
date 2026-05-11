@@ -15,7 +15,7 @@ from rest_framework.exceptions import ValidationError
 from core.models import (
     Module, WorkflowDefinition, WorkflowStepDefinition,
     ApprovalRequest, ApprovalStep, AuditLog, User, Division,
-    Brand
+    Brand, RequestWatcher
 )
 from core.state_machine import can_transition
 
@@ -139,7 +139,7 @@ class WorkflowEngine:
     @transaction.atomic
     def submit_request(module_code, workflow_id, requester, title, payload,
                        description='', priority='MEDIUM', reference_id='', 
-                       division_id=None, ip_address=None):
+                       division_id=None, ip_address=None, watcher_ids=None):
         """
         Submit a new approval request from any module.
         Creates the ApprovalRequest and generates all ApprovalStep instances
@@ -261,6 +261,19 @@ class WorkflowEngine:
         # Transition to IN_PROGRESS since first step is activated
         approval_request.status = ApprovalRequest.Status.IN_PROGRESS
         approval_request.save(update_fields=['status', 'updated_at'])
+
+        # Create watchers if provided
+        if watcher_ids:
+            for user_id in watcher_ids:
+                try:
+                    watcher_user = User.objects.get(id=user_id)
+                    RequestWatcher.objects.get_or_create(
+                        request=approval_request,
+                        user=watcher_user,
+                        defaults={'created_by': requester}
+                    )
+                except User.DoesNotExist:
+                    continue
 
         # Create audit log
         AuditLog.objects.create(

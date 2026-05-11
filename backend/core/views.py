@@ -15,7 +15,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 from core.models import (
     Module, Role, User, WorkflowDefinition, WorkflowStepDefinition,
     ApprovalRequest, ApprovalStep, AuditLog, Division, RequestFeedback,
-    Brand, UserBrand, MasterWorkflowCriteria
+    Brand, UserBrand, MasterWorkflowCriteria, RequestWatcher
 )
 from core.serializers import (
     ModuleSerializer, RoleSerializer, UserListSerializer, UserDetailSerializer,
@@ -24,7 +24,8 @@ from core.serializers import (
     ApprovalRequestDetailSerializer, SubmitRequestSerializer,
     ApprovalStepSerializer, AuditLogSerializer, ActionSerializer,
     DivisionSerializer, DelegateRequestSerializer, RequestFeedbackSerializer,
-    BrandSerializer, UserBrandSerializer, MasterWorkflowCriteriaSerializer
+    BrandSerializer, UserBrandSerializer, MasterWorkflowCriteriaSerializer,
+    RequestWatcherSerializer
 )
 from core.engine import WorkflowEngine
 
@@ -67,6 +68,7 @@ class WorkflowSubmitView(generics.CreateAPIView):
             reference_id=serializer.validated_data.get('reference_id', ''),
             division_id=serializer.validated_data.get('division_id'),
             ip_address=_get_client_ip(request),
+            watcher_ids=serializer.validated_data.get('watcher_ids', []),
         )
 
         return Response(
@@ -86,9 +88,23 @@ class WorkflowDetailView(generics.RetrieveAPIView):
     """
     queryset = ApprovalRequest.objects.select_related(
         'module', 'workflow', 'requester'
-    ).prefetch_related('steps', 'audit_logs')
+    ).prefetch_related('steps', 'audit_logs', 'watchers', 'watchers__user')
     serializer_class = ApprovalRequestDetailSerializer
     permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        """
+        Allow access if user is requester, an approver in any step, or a watcher.
+        """
+        user = self.request.user
+        if user.is_superuser:
+            return self.queryset
+
+        return self.queryset.filter(
+            Q(requester=user) |
+            Q(steps__assigned_to=user) |
+            Q(watchers__user=user)
+        ).distinct()
 
 
 class WorkflowApproveView(generics.GenericAPIView):
@@ -221,9 +237,16 @@ class InboxView(generics.ListAPIView):
         OR a participant in the discussion.
         """
         user = self.request.user
+        tab = self.request.query_params.get('tab', 'inbox')
 
         if user.is_superuser:
-            queryset = ApprovalRequest.objects.filter(status=ApprovalRequest.Status.IN_PROGRESS)
+            queryset = ApprovalRequest.objects.all()
+        elif tab == 'watching':
+            # Requests where user is a watcher
+            watched_ids = RequestWatcher.objects.filter(
+                user=user
+            ).values_list('request_id', flat=True)
+            queryset = ApprovalRequest.objects.filter(id__in=watched_ids)
         else:
             # 1. Requests where user is the active approver
             waiting_ids = ApprovalStep.objects.filter(
@@ -311,6 +334,54 @@ class HistoryView(generics.ListAPIView):
         return queryset
 
 
+class WatcherListView(generics.ListCreateAPIView):
+    """
+    GET /api/v1/workflow/<id>/watchers
+    POST /api/v1/workflow/<id>/watchers
+    List all watchers for a request or add a new one.
+    """
+    serializer_class = RequestWatcherSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return RequestWatcher.objects.filter(request_id=self.kwargs['pk'])
+
+    def post(self, request, pk):
+        try:
+            approval_request = ApprovalRequest.objects.get(id=pk)
+        except ApprovalRequest.DoesNotExist:
+            return Response({'error': 'Request not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        user_id = request.data.get('user_id')
+        if not user_id:
+            return Response({'error': 'user_id is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            target_user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        watcher, created = RequestWatcher.objects.get_or_create(
+            request=approval_request,
+            user=target_user,
+            defaults={'created_by': request.user}
+        )
+
+        if not created:
+            return Response({'message': 'User is already a watcher.'}, status=status.HTTP_200_OK)
+
+        # Audit log for adding watcher
+        AuditLog.objects.create(
+            request=approval_request,
+            actor=request.user,
+            action=AuditLog.Action.COMMENT,
+            details=f"Added {target_user.username} as a watcher.",
+            payload_snapshot=approval_request.payload
+        )
+
+        return Response(RequestWatcherSerializer(watcher).data, status=status.HTTP_201_CREATED)
+
+
 # ─────────────────────────────────────────────
 # Dashboard Summary
 # ─────────────────────────────────────────────
@@ -330,7 +401,6 @@ def dashboard_summary(request):
     else:
         # 1. Tasks I have handled in the past (Approved/Rejected)
         acted_request_ids = AuditLog.objects.filter(actor=user).values_list('request_id', flat=True)
-        print ("acted request id : ", acted_request_ids)
         
         # 2. Combined relevance filter:
         relevant_requests = ApprovalRequest.objects.filter(
@@ -400,6 +470,7 @@ def dashboard_summary(request):
             },
             'inbox_count': inbox_count,
             'my_requests_count': my_requests_count,
+            'watching_count': RequestWatcher.objects.filter(user=user).count(),
             'recent_activity': activity_serializer.data,
             'module_counts': module_counts
         }

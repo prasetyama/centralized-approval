@@ -321,6 +321,38 @@ class ApprovalRequest(models.Model):
         return f"[{self.module.code}] {self.title} - {self.status}"
 
 
+class RequestWatcher(models.Model):
+    """
+    Users who are given read-only access to a specific request.
+    They can see details, audit logs, and discussions but cannot take action.
+    """
+    request = models.ForeignKey(
+        ApprovalRequest,
+        on_delete=models.CASCADE,
+        related_name='watchers'
+    )
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='watched_requests'
+    )
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='watchers_created'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'aw_request_watcher'
+        unique_together = ['request', 'user']
+        verbose_name_plural = 'Request Watchers'
+
+    def __str__(self):
+        return f"{self.user.username} watching {self.request.title}"
+
+
 class ApprovalStep(models.Model):
     """
     Instance of a workflow step being executed for a specific request.

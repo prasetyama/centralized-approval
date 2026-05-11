@@ -6,7 +6,9 @@ import {
     ShoppingCart,
     Wallet,
     Users,
+    Eye,
 } from 'lucide-react';
+import { useState } from 'react';
 import api from '@/services/api';
 import { Card } from '@/components/atoms/Card';
 import { Button } from '@/components/atoms/Button';
@@ -23,9 +25,10 @@ import { formatDate } from '@/lib/utils';
 import { Link } from 'react-router-dom';
 
 export const InboxPage = () => {
+    const [activeTab, setActiveTab] = useState<'inbox' | 'watching'>('inbox');
     const { data: inbox, isLoading } = useQuery({
-        queryKey: ['inbox'],
-        queryFn: () => api.get('/inbox') as Promise<any>,
+        queryKey: ['inbox', activeTab],
+        queryFn: () => api.get('/inbox', { params: { tab: activeTab } }) as Promise<any>,
     });
 
     const getModuleIcon = (code: string) => {
@@ -52,17 +55,43 @@ export const InboxPage = () => {
 
     return (
         <div className="space-y-8">
+            <div className="flex border-b border-slate-100">
+                <button
+                    onClick={() => setActiveTab('inbox')}
+                    className={`px-6 py-4 text-sm font-bold flex items-center gap-2 transition-all ${activeTab === 'inbox'
+                        ? 'text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50/30'
+                        : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'
+                    }`}
+                >
+                    <Inbox size={18} />
+                    Inbox
+                </button>
+                <button
+                    onClick={() => setActiveTab('watching')}
+                    className={`px-6 py-4 text-sm font-bold flex items-center gap-2 transition-all ${activeTab === 'watching'
+                        ? 'text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50/30'
+                        : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'
+                    }`}
+                >
+                    <Eye size={18} />
+                    Watching
+                </button>
+            </div>
+
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-3xl font-bold tracking-tight text-slate-900">Approval</h1>
-                    <p className="mt-1 text-slate-500">Review and approve tasks from all departments.</p>
+                    <h1 className="text-3xl font-bold tracking-tight text-slate-900">
+                        {activeTab === 'inbox' ? 'Approval Inbox' : 'Watched Requests'}
+                    </h1>
+                    <p className="mt-1 text-slate-500">
+                        {activeTab === 'inbox' 
+                            ? 'Review and approve tasks from all departments.' 
+                            : 'Monitor requests where you are added as a watcher.'}
+                    </p>
                 </div>
                 <div className="flex gap-3">
                     <Button variant="outline" className="gap-2">
                         <Filter size={16} /> Filters
-                    </Button>
-                    <Button className="gap-2">
-                        Refresh
                     </Button>
                 </div>
             </div>

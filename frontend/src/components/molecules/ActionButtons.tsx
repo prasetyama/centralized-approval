@@ -10,9 +10,10 @@ interface ActionButtonsProps {
     onReject: (comments: string) => Promise<void>;
     isLoading: boolean;
     canAction: boolean;
+    isWatcher?: boolean;
 }
 
-export const ActionButtons = ({ onApprove, onReject, isLoading, canAction }: Omit<ActionButtonsProps, 'requestId'>) => {
+export const ActionButtons = ({ onApprove, onReject, isLoading, canAction, isWatcher }: Omit<ActionButtonsProps, 'requestId'>) => {
     const [showModal, setShowModal] = useState<'APPROVE' | 'REJECT' | null>(null);
     const [comments, setComments] = useState('');
     const [error, setError] = useState<string | null>(null);
@@ -36,7 +37,7 @@ export const ActionButtons = ({ onApprove, onReject, isLoading, canAction }: Omi
         }
     };
 
-    if (!canAction) return null;
+    if (!canAction || isWatcher) return null;
 
     return (
         <div className="flex gap-4">
