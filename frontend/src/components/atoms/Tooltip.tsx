@@ -1,5 +1,6 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
+import { XCircle } from "lucide-react";
 
 const TooltipContext = React.createContext<{
   show: boolean;
@@ -28,6 +29,16 @@ const TooltipTrigger = ({ children }: { children: React.ReactNode; asChild?: boo
   return <>{children}</>;
 };
 
+const TooltipRemoveWatcherButton = ({ onClick }: { onClick: () => void }) => {
+  const context = React.useContext(TooltipContext);
+  if (!context?.show) return null;
+  return (
+    <div className="absolute top-0 right-0 bg-red-500 rounded-full w-5 h-5 z-10 cursor-pointer" onClick={onClick}>
+      <XCircle size={8} className='text-white w-full h-full' />
+    </div>
+  )
+}
+
 const TooltipContent = ({ children, className }: { children: React.ReactNode; className?: string }) => {
   const context = React.useContext(TooltipContext);
   if (!context?.show) return null;
@@ -46,4 +57,4 @@ const TooltipContent = ({ children, className }: { children: React.ReactNode; cl
   );
 };
 
-export { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider };
+export { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider, TooltipRemoveWatcherButton };

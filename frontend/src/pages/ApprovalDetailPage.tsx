@@ -14,10 +14,11 @@ import { FeedbackList } from '@/components/molecules/FeedbackList';
 import { FeedbackForm } from '@/components/molecules/FeedbackForm';
 import { useAuth } from '@/context/AuthContext';
 import { formatDate } from '@/lib/utils';
-import { MessageSquare, ListTodo, Eye, Plus, AlertCircle, XCircle } from 'lucide-react';
+import { MessageSquare, ListTodo, Eye, Plus, AlertCircle } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/atoms/Avatar';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/atoms/Tooltip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, TooltipRemoveWatcherButton } from '@/components/atoms/Tooltip';
 import { AddWatcherModal } from '@/components/molecules/AddWatcherModal';
+import { ConfirmationModal } from '@/components/molecules/ConfirmationModal';
 
 export const ApprovalDetailPage = () => {
     const { id } = useParams();
@@ -26,6 +27,8 @@ export const ApprovalDetailPage = () => {
     const { user } = useAuth();
     const [isDelegateModalOpen, setIsDelegateModalOpen] = useState(false);
     const [isAddWatcherModalOpen, setIsAddWatcherModalOpen] = useState(false);
+    const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
+    const [watcherToRemove, setWatcherToRemove] = useState<{id: number, name: string} | null>(null);
     const [activeTab, setActiveTab] = useState<'timeline' | 'discussion'>('timeline');
     const { data: request, isLoading, isError } = useQuery({
         queryKey: ['workflow-detail', id],
@@ -76,6 +79,8 @@ export const ApprovalDetailPage = () => {
             api.delete(`/workflow/watchers/remove`, { data: { watcher_id: watcherId } }),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['workflow-detail', id] });
+            setIsConfirmModalOpen(false);
+            setWatcherToRemove(null);
         },
         onError: (error) => {
             alert(error);
@@ -235,9 +240,10 @@ export const ApprovalDetailPage = () => {
                                                                 {watcher.user_full_name[0].toUpperCase()}
                                                             </AvatarFallback>
                                                         </Avatar>
-                                                        <div className='absolute top-0 right-0 bg-red-500 rounded-full w-5 h-5 z-10 cursor-pointer' onClick={() => removeWatcherMutation.mutate(watcher.id)}>
-                                                            <XCircle size={8} className='text-white w-full h-full' />
-                                                        </div>
+                                                        <TooltipRemoveWatcherButton onClick={() => {
+                                                            setWatcherToRemove({ id: watcher.id, name: watcher.user_full_name });
+                                                            setIsConfirmModalOpen(true);
+                                                        }} />
                                                     </TooltipTrigger>
                                                     <TooltipContent className="bg-slate-900 text-white border-none font-bold text-xs">
                                                         {watcher.user_full_name}
@@ -355,6 +361,20 @@ export const ApprovalDetailPage = () => {
                     await addWatcherMutation.mutateAsync(userId);
                 }}
                 isLoading={addWatcherMutation.isPending}
+            />
+
+            <ConfirmationModal
+                isOpen={isConfirmModalOpen}
+                onClose={() => {
+                    setIsConfirmModalOpen(false);
+                    setWatcherToRemove(null);
+                }}
+                onConfirm={() => watcherToRemove && removeWatcherMutation.mutate(watcherToRemove.id)}
+                title="Remove Watcher?"
+                description={`Are you sure you want to remove ${watcherToRemove?.name} from this request? They will no longer receive updates.`}
+                confirmText="Yes, Remove"
+                isLoading={removeWatcherMutation.isPending}
+                variant="danger"
             />
         </div>
     );
