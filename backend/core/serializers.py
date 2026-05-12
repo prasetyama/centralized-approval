@@ -7,7 +7,7 @@ from rest_framework import serializers
 from core.models import (
     Module, Role, User, WorkflowDefinition, WorkflowStepDefinition,
     ApprovalRequest, ApprovalStep, AuditLog, Division, RequestFeedback,
-    Brand, UserBrand, MasterWorkflowCriteria, RequestWatcher
+    Brand, UserBrand, MasterWorkflowCriteria, RequestWatcher, ModuleVariable
 )
 
 
@@ -155,6 +155,13 @@ class ModuleSerializer(serializers.ModelSerializer):
         read_only_fields = ['created_at']
 
 
+class ModuleVariableSerializer(serializers.ModelSerializer):
+    """Serializer for ModuleVariable model."""
+    class Meta:
+        model = ModuleVariable
+        fields = ['id', 'module', 'name', 'key_name', 'data_type', 'is_active']
+
+
 class WorkflowStepDefinitionSerializer(serializers.ModelSerializer):
     """Serializer for WorkflowStepDefinition."""
     role_name = serializers.CharField(source='role_required.name', read_only=True)
@@ -168,7 +175,7 @@ class WorkflowStepDefinitionSerializer(serializers.ModelSerializer):
             'id', 'step_order', 'name', 'approver_type', 
             'role_required', 'role_name', 'user_required', 'user_name', 
             'is_brand_conditional', 'master_workflow_criteria', 'master_workflow_criteria_key_param_json', 
-            'is_optional', 'role_users'
+            'is_optional', 'conditions', 'role_users'
         ]
 
     def get_user_name(self, obj):

@@ -13,7 +13,8 @@ from core.views import (
     InboxView, HistoryView, dashboard_summary,
     ModuleViewSet, RoleViewSet, UserViewSet, DivisionViewSet,
     WorkflowDefinitionViewSet, ApprovalRequestViewSet, RequestFeedbackViewSet,
-    BrandViewSet, UserBrandViewSet, MasterWorkflowCriteriaViewSet
+    BrandViewSet, UserBrandViewSet, MasterWorkflowCriteriaViewSet,
+    ModuleVariableViewSet
 )
 
 router = DefaultRouter()
@@ -27,8 +28,12 @@ router.register(r'feedback', RequestFeedbackViewSet, basename='request-feedback'
 router.register(r'admin/brands', BrandViewSet, basename='brand')
 router.register(r'admin/user-brands', UserBrandViewSet, basename='user-brand')
 router.register(r'admin/master-workflow-conditions', MasterWorkflowCriteriaViewSet, basename='master-condition')
+router.register(r'admin/module-variables', ModuleVariableViewSet, basename='module-variable')
 
 urlpatterns = [
+    # Module Variables (Direct access as per spec)
+    path('modules/<int:pk>/variables', ModuleViewSet.as_view({'get': 'variables'}), name='module-variables-direct'),
+
     # Workflow actions
     path('workflow/submit', WorkflowSubmitView.as_view(), name='workflow-submit'),
     path('workflow/<int:pk>', WorkflowDetailView.as_view(), name='workflow-detail'),

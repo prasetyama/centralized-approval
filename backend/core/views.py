@@ -15,7 +15,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 from core.models import (
     Module, Role, User, WorkflowDefinition, WorkflowStepDefinition,
     ApprovalRequest, ApprovalStep, AuditLog, Division, RequestFeedback,
-    Brand, UserBrand, MasterWorkflowCriteria, RequestWatcher
+    Brand, UserBrand, MasterWorkflowCriteria, RequestWatcher, ModuleVariable
 )
 from core.serializers import (
     ModuleSerializer, RoleSerializer, UserListSerializer, UserDetailSerializer,
@@ -25,10 +25,11 @@ from core.serializers import (
     ApprovalStepSerializer, AuditLogSerializer, ActionSerializer,
     DivisionSerializer, DelegateRequestSerializer, RequestFeedbackSerializer,
     BrandSerializer, UserBrandSerializer, MasterWorkflowCriteriaSerializer,
-    RequestWatcherSerializer
+    RequestWatcherSerializer, ModuleVariableSerializer
 )
 from core.engine import WorkflowEngine
 from django.utils import timezone
+from rest_framework.decorators import action
 
 
 def _get_client_ip(request):
@@ -90,8 +91,8 @@ class WorkflowDetailView(generics.RetrieveAPIView):
     queryset = ApprovalRequest.objects.select_related(
         'module', 'workflow', 'requester'
     ).prefetch_related(
-        'steps', 
-        'audit_logs', 
+        Prefetch('steps', queryset=ApprovalStep.objects.exclude(status='SKIPPED')),
+        'audit_logs',
         Prefetch('watchers', queryset=RequestWatcher.objects.filter(deleted_at=None).select_related('user'))
     )
     serializer_class = ApprovalRequestDetailSerializer
@@ -555,6 +556,22 @@ class ModuleViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
     filterset_fields = ['is_active']
     search_fields = ['name', 'code']
+
+    @action(detail=True, methods=['get'])
+    def variables(self, request, pk=None):
+        """Get all variables for this module."""
+        module = self.get_object()
+        variables = module.variables.filter(is_active=True)
+        serializer = ModuleVariableSerializer(variables, many=True)
+        return Response(serializer.data)
+
+
+class ModuleVariableViewSet(viewsets.ModelViewSet):
+    """CRUD for ModuleVariables."""
+    queryset = ModuleVariable.objects.all()
+    serializer_class = ModuleVariableSerializer
+    permission_classes = [IsAuthenticated]
+    filterset_fields = ['module', 'is_active']
 
 
 class RoleViewSet(viewsets.ModelViewSet):

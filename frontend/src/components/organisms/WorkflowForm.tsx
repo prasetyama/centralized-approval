@@ -7,6 +7,7 @@ import { Button } from '@/components/atoms/Button';
 import { Input } from '@/components/atoms/Input';
 import { Select } from '@/components/atoms/Select';
 import { Textarea } from '@/components/atoms/Textarea';
+import { CriteriaRuleBuilder } from '@/components/molecules/CriteriaRuleBuilder';
 
 interface Step {
     id?: number;
@@ -18,6 +19,7 @@ interface Step {
     is_brand_conditional: boolean;
     master_workflow_criteria?: number | null;
     is_optional: boolean;
+    conditions: any[];
     role_name?: string;
     user_name?: string;
 }
@@ -82,6 +84,7 @@ export const WorkflowForm: React.FC<WorkflowFormProps> = ({ initialData, onClose
             is_brand_conditional: false,
             master_workflow_criteria: null,
             is_optional: false,
+            conditions: [],
         };
         setFormData({ ...formData, steps: [...formData.steps, newStep] });
     };
@@ -306,7 +309,7 @@ export const WorkflowForm: React.FC<WorkflowFormProps> = ({ initialData, onClose
                                         )}
                                     </div>
 
-                                    {/* <div className="flex items-center gap-6 mt-4 pt-3 border-t border-slate-50">
+                                    <div className="flex items-center gap-6 mt-4 pt-3 border-t border-slate-50">
                                         <div className='flex items-center gap-2'>
                                             <input
                                                 type="checkbox"
@@ -319,7 +322,15 @@ export const WorkflowForm: React.FC<WorkflowFormProps> = ({ initialData, onClose
                                                 Optional Step
                                             </label>
                                         </div>
-                                    </div> */}
+                                    </div>
+
+                                    <div className="mt-4 pt-3 border-t border-slate-50">
+                                        <CriteriaRuleBuilder 
+                                            moduleId={formData.module}
+                                            conditions={step.conditions || []}
+                                            onChange={(conditions) => handleStepChange(index, { conditions })}
+                                        />
+                                    </div>
                                 </Card>
                             </div>
                         ))}
