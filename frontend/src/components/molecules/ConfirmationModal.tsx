@@ -56,7 +56,7 @@ export const ConfirmationModal = ({
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-300">
             <Card className="w-full max-w-md shadow-2xl border-slate-200 overflow-hidden animate-in zoom-in-95 duration-200 bg-white">
-                {/* <div className={`p-1 h-1.5 bg-gradient-to-r ${style.gradient}`} /> */}
+                <div className={`p-1 h-1.5 bg-gradient-to-r ${style.gradient}`} />
                 <div className="p-8 space-y-6 text-center">
                     <div className="flex justify-center">
                         <div className={`p-4 rounded-2xl ${style.iconBg} ${style.iconText} ring-8 ${style.ring}`}>
