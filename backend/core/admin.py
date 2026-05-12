@@ -6,7 +6,7 @@ Registers all models with the Django admin for easy data management.
 from django.contrib import admin
 from core.models import (
     Module, Role, User, WorkflowDefinition, WorkflowStepDefinition,
-    ApprovalRequest, ApprovalStep, AuditLog, Division
+    ApprovalRequest, ApprovalStep, AuditLog, Division, Brand, UserBrand, MasterWorkflowCriteria
 )
 
 
@@ -14,6 +14,26 @@ from core.models import (
 class DivisionAdmin(admin.ModelAdmin):
     list_display = ['name', 'code', 'created_at']
     search_fields = ['name', 'code']
+
+
+@admin.register(Brand)
+class BrandAdmin(admin.ModelAdmin):
+    list_display = ['name', 'code', 'owner', 'master_workflow_condition', 'created_at']
+    search_fields = ['name', 'code', 'owner__username', 'master_workflow_condition__name']
+    list_filter = ['owner']
+
+@admin.register(MasterWorkflowCriteria)
+class MasterWorkflowCriteriaAdmin(admin.ModelAdmin):
+    list_display = ['name', 'description', 'key_param_json', 'created_at']
+    search_fields = ['name']
+    list_filter = ['name']
+
+
+@admin.register(UserBrand)
+class UserBrandAdmin(admin.ModelAdmin):
+    list_display = ['user', 'brand']
+    list_filter = ['user', 'brand']
+    search_fields = ['user__username', 'brand__name']
 
 
 @admin.register(Module)

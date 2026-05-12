@@ -2,7 +2,6 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import {
     LayoutDashboard,
     Inbox,
-    Settings,
     Users,
     GitBranch,
     LogOut,
@@ -10,7 +9,8 @@ import {
     ChevronLeft,
     ChevronRight,
     X,
-    Play
+    Play,
+    Tag
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
@@ -21,8 +21,8 @@ const navItems = [
     { name: 'History', href: '/history', icon: History, userOnly: true },
     { name: 'Workflows', href: '/admin/workflows', icon: GitBranch, adminOnly: true },
     { name: 'User Management', href: '/admin/users', icon: Users, adminOnly: true },
-    { name: 'Settings', href: '/settings', icon: Settings },
     { name: 'Simulator', href: '/admin/workflow/simulator', icon: Play, adminOnly: true },
+    { name: 'Master Workflows', href: '/admin/workflow/brand-master', icon: Tag, adminOnly: true },
 ];
 
 type SidebarProps = {

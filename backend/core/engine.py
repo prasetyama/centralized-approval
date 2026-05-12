@@ -14,7 +14,8 @@ from rest_framework.exceptions import ValidationError
 
 from core.models import (
     Module, WorkflowDefinition, WorkflowStepDefinition,
-    ApprovalRequest, ApprovalStep, AuditLog, User, Division
+    ApprovalRequest, ApprovalStep, AuditLog, User, Division,
+    Brand, RequestWatcher
 )
 from core.state_machine import can_transition
 
@@ -138,7 +139,7 @@ class WorkflowEngine:
     @transaction.atomic
     def submit_request(module_code, workflow_id, requester, title, payload,
                        description='', priority='MEDIUM', reference_id='', 
-                       division_id=None, ip_address=None):
+                       division_id=None, ip_address=None, watcher_ids=None):
         """
         Submit a new approval request from any module.
         Creates the ApprovalRequest and generates all ApprovalStep instances
@@ -202,20 +203,43 @@ class WorkflowEngine:
         # Create approval steps from definitions
         for step_def in step_defs:
             assignee = None
-            if step_def.approver_type == WorkflowStepDefinition.ApproverType.USER:
-                # Direct user assignment
-                assignee = step_def.user_required
-            else:
-                # Role-based assignment: Auto-assign to first user with the required role and matching division
-                assignee_qs = User.objects.filter(
-                    role=step_def.role_required, is_active=True, is_approver=True
-                )
+            
+            # 1. Check if step uses Brand-Specific Approval
+            if step_def.is_brand_conditional and step_def.master_workflow_criteria:
+                # Use the criteria to find the key in the payload
+                payload_key = step_def.master_workflow_criteria.key_param_json
+                master_code = payload.get(payload_key)
                 
-                if division_id:
-                    # User.division is a CharField, filter by the code string directly
-                    assignee_qs = assignee_qs.filter(division=division_id)
+                if master_code:
+                    try:
+                        # Find matching master data entry (Brand/Zone/etc.)
+                        condition = Brand.objects.get(
+                            code=master_code,
+                            master_workflow_condition=step_def.master_workflow_criteria
+                        )
+                        if condition.owner:
+                            assignee = condition.owner
+                    except Brand.DoesNotExist:
+                        raise ValidationError(f"Condition '{master_code}' not found for criteria '{step_def.master_workflow_criteria.name}'.")
+                else:
+                    raise ValidationError(f"Master workflow criteria value not found for key '{payload_key}'.")
+            
+            # 2. Fallback to standard logic if not brand-conditional or brand assignee not found
+            if assignee is None:
+                if step_def.approver_type == WorkflowStepDefinition.ApproverType.USER:
+                    # Direct user assignment
+                    assignee = step_def.user_required
+                else:
+                    # Role-based assignment: Auto-assign to first user with the required role and matching division
+                    assignee_qs = User.objects.filter(
+                        role=step_def.role_required, is_active=True, is_approver=True
+                    )
                     
-                assignee = assignee_qs.first()
+                    if division_id:
+                        # User.division is a CharField, filter by the code string directly
+                        assignee_qs = assignee_qs.filter(division=division_id)
+                        
+                    assignee = assignee_qs.first()
 
             step_status = (
                 ApprovalStep.StepStatus.WAITING
@@ -237,6 +261,19 @@ class WorkflowEngine:
         # Transition to IN_PROGRESS since first step is activated
         approval_request.status = ApprovalRequest.Status.IN_PROGRESS
         approval_request.save(update_fields=['status', 'updated_at'])
+
+        # Create watchers if provided
+        if watcher_ids:
+            for user_id in watcher_ids:
+                try:
+                    watcher_user = User.objects.get(id=user_id)
+                    RequestWatcher.objects.get_or_create(
+                        request=approval_request,
+                        user=watcher_user,
+                        defaults={'created_by': requester}
+                    )
+                except User.DoesNotExist:
+                    continue
 
         # Create audit log
         AuditLog.objects.create(

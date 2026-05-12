@@ -6,7 +6,8 @@ DRF serializers for all core models.
 from rest_framework import serializers
 from core.models import (
     Module, Role, User, WorkflowDefinition, WorkflowStepDefinition,
-    ApprovalRequest, ApprovalStep, AuditLog, Division, RequestFeedback
+    ApprovalRequest, ApprovalStep, AuditLog, Division, RequestFeedback,
+    Brand, UserBrand, MasterWorkflowCriteria, RequestWatcher
 )
 
 
@@ -16,6 +17,42 @@ class DivisionSerializer(serializers.ModelSerializer):
         model = Division
         fields = ['id', 'name', 'code', 'description', 'created_at', 'updated_at']
         read_only_fields = ['created_at', 'updated_at']
+
+
+class BrandSerializer(serializers.ModelSerializer):
+    """Serializer for Brand model."""
+    owner_name = serializers.CharField(source='owner.username', read_only=True)
+    owner_full_name = serializers.SerializerMethodField()
+    master_workflow_condition_name = serializers.CharField(source='master_workflow_condition.name', read_only=True)
+
+    class Meta:
+        model = Brand
+        fields = ['id', 'name', 'code', 'owner', 'owner_name', 'owner_full_name', 'master_workflow_condition', 'master_workflow_condition_name', 'created_at', 'updated_at']
+
+    def get_owner_full_name(self, obj):
+        return obj.owner.get_full_name() if obj.owner else None
+
+
+class UserBrandSerializer(serializers.ModelSerializer):
+    """Serializer for UserBrand mapping."""
+    user_name = serializers.CharField(source='user.username', read_only=True)
+    user_full_name = serializers.SerializerMethodField()
+    brand_name = serializers.CharField(source='brand.name', read_only=True)
+
+    class Meta:
+        model = UserBrand
+        fields = ['id', 'user', 'user_name', 'user_full_name', 'brand', 'brand_name']
+
+    def get_user_full_name(self, obj):
+        return obj.user.get_full_name() or obj.user.username
+
+class MasterWorkflowCriteriaSerializer(serializers.ModelSerializer):
+    """Serializer for MasterWorkflowCriteria mapping."""
+
+    class Meta:
+        model = MasterWorkflowCriteria
+        fields = ['id', 'name', 'description', 'key_param_json']
+
 
 
 class RoleSerializer(serializers.ModelSerializer):
@@ -123,12 +160,14 @@ class WorkflowStepDefinitionSerializer(serializers.ModelSerializer):
     role_name = serializers.CharField(source='role_required.name', read_only=True)
     user_name = serializers.SerializerMethodField()
     role_users = serializers.SerializerMethodField()
+    master_workflow_criteria_key_param_json = serializers.CharField(source='master_workflow_criteria.key_param_json', read_only=True)
 
     class Meta:
         model = WorkflowStepDefinition
         fields = [
             'id', 'step_order', 'name', 'approver_type', 
             'role_required', 'role_name', 'user_required', 'user_name', 
+            'is_brand_conditional', 'master_workflow_criteria', 'master_workflow_criteria_key_param_json', 
             'is_optional', 'role_users'
         ]
 
@@ -239,6 +278,19 @@ class AuditLogSerializer(serializers.ModelSerializer):
         return obj.actor.get_full_name() or obj.actor.username
 
 
+class RequestWatcherSerializer(serializers.ModelSerializer):
+    """Serializer for RequestWatcher model."""
+    user_name = serializers.CharField(source='user.username', read_only=True)
+    user_full_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = RequestWatcher
+        fields = ['id', 'user', 'user_name', 'user_full_name', 'created_at']
+
+    def get_user_full_name(self, obj):
+        return obj.user.get_full_name() or obj.user.username
+
+
 class RequestFeedbackSerializer(serializers.ModelSerializer):
     """Serializer for RequestFeedback model."""
     user_name = serializers.SerializerMethodField()
@@ -308,6 +360,7 @@ class ApprovalRequestDetailSerializer(serializers.ModelSerializer):
     division_details = serializers.SerializerMethodField()
     audit_logs = AuditLogSerializer(many=True, read_only=True)
     feedbacks = RequestFeedbackSerializer(many=True, read_only=True)
+    watchers = RequestWatcherSerializer(many=True, read_only=True)
 
     class Meta:
         model = ApprovalRequest
@@ -316,7 +369,7 @@ class ApprovalRequestDetailSerializer(serializers.ModelSerializer):
             'module_color', 'module_icon', 'workflow', 'workflow_name',
             'requester', 'requester_name', 'title', 'description',
             'payload', 'status', 'current_step', 'priority', 'division', 'division_details',
-            'steps', 'audit_logs', 'feedbacks', 'created_at', 'updated_at',
+            'steps', 'audit_logs', 'feedbacks', 'watchers', 'created_at', 'updated_at',
         ]
 
     def get_requester_name(self, obj):
@@ -346,6 +399,12 @@ class SubmitRequestSerializer(serializers.Serializer):
     )
     division_id = serializers.CharField(max_length=50, required=False, allow_null=True)
     reference_id = serializers.CharField(max_length=100, required=False, default='')
+    watcher_ids = serializers.ListField(
+        child=serializers.IntegerField(),
+        required=False,
+        default=list,
+        help_text="List of user IDs to be added as watchers"
+    )
 
 
 class ActionSerializer(serializers.Serializer):

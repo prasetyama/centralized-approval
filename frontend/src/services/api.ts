@@ -30,7 +30,9 @@ api.interceptors.response.use(
                 window.location.href = '/login';
             }
         }
-        return Promise.reject(error.response?.data?.error || error.message);
+        const errorData = error.response?.data;
+        const errorMessage = errorData?.error || errorData?.detail || errorData?.message || error.message;
+        return Promise.reject(typeof errorMessage === 'string' ? errorMessage : JSON.stringify(errorMessage));
     }
 );
 

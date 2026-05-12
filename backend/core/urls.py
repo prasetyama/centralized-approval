@@ -9,9 +9,11 @@ from rest_framework.routers import DefaultRouter
 from core.views import (
     WorkflowSubmitView, WorkflowDetailView,
     WorkflowApproveView, WorkflowRejectView, WorkflowReviseView, WorkflowDelegateView,
+    WatcherListView, WatcherRemoveView,
     InboxView, HistoryView, dashboard_summary,
     ModuleViewSet, RoleViewSet, UserViewSet, DivisionViewSet,
     WorkflowDefinitionViewSet, ApprovalRequestViewSet, RequestFeedbackViewSet,
+    BrandViewSet, UserBrandViewSet, MasterWorkflowCriteriaViewSet
 )
 
 router = DefaultRouter()
@@ -22,6 +24,9 @@ router.register(r'admin/users', UserViewSet, basename='user')
 router.register(r'admin/workflows', WorkflowDefinitionViewSet, basename='workflow-definition')
 router.register(r'requests', ApprovalRequestViewSet, basename='approval-request')
 router.register(r'feedback', RequestFeedbackViewSet, basename='request-feedback')
+router.register(r'admin/brands', BrandViewSet, basename='brand')
+router.register(r'admin/user-brands', UserBrandViewSet, basename='user-brand')
+router.register(r'admin/master-workflow-conditions', MasterWorkflowCriteriaViewSet, basename='master-condition')
 
 urlpatterns = [
     # Workflow actions
@@ -31,6 +36,8 @@ urlpatterns = [
     path('workflow/<int:pk>/reject', WorkflowRejectView.as_view(), name='workflow-reject'),
     path('workflow/<int:pk>/revise', WorkflowReviseView.as_view(), name='workflow-revise'),
     path('workflow/<int:pk>/delegate', WorkflowDelegateView.as_view(), name='workflow-delegate'),
+    path('workflow/<int:pk>/watchers', WatcherListView.as_view(), name='workflow-watchers'),
+    path('workflow/watchers/remove', WatcherRemoveView.as_view(), name='workflow-watchers-remove'),   
 
     # Inbox & History
     path('inbox', InboxView.as_view(), name='inbox'),

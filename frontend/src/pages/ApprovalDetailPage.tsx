@@ -1,6 +1,6 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Clock, History, User } from 'lucide-react';
+import { ArrowLeft, Clock, History } from 'lucide-react';
 import { useState } from 'react';
 import api from '@/services/api';
 import { Button } from '@/components/atoms/Button';
@@ -14,7 +14,11 @@ import { FeedbackList } from '@/components/molecules/FeedbackList';
 import { FeedbackForm } from '@/components/molecules/FeedbackForm';
 import { useAuth } from '@/context/AuthContext';
 import { formatDate } from '@/lib/utils';
-import { MessageSquare, ListTodo } from 'lucide-react';
+import { MessageSquare, ListTodo, Eye, Plus, AlertCircle } from 'lucide-react';
+import { Avatar, AvatarFallback } from '@/components/atoms/Avatar';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, TooltipRemoveWatcherButton } from '@/components/atoms/Tooltip';
+import { AddWatcherModal } from '@/components/molecules/AddWatcherModal';
+import { ConfirmationModal } from '@/components/molecules/ConfirmationModal';
 
 export const ApprovalDetailPage = () => {
     const { id } = useParams();
@@ -22,10 +26,14 @@ export const ApprovalDetailPage = () => {
     const queryClient = useQueryClient();
     const { user } = useAuth();
     const [isDelegateModalOpen, setIsDelegateModalOpen] = useState(false);
+    const [isAddWatcherModalOpen, setIsAddWatcherModalOpen] = useState(false);
+    const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
+    const [watcherToRemove, setWatcherToRemove] = useState<{id: number, name: string} | null>(null);
     const [activeTab, setActiveTab] = useState<'timeline' | 'discussion'>('timeline');
-    const { data: request, isLoading } = useQuery({
+    const { data: request, isLoading, isError } = useQuery({
         queryKey: ['workflow-detail', id],
         queryFn: () => api.get(`/workflow/${id}`),
+        retry: false,
     });
 
     const actionMutation = useMutation({
@@ -57,6 +65,28 @@ export const ApprovalDetailPage = () => {
         },
     });
 
+    const addWatcherMutation = useMutation({
+        mutationFn: (userId: number) =>
+            api.post(`/workflow/${id}/watchers`, { user_id: userId }),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['workflow-detail', id] });
+            setIsAddWatcherModalOpen(false);
+        },
+    });
+
+    const removeWatcherMutation = useMutation({
+        mutationFn: (watcherId: number) =>
+            api.delete(`/workflow/watchers/remove`, { data: { watcher_id: watcherId } }),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['workflow-detail', id] });
+            setIsConfirmModalOpen(false);
+            setWatcherToRemove(null);
+        },
+        onError: (error) => {
+            alert(error);
+        },
+    });
+
     const getStatusVariant = (status: string) => {
         switch (status) {
             case 'APPROVED': return 'success';
@@ -65,6 +95,25 @@ export const ApprovalDetailPage = () => {
             default: return 'outline';
         }
     };
+
+    if (isError) {
+        return (
+            <div className="flex flex-col items-center justify-center min-h-[60vh] p-8 text-center animate-in fade-in duration-500">
+                <div className="p-6 rounded-full bg-red-50 text-red-600 mb-6 ring-8 ring-red-50/50">
+                    <AlertCircle size={48} />
+                </div>
+                <h2 className="text-3xl font-extrabold text-slate-900 mb-3 tracking-tight">Access Denied</h2>
+                <div className="flex gap-4">
+                    <Button variant="outline" onClick={() => navigate(-1)} className="font-bold px-8 h-12 rounded-xl">
+                        Go Back
+                    </Button>
+                    <Button onClick={() => window.location.reload()} className="bg-slate-900 text-white font-bold px-8 h-12 rounded-xl shadow-lg shadow-slate-200">
+                        Retry
+                    </Button>
+                </div>
+            </div>
+        );
+    }
 
     if (isLoading) {
         return (
@@ -87,6 +136,8 @@ export const ApprovalDetailPage = () => {
         detail.status === 'IN_PROGRESS'
     );
 
+    const isWatcher = detail?.watchers?.some((w: any) => w.user === user?.id);
+
     const activeStep = detail?.steps?.find((s: any) => s.step_order === detail.current_step);
 
     return (
@@ -108,7 +159,7 @@ export const ApprovalDetailPage = () => {
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
-                    {user?.is_superuser && detail.status === 'IN_PROGRESS' && (
+                    {/* {user?.is_superuser && detail.status === 'IN_PROGRESS' && (
                         <Button
                             variant="outline"
                             className="bg-purple-50 text-purple-600 border-purple-200 hover:bg-purple-100 hover:text-purple-700 font-bold"
@@ -117,7 +168,16 @@ export const ApprovalDetailPage = () => {
                             <User size={18} className="mr-2" />
                             Delegate Task
                         </Button>
-                    )}
+                    )} */}
+                    {!isWatcher && <Button
+                        variant="outline"
+                        className="bg-indigo-50 text-indigo-600 border-indigo-200 hover:bg-indigo-100 hover:text-indigo-700 font-bold"
+                        onClick={() => setIsAddWatcherModalOpen(true)}
+                    >
+                        <Plus size={18} className="mr-2" />
+                        Add Watcher
+                    </Button>
+                    }
                 </div>
             </div>
 
@@ -133,7 +193,7 @@ export const ApprovalDetailPage = () => {
                             <History size={18} className="text-slate-400" />
                             <CardTitle className="text-base uppercase tracking-wider text-slate-500 font-bold">Request Summary</CardTitle>
                         </CardHeader>
-                        <CardContent className="p-6">
+                        <CardContent className="p-6 mb-6">
                             <div className="grid grid-cols-2 gap-8">
                                 <div className="space-y-4">
                                     <div>
@@ -166,6 +226,34 @@ export const ApprovalDetailPage = () => {
                                     {detail.description || 'No description provided.'}
                                 </p>
                             </div>
+
+                            {detail.watchers?.length > 0 && (
+                                <div className="mt-8 pt-8 border-t border-slate-100">
+                                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">People watching this request</p>
+                                    <div className="flex flex-wrap gap-2">
+                                        <TooltipProvider>
+                                            {detail.watchers.map((watcher: any) => (
+                                                <Tooltip key={watcher.id}>
+                                                    <TooltipTrigger asChild>
+                                                        <Avatar className="h-14 w-14 border-2 border-white ring-2 ring-slate-100 ring-offset-0 transition-transform hover:scale-110 z-2">
+                                                            <AvatarFallback className="bg-indigo-100 text-indigo-600 font-bold">
+                                                                {watcher.user_full_name[0].toUpperCase()}
+                                                            </AvatarFallback>
+                                                        </Avatar>
+                                                        <TooltipRemoveWatcherButton onClick={() => {
+                                                            setWatcherToRemove({ id: watcher.id, name: watcher.user_full_name });
+                                                            setIsConfirmModalOpen(true);
+                                                        }} />
+                                                    </TooltipTrigger>
+                                                    <TooltipContent className="bg-slate-900 text-white border-none font-bold text-xs">
+                                                        {watcher.user_full_name}
+                                                    </TooltipContent>
+                                                </Tooltip>
+                                            ))}
+                                        </TooltipProvider>
+                                    </div>
+                                </div>
+                            )}
                         </CardContent>
                     </Card>
                 </div>
@@ -234,9 +322,17 @@ export const ApprovalDetailPage = () => {
                         onReject={async (comments) => { await actionMutation.mutateAsync({ action: 'reject', comments }); }}
                         isLoading={actionMutation.isPending}
                         canAction={isApprover === true}
+                        isWatcher={isWatcher}
                     />
 
-                    {!isApprover && detail.status === 'IN_PROGRESS' && (
+                    {isWatcher && (
+                        <div className="rounded-xl bg-indigo-50/50 p-4 border border-indigo-100 text-sm text-indigo-700 font-medium flex gap-3">
+                            <Eye size={18} className="shrink-0" />
+                            <p>You are viewing this request as a <strong>Watcher</strong>. You have read-only access and cannot perform approval actions.</p>
+                        </div>
+                    )}
+
+                    {!isApprover && detail.status === 'IN_PROGRESS' && !isWatcher && (
                         <div className="rounded-xl bg-blue-50/50 p-4 border border-blue-100 text-sm text-blue-700 font-medium flex gap-3">
                             <Clock size={18} className="shrink-0" />
                             <p>This request is currently with another approver. You can take action when it reaches your step.</p>
@@ -257,6 +353,29 @@ export const ApprovalDetailPage = () => {
                     isLoading={delegateMutation.isPending}
                 />
             )}
+
+            <AddWatcherModal
+                isOpen={isAddWatcherModalOpen}
+                onClose={() => setIsAddWatcherModalOpen(false)}
+                onSubmit={async (userId) => {
+                    await addWatcherMutation.mutateAsync(userId);
+                }}
+                isLoading={addWatcherMutation.isPending}
+            />
+
+            <ConfirmationModal
+                isOpen={isConfirmModalOpen}
+                onClose={() => {
+                    setIsConfirmModalOpen(false);
+                    setWatcherToRemove(null);
+                }}
+                onConfirm={() => watcherToRemove && removeWatcherMutation.mutate(watcherToRemove.id)}
+                title="Remove Watcher?"
+                description={`Are you sure you want to remove ${watcherToRemove?.name} from this request? They will no longer receive updates.`}
+                confirmText="Yes, Remove"
+                isLoading={removeWatcherMutation.isPending}
+                variant="danger"
+            />
         </div>
     );
 };

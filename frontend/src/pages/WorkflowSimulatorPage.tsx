@@ -2,8 +2,11 @@ import { useState } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/atoms/Card';
 import { Button } from '../components/atoms/Button';
 import { Textarea } from '../components/atoms/Textarea';
-import { CheckCircle, XCircle, Play, X } from 'lucide-react';
+import { CheckCircle, XCircle, Play, X, Eye } from 'lucide-react';
 import api from '../services/api';
+import { Select } from '@/components/atoms/Select';
+import { Badge } from '@/components/atoms/Badge';
+import { useQuery } from '@tanstack/react-query';
 import { PayloadRenderer } from '@/components/molecules/PayloadRenderer';
 
 export const WorkflowSimulatorPage = () => {
@@ -22,6 +25,7 @@ export const WorkflowSimulatorPage = () => {
             "total_sku": 1,
             "submitted_at": "2026-03-30T06:52:27.782Z",
             "order_type": "3",
+            "brand_code": "SQ",
             "items": [
                 {
                     "sku": "F0000526",
@@ -39,6 +43,14 @@ export const WorkflowSimulatorPage = () => {
     const [error, setError] = useState<string | null>(null);
     const [simulationResult, setSimulationResult] = useState<any[] | null>(null);
     const [simulatedData, setSimulatedData] = useState<any | null>(null);
+    const [selectedWatcherIds, setSelectedWatcherIds] = useState<number[]>([]);
+
+    const { data: usersData } = useQuery({
+        queryKey: ['users-all'],
+        queryFn: () => api.get('/admin/users', { params: { is_active: true } }) as Promise<any>,
+    });
+
+    const users = usersData?.results || [];
 
     const handleSimulate = async () => {
         setError(null);
@@ -49,10 +61,14 @@ export const WorkflowSimulatorPage = () => {
             const parsedPayload = JSON.parse(payloadInput);
             const workflowId = parsedPayload.workflow_id;
 
-            // Call API to fetch workflow definition ONLY, do not create ticket
-            const response: any = await api.get(`/admin/workflows/${workflowId}/`);
+            // Call API to fetch workflow definition and brands
+            const [workflowResponse, brandsResponse]: any[] = await Promise.all([
+                api.get(`/admin/workflows/${workflowId}/`),
+                api.get('/admin/brands/')
+            ]);
 
-            const data = response.success !== undefined ? response.data : response;
+            const data = workflowResponse.success !== undefined ? workflowResponse.data : workflowResponse;
+            const brands = brandsResponse.results || brandsResponse;
 
             if (data && data.steps) {
                 let hasWaiting = false;
@@ -77,7 +93,27 @@ export const WorkflowSimulatorPage = () => {
                         hasWaiting = true;
                     }
 
-                    return { ...step, status };
+                    let simulatedAssignee = null;
+                    if (step.is_brand_conditional && !isSkipped) {
+                        const masterWorkflowCriteriaKey = step.master_workflow_criteria_key_param_json;
+                        if (masterWorkflowCriteriaKey) {
+                            const criteriaValue = parsedPayload.payload?.[masterWorkflowCriteriaKey];
+                            if (criteriaValue) {
+                                const brand = brands.find((b: any) => b.code === criteriaValue);
+                                if (brand) {
+                                    simulatedAssignee = brand?.owner_name;
+                                } else {
+                                    throw new Error(`Condition '${criteriaValue}' not found.`);
+                                }
+                            } else {
+                                throw new Error(`Master workflow criteria value not found for key ${masterWorkflowCriteriaKey}.`);
+                            }
+                        } else {
+                            throw new Error("Master workflow criteria key not found.");
+                        }
+                    }
+
+                    return { ...step, status, simulatedAssignee };
                 });
 
                 setSimulationResult(simulatedSteps);
@@ -91,6 +127,24 @@ export const WorkflowSimulatorPage = () => {
             } else {
                 setError(err.message || err.toString() || "An error occurred during simulation.");
             }
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleSubmit = async () => {
+        setLoading(true);
+        setError(null);
+        try {
+            const parsedPayload = JSON.parse(payloadInput);
+            const response = await api.post('/workflow/submit', {
+                ...parsedPayload,
+                watcher_ids: selectedWatcherIds
+            });
+            alert('Request submitted successfully with watchers!');
+            console.log('Submit response:', response);
+        } catch (err: any) {
+            setError(err.message || "Submit failed");
         } finally {
             setLoading(false);
         }
@@ -164,8 +218,53 @@ export const WorkflowSimulatorPage = () => {
                             className="w-full flex items-center justify-center gap-2"
                         >
                             <Play className="w-4 h-4" />
-                            Run
+                            Run Simulation
                         </Button>
+
+                        <div className="pt-6 border-t border-slate-100 space-y-4">
+                            <h3 className="text-sm font-bold text-slate-700 flex items-center gap-2">
+                                <Eye size={16} /> Add Watchers (Pre-submission)
+                            </h3>
+                            <div className="flex flex-wrap gap-2 mb-4">
+                                {selectedWatcherIds.map(id => {
+                                    const user = users.find((u: any) => u.id === id);
+                                    return (
+                                        <Badge key={id} variant="info" className="gap-1 pr-1">
+                                            {user?.username || id}
+                                            <X
+                                                size={14}
+                                                className="cursor-pointer hover:text-red-500"
+                                                onClick={() => setSelectedWatcherIds(prev => prev.filter(i => i !== id))}
+                                            />
+                                        </Badge>
+                                    );
+                                })}
+                            </div>
+                            <Select
+                                value=""
+                                onChange={(e) => {
+                                    const val = Number(e.target.value);
+                                    if (val && !selectedWatcherIds.includes(val)) {
+                                        setSelectedWatcherIds(prev => [...prev, val]);
+                                    }
+                                }}
+                                options={[
+                                    { value: '', label: 'Add a watcher...' },
+                                    ...users.map((u: any) => ({
+                                        value: u.id.toString(),
+                                        label: `${u.first_name} ${u.last_name} (${u.username})`
+                                    }))
+                                ]}
+                            />
+                            <Button
+                                onClick={handleSubmit}
+                                loading={loading}
+                                variant="outline"
+                                className="w-full border-indigo-200 text-indigo-600 hover:bg-indigo-50 font-bold"
+                            >
+                                Submit Request with Watchers
+                            </Button>
+                        </div>
                     </CardContent>
                 </Card>
 
@@ -223,7 +322,7 @@ export const WorkflowSimulatorPage = () => {
                                                         <p className="text-[15px] text-slate-700">
                                                             {isApproved ? 'Approved by ' : isRejected ? 'Rejected by ' : isWaiting ? 'Waiting Approval ' : 'Pending Approval '}
                                                             <span className="font-semibold text-slate-900">
-                                                                {step.user_name || step.role_users[0].name} {step.role_required && `(${step.role_name})`}
+                                                                {step.simulatedAssignee || step.user_name || (step.role_users && step.role_users[0]?.name) || "Unassigned"}  ({step.name})
                                                             </span>
                                                         </p>
                                                         {(step.condition_expression || step.condition) && (
@@ -257,6 +356,44 @@ export const WorkflowSimulatorPage = () => {
                                             </div>
                                         );
                                     })}
+
+                                    {/* Final Result Card */}
+                                    {(() => {
+                                        const isRejected = simulationResult.some(s => s.status === 'REJECTED');
+                                        const isAllApproved = simulationResult.every(s => s.status === 'APPROVED' || s.status === 'SKIPPED');
+
+                                        if (isRejected) {
+                                            return (
+                                                <div className="mt-8 p-2 bg-red-50 border-2 border-red-200 rounded-2xl animate-in zoom-in duration-300">
+                                                    <div className="flex items-center gap-4">
+                                                        <div className="h-12 w-12 rounded-full bg-red-500 flex items-center justify-center text-white shadow-lg shadow-red-200">
+                                                            <XCircle size={28} />
+                                                        </div>
+                                                        <div>
+                                                            <h3 className="text-xl font-black text-red-900 leading-none">Workflow Rejected</h3>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        }
+
+                                        if (isAllApproved) {
+                                            return (
+                                                <div className="mt-8 p-2 bg-emerald-50 border-2 border-emerald-200 rounded-2xl animate-in zoom-in duration-300">
+                                                    <div className="flex items-center gap-4">
+                                                        <div className="h-8 w-8 rounded-full bg-emerald-500 flex items-center justify-center text-white shadow-lg shadow-emerald-200">
+                                                            <CheckCircle size={24} />
+                                                        </div>
+                                                        <div>
+                                                            <h3 className="text-xl font-black text-emerald-900 leading-none">Workflow Approved</h3>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        }
+
+                                        return null;
+                                    })()}
                                 </div>
                             </div>
                         )}

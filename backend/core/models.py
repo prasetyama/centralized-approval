@@ -205,6 +205,15 @@ class WorkflowStepDefinition(models.Model):
         blank=True,
         help_text="Specific user required to approve this step (if type is USER)"
     )
+    is_brand_conditional = models.BooleanField(default=False, help_text="If true, uses Brand-Specific Approval logic")
+    master_workflow_criteria = models.ForeignKey(
+        'MasterWorkflowCriteria',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='workflow_steps',
+        help_text="Criteria to find the brand/owner for conditional approval"
+    )
     is_optional = models.BooleanField(default=False, help_text="If true, step can be skipped")
 
     class Meta:
@@ -310,6 +319,45 @@ class ApprovalRequest(models.Model):
 
     def __str__(self):
         return f"[{self.module.code}] {self.title} - {self.status}"
+
+
+class RequestWatcher(models.Model):
+    """
+    Users who are given read-only access to a specific request.
+    They can see details, audit logs, and discussions but cannot take action.
+    """
+    request = models.ForeignKey(
+        ApprovalRequest,
+        on_delete=models.CASCADE,
+        related_name='watchers'
+    )
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='watched_requests'
+    )
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='watchers_created'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    deleted_at = models.DateTimeField(null=True, blank=True)
+    deleted_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='watchers_deleted'
+    )
+
+    class Meta:
+        db_table = 'aw_request_watcher'
+        unique_together = ['request', 'user']
+        verbose_name_plural = 'Request Watchers'
+
+    def __str__(self):
+        return f"{self.user.username} watching {self.request.title}"
 
 
 class ApprovalStep(models.Model):
@@ -480,3 +528,75 @@ class RequestFeedback(models.Model):
 
     def __str__(self):
         return f"Feedback by {self.user} on {self.request}"
+
+class MasterWorkflowCriteria(models.Model):
+    name = models.CharField(max_length=150, unique=True, help_text="Master Zone, Master Brand")
+    description = models.CharField(max_length=255, null=True, blank=True)
+    key_param_json = models.CharField(max_length=50, unique=True, help_text="brand_code, zone_code")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'aw_master_workflow_condition'
+        ordering = ['name']
+
+    def __str__(self):
+        return f"{self.name}"
+    
+
+
+class Brand(models.Model):
+    """
+    Brand management model.
+    Each brand has one owner who handles brand-conditional approval steps.
+    """
+    name = models.CharField(max_length=100, unique=True, help_text="Example: 'Apple', 'Samsung'")
+    code = models.CharField(max_length=50, unique=True, help_text="Unique code for identification")
+    owner = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='owned_brands',
+        help_text="The user who handles approval for this brand"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    master_workflow_condition = models.ForeignKey(
+        MasterWorkflowCriteria,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='master_workflow_conditions'
+    )
+
+    class Meta:
+        db_table = 'aw_brand'
+        ordering = ['name']
+
+    def __str__(self):
+        return f"{self.name} ({self.code})"
+
+
+class UserBrand(models.Model):
+    """
+    Mapping users to brands.
+    Used to track which user is responsible for which brand.
+    """
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='user_brands'
+    )
+    brand = models.ForeignKey(
+        Brand,
+        on_delete=models.CASCADE,
+        related_name='brand_users'
+    )
+
+    class Meta:
+        db_table = 'aw_user_brand'
+        unique_together = ['user', 'brand']
+
+    def __str__(self):
+        return f"{self.user.username} -> {self.brand.name}"

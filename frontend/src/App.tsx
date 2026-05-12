@@ -10,6 +10,7 @@ import { ApprovalDetailPage } from './pages/ApprovalDetailPage';
 import { AdminUserPage } from './pages/AdminUserPage';
 import { AdminWorkflowPage } from './pages/AdminWorkflowPage';
 import { WorkflowSimulatorPage } from './pages/WorkflowSimulatorPage';
+import { BrandMasterPage } from './pages/BrandMasterPage';
 
 const AppRoutes = () => {
     const { loading } = useAuth();
@@ -43,6 +44,7 @@ const AppRoutes = () => {
                 <Route path="admin/workflows/:id/edit" element={<AdminWorkflowPage />} />
                 <Route path="admin/workflows/new" element={<AdminWorkflowPage />} />
                 <Route path="admin/workflow/simulator" element={<WorkflowSimulatorPage />} />
+                <Route path="admin/workflow/brand-master" element={<BrandMasterPage />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
             </Route>
         </Routes>
