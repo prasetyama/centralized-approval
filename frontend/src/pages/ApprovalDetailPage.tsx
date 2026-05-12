@@ -14,7 +14,7 @@ import { FeedbackList } from '@/components/molecules/FeedbackList';
 import { FeedbackForm } from '@/components/molecules/FeedbackForm';
 import { useAuth } from '@/context/AuthContext';
 import { formatDate } from '@/lib/utils';
-import { MessageSquare, ListTodo, Eye, Plus } from 'lucide-react';
+import { MessageSquare, ListTodo, Eye, Plus, AlertCircle, XCircle } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/atoms/Avatar';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/atoms/Tooltip';
 import { AddWatcherModal } from '@/components/molecules/AddWatcherModal';
@@ -27,9 +27,10 @@ export const ApprovalDetailPage = () => {
     const [isDelegateModalOpen, setIsDelegateModalOpen] = useState(false);
     const [isAddWatcherModalOpen, setIsAddWatcherModalOpen] = useState(false);
     const [activeTab, setActiveTab] = useState<'timeline' | 'discussion'>('timeline');
-    const { data: request, isLoading } = useQuery({
+    const { data: request, isLoading, isError } = useQuery({
         queryKey: ['workflow-detail', id],
         queryFn: () => api.get(`/workflow/${id}`),
+        retry: false,
     });
 
     const actionMutation = useMutation({
@@ -70,6 +71,17 @@ export const ApprovalDetailPage = () => {
         },
     });
 
+    const removeWatcherMutation = useMutation({
+        mutationFn: (watcherId: number) =>
+            api.delete(`/workflow/watchers/remove`, { data: { watcher_id: watcherId } }),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['workflow-detail', id] });
+        },
+        onError: (error) => {
+            alert(error);
+        },
+    });
+
     const getStatusVariant = (status: string) => {
         switch (status) {
             case 'APPROVED': return 'success';
@@ -78,6 +90,25 @@ export const ApprovalDetailPage = () => {
             default: return 'outline';
         }
     };
+
+    if (isError) {
+        return (
+            <div className="flex flex-col items-center justify-center min-h-[60vh] p-8 text-center animate-in fade-in duration-500">
+                <div className="p-6 rounded-full bg-red-50 text-red-600 mb-6 ring-8 ring-red-50/50">
+                    <AlertCircle size={48} />
+                </div>
+                <h2 className="text-3xl font-extrabold text-slate-900 mb-3 tracking-tight">Access Denied</h2>
+                <div className="flex gap-4">
+                    <Button variant="outline" onClick={() => navigate(-1)} className="font-bold px-8 h-12 rounded-xl">
+                        Go Back
+                    </Button>
+                    <Button onClick={() => window.location.reload()} className="bg-slate-900 text-white font-bold px-8 h-12 rounded-xl shadow-lg shadow-slate-200">
+                        Retry
+                    </Button>
+                </div>
+            </div>
+        );
+    }
 
     if (isLoading) {
         return (
@@ -133,7 +164,7 @@ export const ApprovalDetailPage = () => {
                             Delegate Task
                         </Button>
                     )} */}
-                    <Button
+                    {!isWatcher && <Button
                         variant="outline"
                         className="bg-indigo-50 text-indigo-600 border-indigo-200 hover:bg-indigo-100 hover:text-indigo-700 font-bold"
                         onClick={() => setIsAddWatcherModalOpen(true)}
@@ -141,6 +172,7 @@ export const ApprovalDetailPage = () => {
                         <Plus size={18} className="mr-2" />
                         Add Watcher
                     </Button>
+                    }
                 </div>
             </div>
 
@@ -198,11 +230,14 @@ export const ApprovalDetailPage = () => {
                                             {detail.watchers.map((watcher: any) => (
                                                 <Tooltip key={watcher.id}>
                                                     <TooltipTrigger asChild>
-                                                        <Avatar className="h-10 w-10 border-2 border-white ring-2 ring-slate-100 ring-offset-0 transition-transform hover:scale-110 cursor-pointer">
+                                                        <Avatar className="h-14 w-14 border-2 border-white ring-2 ring-slate-100 ring-offset-0 transition-transform hover:scale-110 z-2">
                                                             <AvatarFallback className="bg-indigo-100 text-indigo-600 font-bold">
                                                                 {watcher.user_full_name[0].toUpperCase()}
                                                             </AvatarFallback>
                                                         </Avatar>
+                                                        <div className='absolute top-0 right-0 bg-red-500 rounded-full w-5 h-5 z-10 cursor-pointer' onClick={() => removeWatcherMutation.mutate(watcher.id)}>
+                                                            <XCircle size={8} className='text-white w-full h-full' />
+                                                        </div>
                                                     </TooltipTrigger>
                                                     <TooltipContent className="bg-slate-900 text-white border-none font-bold text-xs">
                                                         {watcher.user_full_name}
@@ -291,7 +326,7 @@ export const ApprovalDetailPage = () => {
                         </div>
                     )}
 
-                    {!isApprover && detail.status === 'IN_PROGRESS' && (
+                    {!isApprover && detail.status === 'IN_PROGRESS' && !isWatcher && (
                         <div className="rounded-xl bg-blue-50/50 p-4 border border-blue-100 text-sm text-blue-700 font-medium flex gap-3">
                             <Clock size={18} className="shrink-0" />
                             <p>This request is currently with another approver. You can take action when it reaches your step.</p>

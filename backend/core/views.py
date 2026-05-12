@@ -9,7 +9,7 @@ from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from rest_framework.response import Response
 from django.db import transaction
-from django.db.models import Q, Count
+from django.db.models import Q, Prefetch, Count
 from django_filters.rest_framework import DjangoFilterBackend
 
 from core.models import (
@@ -28,6 +28,7 @@ from core.serializers import (
     RequestWatcherSerializer
 )
 from core.engine import WorkflowEngine
+from django.utils import timezone
 
 
 def _get_client_ip(request):
@@ -88,7 +89,11 @@ class WorkflowDetailView(generics.RetrieveAPIView):
     """
     queryset = ApprovalRequest.objects.select_related(
         'module', 'workflow', 'requester'
-    ).prefetch_related('steps', 'audit_logs', 'watchers', 'watchers__user')
+    ).prefetch_related(
+        'steps', 
+        'audit_logs', 
+        Prefetch('watchers', queryset=RequestWatcher.objects.filter(deleted_at=None).select_related('user'))
+    )
     serializer_class = ApprovalRequestDetailSerializer
     permission_classes = [IsAuthenticated]
 
@@ -103,7 +108,7 @@ class WorkflowDetailView(generics.RetrieveAPIView):
         return self.queryset.filter(
             Q(requester=user) |
             Q(steps__assigned_to=user) |
-            Q(watchers__user=user)
+            Q(watchers__user=user) & Q(watchers__deleted_at=None)
         ).distinct()
 
 
@@ -242,9 +247,9 @@ class InboxView(generics.ListAPIView):
         if user.is_superuser:
             queryset = ApprovalRequest.objects.all()
         elif tab == 'watching':
-            # Requests where user is a watcher
             watched_ids = RequestWatcher.objects.filter(
-                user=user
+                user=user,
+                deleted_at=None
             ).values_list('request_id', flat=True)
             queryset = ApprovalRequest.objects.filter(id__in=watched_ids)
         else:
@@ -344,7 +349,7 @@ class WatcherListView(generics.ListCreateAPIView):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return RequestWatcher.objects.filter(request_id=self.kwargs['pk'])
+        return RequestWatcher.objects.filter(request_id=self.kwargs['pk'], deleted_at=None)
 
     def post(self, request, pk):
         try:
@@ -361,11 +366,28 @@ class WatcherListView(generics.ListCreateAPIView):
         except User.DoesNotExist:
             return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
 
-        watcher, created = RequestWatcher.objects.get_or_create(
+        existing_watcher = RequestWatcher.objects.filter(
             request=approval_request,
-            user=target_user,
-            defaults={'created_by': request.user}
-        )
+            user=target_user
+        ).first()
+
+        if existing_watcher:
+            # If soft-deleted, restore it
+            if existing_watcher.deleted_at is not None:
+                existing_watcher.deleted_at = None
+                existing_watcher.deleted_by = None
+                existing_watcher.save()
+                created = False
+            else:
+                created = False
+            watcher = existing_watcher
+        else:
+            watcher = RequestWatcher.objects.create(
+                request=approval_request,
+                user=target_user,
+                created_by=request.user
+            )
+            created = True
 
         if not created:
             return Response({'message': 'User is already a watcher.'}, status=status.HTTP_200_OK)
@@ -380,6 +402,43 @@ class WatcherListView(generics.ListCreateAPIView):
         )
 
         return Response(RequestWatcherSerializer(watcher).data, status=status.HTTP_201_CREATED)
+
+class WatcherRemoveView(generics.GenericAPIView):
+    """
+    DELETE /api/v1/workflow/watchers/remove
+    Remove a watcher from a request using watcher_id in the request body.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request):
+        watcher_id = request.data.get('watcher_id')
+        if not watcher_id:
+            return Response({'error': 'watcher_id is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            watcher = RequestWatcher.objects.get(id=watcher_id, deleted_at=None)
+            
+            if watcher.created_by != request.user and not request.user.is_superuser:
+                return Response({'error': 'You are not authorized to remove this watcher.'}, status=status.HTTP_403_FORBIDDEN)
+
+            request_obj = watcher.request
+            username = watcher.user.username
+            
+            watcher.deleted_at = timezone.now()
+            watcher.deleted_by = request.user
+            watcher.save()
+
+            AuditLog.objects.create(
+                request=request_obj,
+                actor=request.user,
+                action=AuditLog.Action.COMMENT,
+                details=f"Removed {username} as a watcher.",
+                payload_snapshot=request_obj.payload
+            )
+
+            return Response({'message': 'Watcher removed successfully.'})
+        except RequestWatcher.DoesNotExist:
+            return Response({'error': 'Watcher not found.'}, status=status.HTTP_404_NOT_FOUND)
 
 
 # ─────────────────────────────────────────────

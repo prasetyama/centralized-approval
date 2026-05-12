@@ -61,7 +61,7 @@ export const InboxPage = () => {
                     className={`px-6 py-4 text-sm font-bold flex items-center gap-2 transition-all ${activeTab === 'inbox'
                         ? 'text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50/30'
                         : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'
-                    }`}
+                        }`}
                 >
                     <Inbox size={18} />
                     Inbox
@@ -71,7 +71,7 @@ export const InboxPage = () => {
                     className={`px-6 py-4 text-sm font-bold flex items-center gap-2 transition-all ${activeTab === 'watching'
                         ? 'text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50/30'
                         : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'
-                    }`}
+                        }`}
                 >
                     <Eye size={18} />
                     Watching
@@ -84,8 +84,8 @@ export const InboxPage = () => {
                         {activeTab === 'inbox' ? 'Approval Inbox' : 'Watched Requests'}
                     </h1>
                     <p className="mt-1 text-slate-500">
-                        {activeTab === 'inbox' 
-                            ? 'Review and approve tasks from all departments.' 
+                        {activeTab === 'inbox'
+                            ? 'Review and approve tasks from all departments.'
                             : 'Monitor requests where you are added as a watcher.'}
                     </p>
                 </div>

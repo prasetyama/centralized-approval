@@ -343,6 +343,13 @@ class RequestWatcher(models.Model):
         related_name='watchers_created'
     )
     created_at = models.DateTimeField(auto_now_add=True)
+    deleted_at = models.DateTimeField(null=True, blank=True)
+    deleted_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='watchers_deleted'
+    )
 
     class Meta:
         db_table = 'aw_request_watcher'
