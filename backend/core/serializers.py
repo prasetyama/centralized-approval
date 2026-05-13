@@ -157,9 +157,13 @@ class ModuleSerializer(serializers.ModelSerializer):
 
 class ModuleVariableSerializer(serializers.ModelSerializer):
     """Serializer for ModuleVariable model."""
+    module_name = serializers.SerializerMethodField()
     class Meta:
         model = ModuleVariable
-        fields = ['id', 'module', 'name', 'key_name', 'data_type', 'is_active']
+        fields = ['id', 'module', 'name', 'key_name', 'data_type', 'is_active', 'module_name']
+
+    def get_module_name(self, obj):
+        return obj.module.name if obj.module else None
 
 
 class WorkflowStepDefinitionSerializer(serializers.ModelSerializer):

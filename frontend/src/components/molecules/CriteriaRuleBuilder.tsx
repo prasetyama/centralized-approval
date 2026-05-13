@@ -103,7 +103,7 @@ export const CriteriaRuleBuilder: React.FC<CriteriaRuleBuilderProps> = ({
                                             value: v.key_name,
                                             label: v.name
                                         }))}
-                                        className="h-9 text-xs"
+                                        className="h-10 text-sm"
                                     />
                                 </div>
                                 <div className="col-span-3">
@@ -111,7 +111,7 @@ export const CriteriaRuleBuilder: React.FC<CriteriaRuleBuilderProps> = ({
                                         value={condition.operator}
                                         onChange={(e) => handleConditionChange(index, { operator: e.target.value })}
                                         options={isBoolean ? operators.slice(0, 2) : operators}
-                                        className="h-9 text-xs"
+                                        className="h-10 text-sm"
                                     />
                                 </div>
                                 <div className="col-span-4">
@@ -123,7 +123,7 @@ export const CriteriaRuleBuilder: React.FC<CriteriaRuleBuilderProps> = ({
                                                 { value: 'true', label: 'True' },
                                                 { value: 'false', label: 'False' }
                                             ]}
-                                            className="h-9 text-xs"
+                                            className="h-10 text-sm"
                                         />
                                     ) : (
                                         <Input
@@ -134,7 +134,7 @@ export const CriteriaRuleBuilder: React.FC<CriteriaRuleBuilderProps> = ({
                                             })}
                                             error={condition.value === '' || isNaN(condition.value) ? "Field is required" : ""}
                                             placeholder="Value..."
-                                            className="h-9 text-xs"
+                                            className="h-10 text-sm"
                                         />
                                     )}
                                 </div>
