@@ -1,6 +1,6 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Plus, Trash2, Settings2, AlertCircle } from 'lucide-react';
+import { Plus, Settings2, AlertCircle } from 'lucide-react';
 import api from '@/services/api';
 import { Button } from '@/components/atoms/Button';
 import { Select } from '@/components/atoms/Select';
@@ -48,9 +48,9 @@ export const CriteriaRuleBuilder: React.FC<CriteriaRuleBuilderProps> = ({
         onChange([...conditions, newCondition]);
     };
 
-    const handleRemoveCondition = (index: number) => {
-        onChange(conditions.filter((_, i) => i !== index));
-    };
+    // const handleRemoveCondition = (index: number) => {
+    //     onChange(conditions.filter((_, i) => i !== index));
+    // };
 
     const handleConditionChange = (index: number, updates: Partial<Condition>) => {
         const newConditions = [...conditions];
@@ -73,15 +73,17 @@ export const CriteriaRuleBuilder: React.FC<CriteriaRuleBuilderProps> = ({
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
                     <Settings2 size={12} /> Execution Criteria
                 </label>
-                <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleAddCondition}
-                    className="h-7 px-2 text-[10px] font-bold uppercase tracking-wider text-blue-600 hover:bg-blue-50"
-                >
-                    <Plus size={12} className="mr-1" /> Add Rule
-                </Button>
+                {conditions.length === 0 && (
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleAddCondition}
+                        className="h-7 px-2 text-[10px] font-bold uppercase tracking-wider text-blue-600 hover:bg-blue-50"
+                    >
+                        <Plus size={12} className="mr-1" /> Add Rule
+                    </Button>
+                )}
             </div>
 
             <div className="space-y-2">
@@ -126,23 +128,24 @@ export const CriteriaRuleBuilder: React.FC<CriteriaRuleBuilderProps> = ({
                                     ) : (
                                         <Input
                                             type={isNumber ? 'number' : 'text'}
-                                            value={condition.value}
+                                            value={condition.value ?? ''}
                                             onChange={(e) => handleConditionChange(index, {
                                                 value: isNumber ? parseFloat(e.target.value) : e.target.value
                                             })}
+                                            error={condition.value === '' || isNaN(condition.value) ? "Field is required" : ""}
                                             placeholder="Value..."
                                             className="h-9 text-xs"
                                         />
                                     )}
                                 </div>
                             </div>
-                            <button
+                            {/* <button
                                 type="button"
                                 onClick={() => handleRemoveCondition(index)}
                                 className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
                             >
                                 <Trash2 size={16} />
-                            </button>
+                            </button> */}
                         </div>
                     );
                 })}

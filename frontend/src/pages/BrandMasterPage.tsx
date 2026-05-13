@@ -30,6 +30,7 @@ export const BrandMasterPage: React.FC = () => {
     // -- State for editing --
     const [editingBrand, setEditingBrand] = useState<any>(null);
     const [editingMasterWorkflowCondition, setEditingMasterWorkflowCondition] = useState<any>(null);
+    const [showErrors, setShowErrors] = useState(false);
 
     // -- Mutations --
     const brandMutation = useMutation({
@@ -37,6 +38,7 @@ export const BrandMasterPage: React.FC = () => {
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['brands'] });
             setEditingBrand(null);
+            setShowErrors(false);
         }
     });
 
@@ -45,6 +47,7 @@ export const BrandMasterPage: React.FC = () => {
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['admin-master-workflow-conditions'] });
             setEditingMasterWorkflowCondition(null);
+            setShowErrors(false);
         }
     });
 
@@ -110,34 +113,47 @@ export const BrandMasterPage: React.FC = () => {
                                     label="Brand Name"
                                     value={editingBrand?.name || ''}
                                     onChange={e => setEditingBrand({ ...editingBrand, name: e.target.value })}
-                                    placeholder="e.g. Apple"
+                                    placeholder="Samsung"
+                                    error={(showErrors || brandMutation.isError) && !editingBrand?.name ? "Field is required" : ""}
                                 />
                                 <Input
                                     label="Brand Code"
                                     value={editingBrand?.code || ''}
                                     onChange={e => setEditingBrand({ ...editingBrand, code: e.target.value })}
-                                    placeholder="e.g. APPLE"
+                                    placeholder="SSG"
+                                    error={(showErrors || brandMutation.isError) && !editingBrand?.code ? "Field is required" : ""}
                                 />
                                 <Select
                                     label="Designated Owner (Approver)"
                                     options={[{ value: '', label: 'No Owner Assigned' }, ...userOptions]}
                                     value={editingBrand?.owner || ''}
                                     onChange={e => setEditingBrand({ ...editingBrand, owner: e.target.value ? parseInt(e.target.value) : null })}
+                                    error={(showErrors || brandMutation.isError) && !editingBrand?.owner ? "Field is required" : ""}
                                 />
                                 <Select
                                     label="Master Workflow Condition"
                                     options={[{ value: '', label: 'No Master Workflow Condition Assigned' }, ...workflowConditionOptions]}
                                     value={editingBrand?.master_workflow_condition || ''}
                                     onChange={e => setEditingBrand({ ...editingBrand, master_workflow_condition: e.target.value ? parseInt(e.target.value) : null })}
+                                    error={(showErrors || brandMutation.isError) && !editingBrand?.master_workflow_condition ? "Field is required" : ""}
                                 />
                                 <div className="flex gap-2 pt-2">
                                     {editingBrand && (
-                                        <Button variant="outline" fullWidth onClick={() => setEditingBrand(null)}>Cancel</Button>
+                                        <Button variant="outline" fullWidth onClick={() => {
+                                            setEditingBrand(null);
+                                            setShowErrors(false);
+                                        }}>Cancel</Button>
                                     )}
                                     <Button
                                         fullWidth
                                         className="bg-blue-600 hover:bg-blue-700"
-                                        onClick={() => brandMutation.mutate(editingBrand)}
+                                        onClick={() => {
+                                            if (!editingBrand?.name || !editingBrand?.code || !editingBrand?.owner || !editingBrand?.master_workflow_condition) {
+                                                setShowErrors(true);
+                                                return;
+                                            }
+                                            brandMutation.mutate(editingBrand);
+                                        }}
                                     >
                                         <Save size={16} className="mr-2" /> {editingBrand?.id ? 'Update Brand' : 'Save Brand'}
                                     </Button>
@@ -201,21 +217,32 @@ export const BrandMasterPage: React.FC = () => {
                                     value={editingMasterWorkflowCondition?.name || ''}
                                     onChange={e => setEditingMasterWorkflowCondition({ ...editingMasterWorkflowCondition, name: e.target.value })}
                                     placeholder="Master Zone"
+                                    error={(showErrors || masterWorkflowConditionMutation.isError) && !editingMasterWorkflowCondition?.name ? "Field is required" : ""}
                                 />
                                 <Input
                                     label="Key Parameter JSON"
                                     value={editingMasterWorkflowCondition?.key_param_json || ''}
                                     onChange={e => setEditingMasterWorkflowCondition({ ...editingMasterWorkflowCondition, key_param_json: e.target.value })}
                                     placeholder='zone_code'
+                                    error={(showErrors || masterWorkflowConditionMutation.isError) && !editingMasterWorkflowCondition?.key_param_json ? "Field is required" : ""}
                                 />
                                 <div className='flex gap-2 pt-2'>
                                     {editingMasterWorkflowCondition && (
-                                        <Button variant="outline" fullWidth onClick={() => setEditingMasterWorkflowCondition(null)}>Cancel</Button>
+                                        <Button variant="outline" fullWidth onClick={() => {
+                                            setEditingMasterWorkflowCondition(null);
+                                            setShowErrors(false);
+                                        }}>Cancel</Button>
                                     )}
                                     <Button
                                         fullWidth
                                         className="bg-blue-600 hover:bg-blue-700"
-                                        onClick={() => masterWorkflowConditionMutation.mutate(editingMasterWorkflowCondition)}
+                                        onClick={() => {
+                                            if (!editingMasterWorkflowCondition?.name || !editingMasterWorkflowCondition?.key_param_json) {
+                                                setShowErrors(true);
+                                                return;
+                                            }
+                                            masterWorkflowConditionMutation.mutate(editingMasterWorkflowCondition);
+                                        }}
                                     >
                                         <Save size={16} className="mr-2" /> {editingMasterWorkflowCondition?.id ? 'Update' : 'Create'}
                                     </Button>

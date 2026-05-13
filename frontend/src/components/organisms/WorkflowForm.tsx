@@ -120,10 +120,33 @@ export const WorkflowForm: React.FC<WorkflowFormProps> = ({ initialData, onClose
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
+
+        const cleanedSteps = formData.steps.map((step: Step) => ({
+            ...step,
+            conditions: step.is_optional ? (step.conditions || []) : []
+        }));
+
+        let hasEmptyCondition = false;
+        cleanedSteps.forEach((step: Step) => {
+            if (step.is_optional && step.conditions) {
+                step.conditions.forEach((condition: any) => {
+                    if (condition.value === undefined || condition.value === null || condition.value.toString().trim() === '' || isNaN(condition.value)) {
+                        hasEmptyCondition = true;
+                    }
+                });
+            }
+        });
+
+        if (hasEmptyCondition) {
+            alert('Please input a value for optional step criteria');
+            return;
+        }
+
         mutation.mutate({
             ...formData,
             module: parseInt(formData.module as string),
             total_steps: formData.steps.length,
+            steps: cleanedSteps,
         });
     };
 
@@ -324,13 +347,15 @@ export const WorkflowForm: React.FC<WorkflowFormProps> = ({ initialData, onClose
                                         </div>
                                     </div>
 
-                                    <div className="mt-4 pt-3 border-t border-slate-50">
-                                        <CriteriaRuleBuilder 
-                                            moduleId={formData.module}
-                                            conditions={step.conditions || []}
-                                            onChange={(conditions) => handleStepChange(index, { conditions })}
-                                        />
-                                    </div>
+                                    {step.is_optional && (
+                                        <div className="mt-4 pt-3 border-t border-slate-50">
+                                            <CriteriaRuleBuilder
+                                                moduleId={formData.module}
+                                                conditions={step.conditions || []}
+                                                onChange={(conditions) => handleStepChange(index, { conditions })}
+                                            />
+                                        </div>
+                                    )}
                                 </Card>
                             </div>
                         ))}
