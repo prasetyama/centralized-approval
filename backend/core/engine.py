@@ -22,10 +22,89 @@ from core.state_machine import can_transition
 
 class WorkflowEngine:
     """
-    Central approval workflow engine.
-    Implements DRY principle: all approval logic resides here,
     not in individual modules.
     """
+
+    @staticmethod
+    def _evaluate_conditions(payload, conditions):
+        """
+        Evaluate a list of conditions against a JSON payload.
+        Conditions format: [{'field': 'key', 'operator': '>', 'value': 100}]
+        """
+        if not conditions:
+            return True
+
+        for condition in conditions:
+            field = condition.get('field')
+            operator = condition.get('operator')
+            target_value = condition.get('value')
+            
+            # Get value from payload (supports nested keys if needed, but let's keep it simple for now)
+            actual_value = payload.get(field)
+
+            # Type conversion/inference
+            try:
+                if isinstance(target_value, bool):
+                    actual_value = bool(actual_value)
+                elif isinstance(target_value, (int, float)):
+                    actual_value = float(actual_value)
+                    target_value = float(target_value)
+                else:
+                    actual_value = str(actual_value) if actual_value is not None else ""
+                    target_value = str(target_value)
+            except (ValueError, TypeError):
+                # If conversion fails, the condition is not met
+                return False
+
+            # Comparison logic
+            if operator == '==':
+                if not (actual_value == target_value): return False
+            elif operator == '!=':
+                if not (actual_value != target_value): return False
+            elif operator == '>':
+                if not (actual_value > target_value): return False
+            elif operator == '<':
+                if not (actual_value < target_value): return False
+            elif operator == '>=':
+                if not (actual_value >= target_value): return False
+            elif operator == '<=':
+                if not (actual_value <= target_value): return False
+            else:
+                return False # Unknown operator
+        
+        return True
+
+    @staticmethod
+    def _activate_next_step(approval_request):
+        """
+        Find and activate the next non-skipped step.
+        If no more steps, mark the request as APPROVED.
+        """
+        next_step = ApprovalStep.objects.filter(
+            request=approval_request,
+            step_order__gt=approval_request.current_step
+        ).order_by('step_order').first()
+
+        while next_step and next_step.status == ApprovalStep.StepStatus.SKIPPED:
+            approval_request.current_step = next_step.step_order
+            next_step = ApprovalStep.objects.filter(
+                request=approval_request,
+                step_order__gt=approval_request.current_step
+            ).order_by('step_order').first()
+
+        if next_step:
+            next_step.status = ApprovalStep.StepStatus.WAITING
+            next_step.save(update_fields=['status'])
+            approval_request.current_step = next_step.step_order
+            approval_request.save(update_fields=['current_step', 'updated_at'])
+            return False # Not finished
+        else:
+            # Final step reached
+            if not can_transition(approval_request.status, ApprovalRequest.Status.APPROVED):
+                raise ValidationError("Invalid state transition to APPROVED.")
+            approval_request.status = ApprovalRequest.Status.APPROVED
+            approval_request.save(update_fields=['status', 'updated_at'])
+            return True # Finished
 
     @staticmethod
     def notify_external_system(approval_request):
@@ -241,11 +320,16 @@ class WorkflowEngine:
                         
                     assignee = assignee_qs.first()
 
-            step_status = (
-                ApprovalStep.StepStatus.WAITING
-                if step_def.step_order == 1
-                else ApprovalStep.StepStatus.PENDING
-            )
+            step_status = ApprovalStep.StepStatus.PENDING
+            
+            # 3. Check optional criteria
+            if step_def.conditions:
+                if not WorkflowEngine._evaluate_conditions(payload, step_def.conditions):
+                    step_status = ApprovalStep.StepStatus.SKIPPED
+
+            # Set first step to WAITING if not skipped
+            if step_def.step_order == 1 and step_status == ApprovalStep.StepStatus.PENDING:
+                step_status = ApprovalStep.StepStatus.WAITING
 
             ApprovalStep.objects.create(
                 request=approval_request,
@@ -259,8 +343,19 @@ class WorkflowEngine:
             )
 
         # Transition to IN_PROGRESS since first step is activated
-        approval_request.status = ApprovalRequest.Status.IN_PROGRESS
-        approval_request.save(update_fields=['status', 'updated_at'])
+        # But wait, what if the first step was skipped?
+        first_active_step = approval_request.steps.filter(
+            status=ApprovalStep.StepStatus.WAITING
+        ).first()
+
+        if not first_active_step:
+            # If no steps are waiting, it might mean everything was skipped or first step skipped
+            # Let's use the new activation logic to find the real first step
+            approval_request.current_step = 0 # Start from before the first step
+            WorkflowEngine._activate_next_step(approval_request)
+        else:
+            approval_request.status = ApprovalRequest.Status.IN_PROGRESS
+            approval_request.save(update_fields=['status', 'updated_at'])
 
         # Create watchers if provided
         if watcher_ids:
@@ -357,24 +452,8 @@ class WorkflowEngine:
         current_step.acted_at = timezone.now()
         current_step.save()
 
-        # Check if there's a next step
-        next_step = ApprovalStep.objects.filter(
-            request=approval_request,
-            step_order=approval_request.current_step + 1
-        ).first()
-
-        if next_step:
-            # Advance to next step
-            next_step.status = ApprovalStep.StepStatus.WAITING
-            next_step.save(update_fields=['status'])
-            approval_request.current_step += 1
-            approval_request.save(update_fields=['current_step', 'updated_at'])
-        else:
-            # Final step — mark as APPROVED
-            if not can_transition(approval_request.status, ApprovalRequest.Status.APPROVED):
-                raise ValidationError("Invalid state transition to APPROVED.")
-            approval_request.status = ApprovalRequest.Status.APPROVED
-            approval_request.save(update_fields=['status', 'updated_at'])
+        # Activate the next step using the new helper
+        WorkflowEngine._activate_next_step(approval_request)
 
         # Create audit log
         AuditLog.objects.create(
@@ -584,26 +663,35 @@ class WorkflowEngine:
         approval_request.status = ApprovalRequest.Status.REVISED
         approval_request.save(update_fields=['status', 'payload', 'updated_at'])
 
-        # Reset all steps
-        approval_request.steps.all().update(
-            status=ApprovalStep.StepStatus.PENDING,
-            comments='',
-            acted_at=None,
-        )
+        # Reset all steps and re-evaluate conditions
+        step_definitions = {
+            sd.step_order: sd for sd in approval_request.workflow.steps.all()
+        }
+        
+        for step in approval_request.steps.all().order_by('step_order'):
+            step.comments = ''
+            step.acted_at = None
+            
+            step_def = step_definitions.get(step.step_order)
+            if step_def and step_def.conditions:
+                if not WorkflowEngine._evaluate_conditions(approval_request.payload, step_def.conditions):
+                    step.status = ApprovalStep.StepStatus.SKIPPED
+                else:
+                    step.status = ApprovalStep.StepStatus.PENDING
+            else:
+                step.status = ApprovalStep.StepStatus.PENDING
+            step.save()
 
-        # Set first step to WAITING
-        first_step = approval_request.steps.order_by('step_order').first()
-        if first_step:
-            first_step.status = ApprovalStep.StepStatus.WAITING
-            first_step.save(update_fields=['status'])
-
-        # Back to PENDING → IN_PROGRESS
+        # Reset request state and activate first non-skipped step
         approval_request.status = ApprovalRequest.Status.PENDING
-        approval_request.current_step = 1
+        approval_request.current_step = 0
         approval_request.save(update_fields=['status', 'current_step', 'updated_at'])
 
-        approval_request.status = ApprovalRequest.Status.IN_PROGRESS
-        approval_request.save(update_fields=['status', 'updated_at'])
+        # This will set the first WAITING step and change request status to IN_PROGRESS (if not finished)
+        is_finished = WorkflowEngine._activate_next_step(approval_request)
+        if not is_finished:
+            approval_request.status = ApprovalRequest.Status.IN_PROGRESS
+            approval_request.save(update_fields=['status', 'updated_at'])
 
         # Audit log
         AuditLog.objects.create(

@@ -4,16 +4,17 @@ import { cn } from '@/lib/utils';
 interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElement> {
     error?: string;
     label?: string;
+    required?: boolean;
     options: { value: string | number; label: string }[];
 }
 
 export const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
-    ({ className, error, label, options, ...props }, ref) => {
+    ({ className, error, label, required = false, options, ...props }, ref) => {
         return (
             <div className="w-full space-y-1.5">
                 {label && (
                     <label className="text-sm font-medium text-slate-700">
-                        {label}
+                        {label} {required && <span className="text-red-500">*</span>}
                     </label>
                 )}
                 <select

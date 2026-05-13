@@ -135,6 +135,40 @@ class Module(models.Model):
         return f"{self.name} ({self.code})"
 
 
+class ModuleVariable(models.Model):
+    """
+    Variables available for a module to be used in approval criteria.
+    """
+    class DataType(models.TextChoices):
+        NUMBER = 'NUMBER', 'Number'
+        STRING = 'STRING', 'String'
+        BOOLEAN = 'BOOLEAN', 'Boolean'
+
+    module = models.ForeignKey(
+        Module,
+        on_delete=models.CASCADE,
+        related_name='variables'
+    )
+    name = models.CharField(max_length=100, help_text="Display name (e.g., 'Total Amount')")
+    key_name = models.CharField(max_length=100, help_text="Key in JSON payload (e.g., 'total_amount')")
+    data_type = models.CharField(
+        max_length=20,
+        choices=DataType.choices,
+        default=DataType.STRING
+    )
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'aw_module_variable'
+        unique_together = ['module', 'key_name']
+        ordering = ['module', 'name']
+
+    def __str__(self):
+        return f"{self.module.code} - {self.name} ({self.key_name})"
+
+
 class WorkflowDefinition(models.Model):
     """
     Template defining the approval workflow for a module.
@@ -215,6 +249,11 @@ class WorkflowStepDefinition(models.Model):
         help_text="Criteria to find the brand/owner for conditional approval"
     )
     is_optional = models.BooleanField(default=False, help_text="If true, step can be skipped")
+    conditions = models.JSONField(
+        default=list, 
+        blank=True, 
+        help_text="List of conditions to require/skip this step. Example: [{'field': 'total_amount', 'operator': '>', 'value': 1000000}]"
+    )
 
     class Meta:
         db_table = 'aw_workflow_step_definition'
