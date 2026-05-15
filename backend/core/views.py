@@ -397,7 +397,7 @@ class WatcherListView(generics.ListCreateAPIView):
         AuditLog.objects.create(
             request=approval_request,
             actor=request.user,
-            action=AuditLog.Action.COMMENT,
+            action=AuditLog.Action.WATCHER_ADDED,
             details=f"Added {target_user.username} as a watcher.",
             payload_snapshot=approval_request.payload
         )
@@ -432,7 +432,7 @@ class WatcherRemoveView(generics.GenericAPIView):
             AuditLog.objects.create(
                 request=request_obj,
                 actor=request.user,
-                action=AuditLog.Action.COMMENT,
+                action=AuditLog.Action.WATCHER_REMOVED,
                 details=f"Removed {username} as a watcher.",
                 payload_snapshot=request_obj.payload
             )
@@ -639,6 +639,14 @@ class RequestFeedbackViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user)
+
+        # Add Log Activity
+        AuditLog.objects.create(
+            request=serializer.instance.request,
+            actor=self.request.user,
+            action=AuditLog.Action.FEEDBACK,
+            details=f"Feedback added: {serializer.instance.content}"
+        )
 
 
 class BrandViewSet(viewsets.ModelViewSet):

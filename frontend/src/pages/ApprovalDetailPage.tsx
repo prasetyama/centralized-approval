@@ -18,6 +18,7 @@ import { MessageSquare, ListTodo, Eye, Plus, AlertCircle } from 'lucide-react';
 import { AddWatcherModal } from '@/components/molecules/AddWatcherModal';
 import { ConfirmationModal } from '@/components/molecules/ConfirmationModal';
 import { WatcherAvatarGroup } from '@/components/molecules/WatcherAvatarGroup';
+import { ActivityTimeline } from '@/components/organisms/ActivityTimeline';
 
 export const ApprovalDetailPage = () => {
     const { id } = useParams();
@@ -28,7 +29,7 @@ export const ApprovalDetailPage = () => {
     const [isAddWatcherModalOpen, setIsAddWatcherModalOpen] = useState(false);
     const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
     const [watcherToRemove, setWatcherToRemove] = useState<{ id: number, name: string } | null>(null);
-    const [activeTab, setActiveTab] = useState<'timeline' | 'discussion'>('timeline');
+    const [activeTab, setActiveTab] = useState<'timeline' | 'activity' | 'discussion'>('timeline');
     const { data: request, isLoading, isError } = useQuery({
         queryKey: ['workflow-detail', id],
         queryFn: () => api.get(`/workflow/${id}`),
@@ -251,7 +252,7 @@ export const ApprovalDetailPage = () => {
                                     }`}
                             >
                                 <ListTodo size={18} />
-                                Approval
+                                Approvals
                             </button>
                             <button
                                 onClick={() => setActiveTab('discussion')}
@@ -268,13 +269,29 @@ export const ApprovalDetailPage = () => {
                                     </span>
                                 )}
                             </button>
+                            <button
+                                onClick={() => setActiveTab('activity')}
+                                className={`flex-1 py-4 text-sm font-bold flex items-center justify-center gap-2 transition-all relative ${activeTab === 'activity'
+                                    ? 'text-indigo-600 bg-indigo-50/30 border-b-2 border-indigo-600'
+                                    : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'
+                                    }`}
+                            >
+                                <History size={18} />
+                                Activity Log
+                            </button>
                         </div>
                         <CardContent className="p-0">
                             {activeTab === 'timeline' ? (
-                                <div className="p-6 max-h-[400px] overflow-y-auto">
+                                <div className="p-6 max-h-[500px] overflow-y-auto">
                                     <Timeline
                                         steps={detail.steps}
                                         currentStep={detail.current_step}
+                                    />
+                                </div>
+                            ) : activeTab === 'activity' ? (
+                                <div className="p-6 max-h-[500px] overflow-y-auto bg-slate-50/30">
+                                    <ActivityTimeline
+                                        logs={detail.audit_logs || []}
                                     />
                                 </div>
                             ) : (
