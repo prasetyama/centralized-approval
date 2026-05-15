@@ -91,7 +91,7 @@ class WorkflowDetailView(generics.RetrieveAPIView):
     queryset = ApprovalRequest.objects.select_related(
         'module', 'workflow', 'requester'
     ).prefetch_related(
-        Prefetch('steps', queryset=ApprovalStep.objects.exclude(status='SKIPPED')),
+        'steps',
         'audit_logs',
         Prefetch('watchers', queryset=RequestWatcher.objects.filter(deleted_at=None).select_related('user'))
     )

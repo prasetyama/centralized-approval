@@ -543,6 +543,14 @@ class WorkflowEngine:
         approval_request.status = ApprovalRequest.Status.REJECTED
         approval_request.save(update_fields=['status', 'updated_at'])
 
+        # Reject all subsequent steps that are not already acted upon
+        ApprovalStep.objects.filter(
+            request=approval_request,
+            step_order__gt=current_step.step_order
+        ).exclude(
+            status__in=[ApprovalStep.StepStatus.APPROVED, ApprovalStep.StepStatus.SKIPPED]
+        ).update(status=ApprovalStep.StepStatus.SKIPPED)
+
         # Create audit log
         AuditLog.objects.create(
             request=approval_request,
