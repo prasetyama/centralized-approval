@@ -9,7 +9,7 @@ import { Select } from '@/components/atoms/Select';
 import { ConfirmationModal } from '@/components/molecules/ConfirmationModal';
 
 export const BrandMasterPage: React.FC = () => {
-    const [activeTab, setActiveTab] = useState<'brands' | 'master-workflow-conditions' | 'module-variables'>('brands');
+    const [activeTab, setActiveTab] = useState<'brands' | 'master-workflow-conditions' | 'module-variables'>('master-workflow-conditions');
     const queryClient = useQueryClient();
 
     // -- Queries --
@@ -146,16 +146,16 @@ export const BrandMasterPage: React.FC = () => {
                 </div>
                 <div className="flex bg-slate-100 p-1 rounded-xl shadow-inner">
                     <button
-                        onClick={() => setActiveTab('brands')}
-                        className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'brands' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                    >
-                        <Tag size={16} /> Brands & Owners
-                    </button>
-                    <button
                         onClick={() => setActiveTab('master-workflow-conditions')}
                         className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'master-workflow-conditions' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                     >
                         <Users size={16} /> Master Workflow Conditions
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('brands')}
+                        className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'brands' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                    >
+                        <Tag size={16} /> Brands & Owners
                     </button>
                     <button
                         onClick={() => setActiveTab('module-variables')}

@@ -597,7 +597,7 @@ class UserViewSet(viewsets.ModelViewSet):
 
 class WorkflowDefinitionViewSet(viewsets.ModelViewSet):
     """CRUD for WorkflowDefinitions (Admin)."""
-    queryset = WorkflowDefinition.objects.select_related('module').prefetch_related('steps').all()
+    queryset = WorkflowDefinition.objects.select_related('module').prefetch_related('steps').all().order_by('id')
     permission_classes = [IsAuthenticated]
     filterset_fields = ['module', 'is_active']
     search_fields = ['name']

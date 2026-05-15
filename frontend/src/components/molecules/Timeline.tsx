@@ -63,7 +63,7 @@ export const Timeline = ({ steps, currentStep }: TimelineProps) => {
                                 </p>
                                 {step.acted_at && (
                                     <span className="text-xs text-slate-400">
-                                        {formatDate(step.acted_at)}
+                                        {step.status.toString().replace('_', ' ').toLowerCase() + ' at ' + formatDate(step.acted_at)}
                                     </span>
                                 )}
                             </div>

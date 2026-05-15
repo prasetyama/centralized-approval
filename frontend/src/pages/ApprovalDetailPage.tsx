@@ -15,10 +15,9 @@ import { FeedbackForm } from '@/components/molecules/FeedbackForm';
 import { useAuth } from '@/context/AuthContext';
 import { formatDate } from '@/lib/utils';
 import { MessageSquare, ListTodo, Eye, Plus, AlertCircle } from 'lucide-react';
-import { Avatar, AvatarFallback } from '@/components/atoms/Avatar';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, TooltipRemoveWatcherButton } from '@/components/atoms/Tooltip';
 import { AddWatcherModal } from '@/components/molecules/AddWatcherModal';
 import { ConfirmationModal } from '@/components/molecules/ConfirmationModal';
+import { WatcherAvatarGroup } from '@/components/molecules/WatcherAvatarGroup';
 
 export const ApprovalDetailPage = () => {
     const { id } = useParams();
@@ -28,7 +27,7 @@ export const ApprovalDetailPage = () => {
     const [isDelegateModalOpen, setIsDelegateModalOpen] = useState(false);
     const [isAddWatcherModalOpen, setIsAddWatcherModalOpen] = useState(false);
     const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
-    const [watcherToRemove, setWatcherToRemove] = useState<{id: number, name: string} | null>(null);
+    const [watcherToRemove, setWatcherToRemove] = useState<{ id: number, name: string } | null>(null);
     const [activeTab, setActiveTab] = useState<'timeline' | 'discussion'>('timeline');
     const { data: request, isLoading, isError } = useQuery({
         queryKey: ['workflow-detail', id],
@@ -158,7 +157,7 @@ export const ApprovalDetailPage = () => {
                         </p>
                     </div>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-6 flex-row">
                     {/* {user?.is_superuser && detail.status === 'IN_PROGRESS' && (
                         <Button
                             variant="outline"
@@ -169,6 +168,17 @@ export const ApprovalDetailPage = () => {
                             Delegate Task
                         </Button>
                     )} */}
+
+                    {detail.watchers?.length > 0 && (
+                        <WatcherAvatarGroup
+                            watchers={detail.watchers}
+                            onRemove={(watcher) => {
+                                setWatcherToRemove(watcher);
+                                setIsConfirmModalOpen(true);
+                            }}
+                        />
+                    )}
+
                     {!isWatcher && <Button
                         variant="outline"
                         className="bg-indigo-50 text-indigo-600 border-indigo-200 hover:bg-indigo-100 hover:text-indigo-700 font-bold"
@@ -226,34 +236,6 @@ export const ApprovalDetailPage = () => {
                                     {detail.description || 'No description provided.'}
                                 </p>
                             </div>
-
-                            {detail.watchers?.length > 0 && (
-                                <div className="mt-8 pt-8 border-t border-slate-100">
-                                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">People watching this request</p>
-                                    <div className="flex flex-wrap gap-2">
-                                        <TooltipProvider>
-                                            {detail.watchers.map((watcher: any) => (
-                                                <Tooltip key={watcher.id}>
-                                                    <TooltipTrigger asChild>
-                                                        <Avatar className="h-14 w-14 border-2 border-white ring-2 ring-slate-100 ring-offset-0 transition-transform hover:scale-110 z-2">
-                                                            <AvatarFallback className="bg-indigo-100 text-indigo-600 font-bold">
-                                                                {watcher.user_full_name[0].toUpperCase()}
-                                                            </AvatarFallback>
-                                                        </Avatar>
-                                                        <TooltipRemoveWatcherButton onClick={() => {
-                                                            setWatcherToRemove({ id: watcher.id, name: watcher.user_full_name });
-                                                            setIsConfirmModalOpen(true);
-                                                        }} />
-                                                    </TooltipTrigger>
-                                                    <TooltipContent className="bg-slate-900 text-white border-none font-bold text-xs">
-                                                        {watcher.user_full_name}
-                                                    </TooltipContent>
-                                                </Tooltip>
-                                            ))}
-                                        </TooltipProvider>
-                                    </div>
-                                </div>
-                            )}
                         </CardContent>
                     </Card>
                 </div>

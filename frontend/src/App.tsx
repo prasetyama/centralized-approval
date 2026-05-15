@@ -44,7 +44,7 @@ const AppRoutes = () => {
                 <Route path="admin/workflows/:id/edit" element={<AdminWorkflowPage />} />
                 <Route path="admin/workflows/new" element={<AdminWorkflowPage />} />
                 <Route path="admin/workflow/simulator" element={<WorkflowSimulatorPage />} />
-                <Route path="admin/workflow/brand-master" element={<BrandMasterPage />} />
+                <Route path="admin/master-data" element={<BrandMasterPage />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
             </Route>
         </Routes>

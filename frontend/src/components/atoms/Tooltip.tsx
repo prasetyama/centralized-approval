@@ -33,7 +33,7 @@ const TooltipRemoveWatcherButton = ({ onClick }: { onClick: () => void }) => {
   const context = React.useContext(TooltipContext);
   if (!context?.show) return null;
   return (
-    <div className="absolute top-0 right-0 bg-red-500 rounded-full w-5 h-5 z-10 cursor-pointer" onClick={onClick}>
+    <div className="absolute top-0 right-0 bg-red-500 rounded-full w-4 h-4 z-10 cursor-pointer" onClick={onClick}>
       <XCircle size={8} className='text-white w-full h-full' />
     </div>
   )
