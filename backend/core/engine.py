@@ -331,16 +331,17 @@ class WorkflowEngine:
             if step_def.step_order == 1 and step_status == ApprovalStep.StepStatus.PENDING:
                 step_status = ApprovalStep.StepStatus.WAITING
 
-            ApprovalStep.objects.create(
-                request=approval_request,
-                step_order=step_def.step_order,
-                name=step_def.name,
-                approver_type=step_def.approver_type,
-                assigned_to=assignee,
-                role_required=step_def.role_required,
-                user_required=step_def.user_required,
-                status=step_status,
-            )
+            if step_status != ApprovalStep.StepStatus.ADDITIONAL:
+                ApprovalStep.objects.create(
+                    request=approval_request,
+                    step_order=step_def.step_order,
+                    name=step_def.name,
+                    approver_type=step_def.approver_type,
+                    assigned_to=assignee,
+                    role_required=step_def.role_required,
+                    user_required=step_def.user_required,
+                    status=step_status,
+                )
 
         # Transition to IN_PROGRESS since first step is activated
         # But wait, what if the first step was skipped?
