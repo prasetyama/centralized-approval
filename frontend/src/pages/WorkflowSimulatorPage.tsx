@@ -75,13 +75,14 @@ export const WorkflowSimulatorPage = () => {
 
                 const simulatedSteps = data.steps.map((step: any) => {
                     let isSkipped = false;
+                    let isOptional = false;
 
                     // Evaluate dynamic conditions (JSON-based)
                     if (step.conditions && step.conditions.length > 0) {
                         for (const condition of step.conditions) {
                             const { field, operator, value: targetValue } = condition;
                             const actualValue = parsedPayload.payload?.[field];
-                            console.log('actualValue', actualValue, 'field', field);
+                            console.log('actualValue', actualValue, 'field', field, 'value', targetValue);
                             if (actualValue == undefined) {
                                 throw new Error(`Field ${field} not found in payload.`);
                             }
@@ -93,14 +94,14 @@ export const WorkflowSimulatorPage = () => {
                             if (typeof v2 === 'number') v1 = Number(v1);
                             if (typeof v2 === 'boolean') v1 = String(v1).toLowerCase() === 'true';
 
-                            if (operator === '==') { if (!(v1 == v2)) isSkipped = true; }
-                            else if (operator === '!=') { if (!(v1 != v2)) isSkipped = true; }
-                            else if (operator === '>') { if (!(v1 > v2)) isSkipped = true; }
-                            else if (operator === '<') { if (!(v1 < v2)) isSkipped = true; }
-                            else if (operator === '>=') { if (!(v1 >= v2)) isSkipped = true; }
-                            else if (operator === '<=') { if (!(v1 <= v2)) isSkipped = true; }
+                            if (operator === '==') { if (!(v1 == v2)) isOptional = true; }
+                            else if (operator === '!=') { if (!(v1 != v2)) isOptional = true; }
+                            else if (operator === '>') { if (!(v1 > v2)) isOptional = true; }
+                            else if (operator === '<') { if (!(v1 < v2)) isOptional = true; }
+                            else if (operator === '>=') { if (!(v1 >= v2)) isOptional = true; }
+                            else if (operator === '<=') { if (!(v1 <= v2)) isOptional = true; }
 
-                            if (isSkipped) break;
+                            if (isOptional) break;
                         }
                     }
 
@@ -109,6 +110,8 @@ export const WorkflowSimulatorPage = () => {
                     } else if (!hasWaiting) {
                         step.status = 'WAITING';
                         hasWaiting = true;
+                    } else if (isOptional) {
+                        step.status = 'OPTIONAL';
                     } else {
                         step.status = 'PENDING';
                     }
@@ -179,8 +182,8 @@ export const WorkflowSimulatorPage = () => {
             newResult[stepIndex].status = 'REJECTED';
             // Set all subsequent non-skipped steps to REJECTED
             for (let i = stepIndex + 1; i < newResult.length; i++) {
-                if (newResult[i].status !== 'SKIPPED') {
-                    newResult[i].status = 'REJECTED';
+                if (newResult[i].status !== 'OPTIONAL') {
+                    newResult[i].status = 'SKIPPED';
                 }
             }
         } else if (action === 'APPROVE') {
@@ -188,7 +191,7 @@ export const WorkflowSimulatorPage = () => {
 
             // Set the next non-skipped step to WAITING
             for (let i = stepIndex + 1; i < newResult.length; i++) {
-                if (newResult[i].status !== 'SKIPPED') {
+                if (newResult[i].status !== 'SKIPPED' && newResult[i].status !== 'OPTIONAL') {
                     newResult[i].status = 'WAITING';
                     break;
                 }
@@ -313,14 +316,15 @@ export const WorkflowSimulatorPage = () => {
                                         const isRejected = step.status === 'REJECTED';
                                         const isWaiting = step.status === 'WAITING';
                                         const isSkipped = step.status === 'SKIPPED';
+                                        const isOptional = step.status === 'OPTIONAL';
 
                                         return (
-                                            <div key={index} className={`relative pl-8 flex flex-col min-h-[50px] ${index}`} style={{ display: !isSkipped ? 'flex' : 'none' }}>
+                                            <div key={index} className={`relative pl-8 flex flex-col min-h-[50px] ${index}`} style={{ display: !isOptional ? 'flex' : 'none' }}>
                                                 {/* Timeline vertical lines */}
                                                 {index !== 0 && (
                                                     <div className="absolute left-[-1px] top-0 h-1/2 w-[2px] bg-slate-200 z-10" />
                                                 )}
-                                                {index !== simulationResult.length - 1 && simulationResult[index + 1].status !== 'SKIPPED' && (
+                                                {index !== simulationResult.length - 1 && simulationResult[index + 1].status !== 'OPTIONAL' && (
                                                     <div className="absolute left-[-1px] top-1/2 bottom-[-32px] w-[2px] bg-slate-200 z-10" />
                                                 )}
 
@@ -329,6 +333,8 @@ export const WorkflowSimulatorPage = () => {
                                                     {isApproved ? (
                                                         <CheckCircle className="w-8 h-8 text-emerald-500 bg-white" />
                                                     ) : isRejected ? (
+                                                        <XCircle className="w-8 h-8 text-red-500 bg-white" />
+                                                    ) : isSkipped ? (
                                                         <XCircle className="w-8 h-8 text-red-500 bg-white" />
                                                     ) : (
                                                         <div className="flex items-center justify-center w-8 h-8 rounded-full bg-slate-400 border-[3px] border-white text-white">
@@ -341,7 +347,7 @@ export const WorkflowSimulatorPage = () => {
                                                 <div className="flex-1 flex-col">
                                                     <div>
                                                         <p className="text-[15px] text-slate-700">
-                                                            {isApproved ? 'Approved by ' : isRejected ? 'Rejected by ' : isWaiting ? 'Waiting Approval ' : 'Pending Approval '}
+                                                            {isApproved ? 'Approved by ' : isRejected ? 'Rejected by ' : isWaiting ? 'Waiting Approval ' : isSkipped ? 'Skipped ' : 'Pending Approval '}
                                                             <span className="font-semibold text-slate-900">
                                                                 {step.simulatedAssignee || step.user_name || (step.role_users && step.role_users[0]?.name) || "Unassigned"}  ({step.name})
                                                             </span>
@@ -381,7 +387,7 @@ export const WorkflowSimulatorPage = () => {
                                     {/* Final Result Card */}
                                     {(() => {
                                         const isRejected = simulationResult.some(s => s.status === 'REJECTED');
-                                        const isAllApproved = simulationResult.every(s => s.status === 'APPROVED' || s.status === 'SKIPPED');
+                                        const isAllApproved = simulationResult.every(s => s.status === 'APPROVED' || s.status === 'SKIPPED' || s.status === 'OPTIONAL');
 
                                         if (isRejected) {
                                             return (

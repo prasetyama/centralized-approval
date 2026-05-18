@@ -1,4 +1,4 @@
-import { CheckCircle2, Clock, XCircle } from 'lucide-react';
+import { CheckCircle2, Clock, XCircle, PlusCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatDate } from '@/lib/utils';
 
@@ -6,7 +6,7 @@ export interface TimelineStep {
     id: number;
     name: string;
     assigned_to_name: string;
-    status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'REVISED';
+    status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'REVISED' | 'SKIPPED' | 'ADDITIONAL';
     comments?: string;
     acted_at?: string;
     step_order: number;
@@ -25,6 +25,8 @@ export const Timeline = ({ steps, currentStep }: TimelineProps) => {
                 const isCompleted = step.status === 'APPROVED';
                 const isCurrent = step.status === 'PENDING' && step.step_order === currentStep;
                 const isRejected = step.status === 'REJECTED';
+                const isSkipped = step.status === 'SKIPPED';
+                const isAdditional = step.status === 'ADDITIONAL';
                 const isPast = step.step_order < currentStep;
 
                 return (
@@ -45,6 +47,10 @@ export const Timeline = ({ steps, currentStep }: TimelineProps) => {
                                 <CheckCircle2 className="text-emerald-500" size={20} />
                             ) : isRejected ? (
                                 <XCircle className="text-red-500" size={20} />
+                            ) : isSkipped ? (
+                                <XCircle className="text-red-500" size={20} />
+                            ) : isAdditional ? (
+                                <PlusCircle className="text-slate-300" size={20} />
                             ) : isCurrent ? (
                                 <div className="h-3 w-3 rounded-full bg-blue-600 animate-pulse" />
                             ) : (
@@ -57,24 +63,29 @@ export const Timeline = ({ steps, currentStep }: TimelineProps) => {
                             <div className="flex items-center justify-between">
                                 <p className={cn(
                                     "font-semibold text-sm",
-                                    isCurrent ? "text-blue-600" : "text-slate-900"
+                                    isCurrent ? "text-blue-600" : isAdditional ? "text-blue-600" : "text-slate-900"
                                 )}>
                                     {step.name}
                                 </p>
                                 {step.acted_at && (
                                     <span className="text-xs text-slate-400">
-                                        {formatDate(step.acted_at)}
+                                        {step.status.toString().replace('_', ' ').toLowerCase() + ' at ' + formatDate(step.acted_at)}
                                     </span>
                                 )}
                             </div>
-                            <p className="text-xs text-slate-500 font-medium">
-                                {step.assigned_to_name ? (
+                            <p className={cn(
+                                "text-xs font-medium",
+                                isSkipped ? "text-slate-300" : "text-slate-500"
+                            )}>
+                                {isSkipped ? (
+                                    "System skipped"
+                                ) : step.assigned_to_name ? (
                                     <>
-                                        {step.status === 'APPROVED' ? 'Approved by' : step.status === 'REJECTED' ? 'Rejected by' : 'Waiting for'}: <span className="text-slate-700">{step.assigned_to_name}</span>
+                                        {step.status === 'APPROVED' ? 'Approved by' : step.status === 'REJECTED' ? 'Rejected by' : step.status === 'PENDING' ? 'Pending' : step.status === 'ADDITIONAL' ? 'Additional Action' : 'Waiting for'}: <span className={isSkipped ? "text-slate-400" : "text-slate-700"}>{step.assigned_to_name}</span>
                                     </>
                                 ) : (
                                     <>
-                                        Assigned to <span className="text-slate-700">{step.role_name}</span>
+                                        Assigned to <span className={isSkipped ? "text-slate-400" : "text-slate-700"}>{step.role_name}</span>
                                     </>
                                 )}
                             </p>

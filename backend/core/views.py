@@ -91,7 +91,7 @@ class WorkflowDetailView(generics.RetrieveAPIView):
     queryset = ApprovalRequest.objects.select_related(
         'module', 'workflow', 'requester'
     ).prefetch_related(
-        Prefetch('steps', queryset=ApprovalStep.objects.exclude(status='SKIPPED')),
+        Prefetch('steps', queryset=ApprovalStep.objects.exclude(status='ADDITIONAL')),
         'audit_logs',
         Prefetch('watchers', queryset=RequestWatcher.objects.filter(deleted_at=None).select_related('user'))
     )
@@ -397,7 +397,7 @@ class WatcherListView(generics.ListCreateAPIView):
         AuditLog.objects.create(
             request=approval_request,
             actor=request.user,
-            action=AuditLog.Action.COMMENT,
+            action=AuditLog.Action.WATCHER_ADDED,
             details=f"Added {target_user.username} as a watcher.",
             payload_snapshot=approval_request.payload
         )
@@ -432,7 +432,7 @@ class WatcherRemoveView(generics.GenericAPIView):
             AuditLog.objects.create(
                 request=request_obj,
                 actor=request.user,
-                action=AuditLog.Action.COMMENT,
+                action=AuditLog.Action.WATCHER_REMOVED,
                 details=f"Removed {username} as a watcher.",
                 payload_snapshot=request_obj.payload
             )
@@ -597,7 +597,7 @@ class UserViewSet(viewsets.ModelViewSet):
 
 class WorkflowDefinitionViewSet(viewsets.ModelViewSet):
     """CRUD for WorkflowDefinitions (Admin)."""
-    queryset = WorkflowDefinition.objects.select_related('module').prefetch_related('steps').all()
+    queryset = WorkflowDefinition.objects.select_related('module').prefetch_related('steps').all().order_by('id')
     permission_classes = [IsAuthenticated]
     filterset_fields = ['module', 'is_active']
     search_fields = ['name']
@@ -639,6 +639,14 @@ class RequestFeedbackViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user)
+
+        # Add Log Activity
+        AuditLog.objects.create(
+            request=serializer.instance.request,
+            actor=self.request.user,
+            action=AuditLog.Action.FEEDBACK,
+            details=f"Feedback added: {serializer.instance.content}"
+        )
 
 
 class BrandViewSet(viewsets.ModelViewSet):

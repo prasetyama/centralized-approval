@@ -325,22 +325,23 @@ class WorkflowEngine:
             # 3. Check optional criteria
             if step_def.conditions:
                 if not WorkflowEngine._evaluate_conditions(payload, step_def.conditions):
-                    step_status = ApprovalStep.StepStatus.SKIPPED
+                    step_status = ApprovalStep.StepStatus.ADDITIONAL
 
             # Set first step to WAITING if not skipped
             if step_def.step_order == 1 and step_status == ApprovalStep.StepStatus.PENDING:
                 step_status = ApprovalStep.StepStatus.WAITING
 
-            ApprovalStep.objects.create(
-                request=approval_request,
-                step_order=step_def.step_order,
-                name=step_def.name,
-                approver_type=step_def.approver_type,
-                assigned_to=assignee,
-                role_required=step_def.role_required,
-                user_required=step_def.user_required,
-                status=step_status,
-            )
+            if step_status != ApprovalStep.StepStatus.ADDITIONAL:
+                ApprovalStep.objects.create(
+                    request=approval_request,
+                    step_order=step_def.step_order,
+                    name=step_def.name,
+                    approver_type=step_def.approver_type,
+                    assigned_to=assignee,
+                    role_required=step_def.role_required,
+                    user_required=step_def.user_required,
+                    status=step_status,
+                )
 
         # Transition to IN_PROGRESS since first step is activated
         # But wait, what if the first step was skipped?
@@ -542,6 +543,14 @@ class WorkflowEngine:
             raise ValidationError("Invalid state transition to REJECTED.")
         approval_request.status = ApprovalRequest.Status.REJECTED
         approval_request.save(update_fields=['status', 'updated_at'])
+
+        # Reject all subsequent steps that are not already acted upon
+        ApprovalStep.objects.filter(
+            request=approval_request,
+            step_order__gt=current_step.step_order
+        ).exclude(
+            status__in=[ApprovalStep.StepStatus.APPROVED, ApprovalStep.StepStatus.SKIPPED]
+        ).update(status=ApprovalStep.StepStatus.SKIPPED)
 
         # Create audit log
         AuditLog.objects.create(

@@ -410,6 +410,7 @@ class ApprovalStep(models.Model):
         APPROVED = 'APPROVED', 'Approved'
         REJECTED = 'REJECTED', 'Rejected'
         SKIPPED = 'SKIPPED', 'Skipped'
+        ADDITIONAL = 'ADDITIONAL', 'Additional Action Required'
 
     request = models.ForeignKey(
         ApprovalRequest,
@@ -491,7 +492,9 @@ class AuditLog(models.Model):
         REVISED = 'REVISED', 'Revised'
         REASSIGNED = 'REASSIGNED', 'Reassigned'
         CANCELLED = 'CANCELLED', 'Cancelled'
-        COMMENT = 'COMMENT', 'Comment Added'
+        FEEDBACK = 'FEEDBACK', 'Feedback Added'
+        WATCHER_ADDED = 'WATCHER_ADDED', 'Watcher Added'
+        WATCHER_REMOVED = 'WATCHER_REMOVED', 'Watcher Removed'
 
     request = models.ForeignKey(
         ApprovalRequest,
