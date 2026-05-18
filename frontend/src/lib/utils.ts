@@ -33,3 +33,10 @@ export function formatDate(dateString: string) {
         minute: '2-digit',
     }).format(date);
 }
+
+export function formatThousandSeparator(num: number) {
+    return new Intl.NumberFormat('id-ID', {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0,
+    }).format(num);
+}

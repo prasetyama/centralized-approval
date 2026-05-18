@@ -410,6 +410,7 @@ class ApprovalStep(models.Model):
         APPROVED = 'APPROVED', 'Approved'
         REJECTED = 'REJECTED', 'Rejected'
         SKIPPED = 'SKIPPED', 'Skipped'
+        ADDITIONAL = 'ADDITIONAL', 'Additional Action Required'
 
     request = models.ForeignKey(
         ApprovalRequest,

@@ -5,6 +5,7 @@ import api from '@/services/api';
 import { Button } from '@/components/atoms/Button';
 import { Select } from '@/components/atoms/Select';
 import { Input } from '@/components/atoms/Input';
+import { formatThousandSeparator } from '@/lib/utils';
 
 export interface Condition {
     field: string;
@@ -127,11 +128,26 @@ export const CriteriaRuleBuilder: React.FC<CriteriaRuleBuilderProps> = ({
                                         />
                                     ) : (
                                         <Input
-                                            type={isNumber ? 'number' : 'text'}
-                                            value={condition.value ?? ''}
-                                            onChange={(e) => handleConditionChange(index, {
-                                                value: isNumber ? parseFloat(e.target.value) : e.target.value
-                                            })}
+                                            type="text"
+                                            value={
+                                                isNumber && condition.value !== undefined && condition.value !== null && condition.value !== ''
+                                                    ? formatThousandSeparator(
+                                                        typeof condition.value === 'number'
+                                                            ? condition.value
+                                                            : parseFloat(condition.value.toString().replace(/\./g, ''))
+                                                    )
+                                                    : (condition.value ?? '')
+                                            }
+                                            onChange={(e) => {
+                                                const rawValue = e.target.value;
+                                                if (isNumber) {
+                                                    const cleanValue = rawValue.replace(/\D/g, '');
+                                                    const parsed = cleanValue === '' ? '' : parseFloat(cleanValue);
+                                                    handleConditionChange(index, { value: parsed });
+                                                } else {
+                                                    handleConditionChange(index, { value: rawValue });
+                                                }
+                                            }}
                                             error={condition.value === '' || isNaN(condition.value) ? "Field is required" : ""}
                                             placeholder="Value..."
                                             className="h-10 text-sm"

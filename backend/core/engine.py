@@ -325,7 +325,7 @@ class WorkflowEngine:
             # 3. Check optional criteria
             if step_def.conditions:
                 if not WorkflowEngine._evaluate_conditions(payload, step_def.conditions):
-                    step_status = ApprovalStep.StepStatus.SKIPPED
+                    step_status = ApprovalStep.StepStatus.ADDITIONAL
 
             # Set first step to WAITING if not skipped
             if step_def.step_order == 1 and step_status == ApprovalStep.StepStatus.PENDING:
