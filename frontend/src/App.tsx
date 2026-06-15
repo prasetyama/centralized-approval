@@ -2,7 +2,6 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { AuthGuard } from './components/organisms/AuthGuard';
 import { MainLayout } from './components/organisms/MainLayout';
-import { LoginPage } from './pages/LoginPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { InboxPage } from './pages/InboxPage';
 import { HistoryPage } from './pages/HistoryPage';
@@ -25,8 +24,6 @@ const AppRoutes = () => {
 
     return (
         <Routes>
-            <Route path="/login" element={<LoginPage />} />
-
             <Route
                 path="/"
                 element={

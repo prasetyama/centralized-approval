@@ -317,7 +317,7 @@ export const WorkflowForm: React.FC<WorkflowFormProps> = ({ initialData, onClose
                                                 className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                                             />
                                             <label htmlFor={`brand-cond-${index}`} className="text-xs font-bold text-slate-700 select-none">
-                                                Gunakan Kondisi?
+                                                Use Conditions?
                                             </label>
                                         </div>
                                         {step.is_brand_conditional && (

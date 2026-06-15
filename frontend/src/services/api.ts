@@ -27,7 +27,7 @@ api.interceptors.response.use(
         if (error.response?.status === 401) {
             localStorage.removeItem('auth_token');
             if (window.location.pathname !== '/login') {
-                window.location.href = '/login';
+                window.location.href = `${import.meta.env.VITE_SSO_URL}/login?redirect_url=${encodeURIComponent(window.location.origin + window.location.pathname)}`;
             }
         }
         const errorData = error.response?.data;
