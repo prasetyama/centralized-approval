@@ -60,6 +60,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 const firstName = nameParts[0] || '';
                 const lastName = nameParts.slice(1).join(' ') || '';
 
+                const approvalRole = payload.module_roles?.['APPROVAL'] || payload.module_roles?.['approval'];
+                const isApprover = !!approvalRole && approvalRole.toLowerCase() !== 'viewer';
+
                 setUser({
                     id: payload.user_id,
                     username: payload.email,
@@ -67,11 +70,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                     first_name: firstName,
                     last_name: lastName,
                     name: payload.name,
-                    role_name: payload.module_roles?.['approval'] || 'User',
-                    role_code: payload.module_roles?.['approval'] || 'USER',
+                    role_name: approvalRole || 'User',
+                    role_code: approvalRole || 'USER',
                     department: payload.department,
                     image: payload.image,
-                    is_approver: true,
+                    is_approver: isApprover,
                     is_superuser: false,
                     is_staff: false,
                     role: 1,

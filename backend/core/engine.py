@@ -311,7 +311,7 @@ class WorkflowEngine:
                 else:
                     # Role-based assignment: Auto-assign to first user with the required role and matching division
                     assignee_qs = User.objects.filter(
-                        role=step_def.role_required, is_active=True, is_approver=True
+                        user_roles__role=step_def.role_required, is_active=True, is_approver=True
                     )
                     
                     if division_id:
@@ -436,7 +436,7 @@ class WorkflowEngine:
         
         # 2. Check if user has the required role (unless specifically assigned to someone else)
         if not is_authorized and current_step.role_required:
-            if approver.role == current_step.role_required:
+            if approver.user_roles.filter(role=current_step.role_required).exists():
                 # Role matches, now check division if necessary
                 if not approval_request.division or approver.division == approval_request.division:
                     is_authorized = True
@@ -522,7 +522,7 @@ class WorkflowEngine:
                 is_authorized = True
         
         if not is_authorized and current_step.role_required:
-            if approver.role == current_step.role_required:
+            if approver.user_roles.filter(role=current_step.role_required).exists():
                 if not approval_request.division or approver.division == approval_request.division:
                     is_authorized = True
                 else:
@@ -614,7 +614,7 @@ class WorkflowEngine:
 
         # Validate new assignee has the required role (if role-based)
         if current_step.role_required and not current_step.user_required:
-            if new_assignee.role != current_step.role_required:
+            if not new_assignee.user_roles.filter(role=current_step.role_required).exists():
                 raise ValidationError(f"User '{new_assignee.username}' does not have the required role.")
 
         old_assignee = current_step.assigned_to

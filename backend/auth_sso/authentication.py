@@ -46,29 +46,30 @@ class JWTAuthentication(BaseAuthentication):
         if not email:
             raise AuthenticationFailed('Token does not contain email.')
 
+        module_roles = payload.get('module_roles', {})
+
         try:
             user = User.objects.get(email=email, is_active=True)
             
             # Optionally update role and department from SSO
-            module_roles = payload.get('module_roles', {})
             role_code = module_roles.get('approval') or module_roles.get('APPROVAL')
             if role_code:
-                role = Role.objects.filter(code__iexact=role_code).first()
+                role = Role.objects.filter(code__iexact=payload.get('title', '')).first()
                 if role:
+                    UserRole.objects.get_or_create(user=user, role=role, defaults={'dept': payload.get('department', '')})
                     
-                    UserRole.objects.get_or_create(user=user, role=role)
-                    if not user.is_approver:
-                        user.is_approver = True
+                    is_approver = role_code.lower() != 'viewer'
+                    if user.is_approver != is_approver:
+                        user.is_approver = is_approver
                         user.save(update_fields=['is_approver'])
 
         except User.DoesNotExist:
             
             # Extract role
-            module_roles = payload.get('module_roles', {})
-            role_code = module_roles.get('approval') or module_roles.get('APPROVAL')
             role = None
+            role_code = module_roles.get('approval') or module_roles.get('APPROVAL')
             if role_code:
-                role = Role.objects.filter(code__iexact=role_code).first()
+                role = Role.objects.filter(code__iexact=payload.get('title', '')).first()
 
             # Create username
             username = email.split('@')[0]
@@ -83,18 +84,21 @@ class JWTAuthentication(BaseAuthentication):
             parts = name.split(' ')
             first_name = parts[0] if parts else ''
             last_name = ' '.join(parts[1:]) if len(parts) > 1 else ''
+            department = payload.get('department', '')
+
+            is_approver = bool(role_code and role_code.lower() != 'viewer')
 
             user = User.objects.create(
                 username=username,
                 email=email,
                 first_name=first_name,
                 last_name=last_name,
-                department=payload.get('department', ''),
+                department=department,
                 is_active=True,
-                is_approver=True if role else False
+                is_approver=is_approver
             )
 
             if role:
-                UserRole.objects.create(user=user, role=role)
+                UserRole.objects.create(user=user, role=role, dept=department)
 
         return (user, payload)

@@ -62,10 +62,14 @@ class UserRoleInline(admin.TabularInline):
 
 @admin.register(User)
 class UserAdmin(admin.ModelAdmin):
-    list_display = ['username', 'email', 'division', 'department', 'is_approver', 'is_active']
-    list_filter = ['division', 'is_approver', 'is_active']
+    list_display = ['username', 'email', 'division', 'department', 'is_approver', 'is_active', 'roles']
+    list_filter = ['division', 'is_approver', 'is_active', 'user_roles__role']
     search_fields = ['username', 'email', 'first_name', 'last_name']
     inlines = [UserRoleInline]
+
+    def roles(self, obj):
+        return ", ".join([ur.role.name for ur in obj.user_roles.all()])
+    roles.short_description = 'Roles'
 
 
 class WorkflowStepDefinitionInline(admin.TabularInline):

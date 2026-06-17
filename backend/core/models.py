@@ -54,6 +54,7 @@ class User(AbstractUser):
     Extends Django's AbstractUser for compatibility with Django's auth system.
     """
 
+    email = models.EmailField(unique=True)
     division = models.CharField(max_length=50, blank=True, default='')
     department = models.CharField(max_length=100, blank=True, default='')
     phone = models.CharField(max_length=20, blank=True, default='')
@@ -72,19 +73,24 @@ class UserRole(models.Model):
     Mapping users to roles.
     A user can have multiple roles in the approval system.
     """
-    user = models.ForeignKey(
-        User,
-        on_delete=models.CASCADE,
-        related_name='user_roles'
-    )
+    dept = models.CharField(max_length=50, default='')
     role = models.ForeignKey(
         Role,
+        to_field='code',
+        db_column='title',
         on_delete=models.CASCADE,
         related_name='role_users'
     )
+    user = models.ForeignKey(
+        User,
+        to_field='email',
+        db_column='email',
+        on_delete=models.CASCADE,
+        related_name='user_roles'
+    )
 
     class Meta:
-        db_table = 'aw_user_role'
+        db_table = 'user_title_matrix'
         unique_together = ['user', 'role']
 
     def __str__(self):

@@ -502,7 +502,7 @@ def dashboard_summary(request):
     else:
         # Modules where the user's role is an approver
         relevant_module_ids = WorkflowStepDefinition.objects.filter(
-            role_required__in=user.user_roles.values_list('role_id', flat=True)
+            role_required__in=user.user_roles.values_list('role__id', flat=True)
         ).values_list('workflow__module_id', flat=True).distinct()
         
         recent_logs = AuditLog.objects.filter(

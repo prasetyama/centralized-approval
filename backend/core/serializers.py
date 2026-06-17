@@ -166,7 +166,7 @@ class UserDetailSerializer(serializers.ModelSerializer):
         if role_id:
             try:
                 role = Role.objects.get(id=role_id)
-                UserRole.objects.create(user=user, role=role)
+                UserRole.objects.create(user=user, role=role, dept=user.department)
             except Role.DoesNotExist:
                 pass
                 
@@ -187,7 +187,7 @@ class UserDetailSerializer(serializers.ModelSerializer):
                 # For backwards compatibility with single role expectation, 
                 # we clear old roles and set the new one
                 instance.user_roles.all().delete()
-                UserRole.objects.create(user=instance, role=role)
+                UserRole.objects.create(user=instance, role=role, dept=instance.department)
             except Role.DoesNotExist:
                 pass
 
