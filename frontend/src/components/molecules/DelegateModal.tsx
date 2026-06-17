@@ -33,7 +33,7 @@ export const DelegateModal = ({
         queryKey: ['users-by-role', roleRequiredId],
         queryFn: async () => {
             const response: any = await api.get('/admin/users', {
-                params: { role: roleRequiredId, is_active: true, is_approver: true }
+                params: { user_roles__role: roleRequiredId, is_active: true, is_approver: true }
             });
             return response;
         },

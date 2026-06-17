@@ -89,8 +89,8 @@ export const Sidebar = ({ isExpanded = false, setIsExpanded, isMobileOpen, setIs
 
                 <nav className="flex-1 space-y-1 overflow-y-auto overflow-x-hidden scrollbar-thin">
                     {navItems.map((item) => {
-                        if (item.adminOnly && user?.role_code !== 'ADMIN') return null;
-                        if (item.userOnly && user?.role_code === 'ADMIN') return null;
+                        if (item.adminOnly && user?.role_level !== 'ADMIN') return null;
+                        if (item.userOnly && user?.role_level === 'ADMIN') return null;
 
                         return (
                             <NavLink

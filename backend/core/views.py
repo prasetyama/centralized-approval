@@ -584,10 +584,10 @@ class RoleViewSet(viewsets.ModelViewSet):
 
 class UserViewSet(viewsets.ModelViewSet):
     """CRUD for Users."""
-    queryset = User.objects.select_related('role').all()
+    queryset = User.objects.prefetch_related('user_roles__role').all()
     permission_classes = [IsAuthenticated]
     search_fields = ['username', 'first_name', 'last_name', 'email']
-    filterset_fields = ['role', 'division', 'is_active', 'is_approver']
+    filterset_fields = ['user_roles__role', 'division', 'is_active', 'is_approver']
 
     def get_serializer_class(self):
         if self.action == 'list':

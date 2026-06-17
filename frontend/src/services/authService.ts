@@ -9,6 +9,7 @@ export interface User {
     name: string;
     role_name: string;
     role_code: string;
+    role_level: string;
     department: string;
     title: string;
     is_approver: boolean;

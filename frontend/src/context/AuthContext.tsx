@@ -72,11 +72,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                     name: payload.name,
                     role_name: approvalRole || 'User',
                     role_code: approvalRole || 'USER',
+                    role_level: payload.role,
                     department: payload.department,
                     image: payload.image,
                     is_approver: isApprover,
                     is_superuser: false,
                     is_staff: false,
+                    title: payload.title,
                     role: 1,
                     is_active: true
                 } as any);

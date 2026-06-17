@@ -236,7 +236,7 @@ class WorkflowStepDefinitionSerializer(serializers.ModelSerializer):
 
     def get_role_users(self, obj):
         if obj.approver_type == 'ROLE' and obj.role_required:
-            users = obj.role_required.users.filter(is_active=True)
+            users = User.objects.filter(user_roles__role=obj.role_required, is_active=True)
             return [
                 {
                     "id": user.id,
