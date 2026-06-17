@@ -6,13 +6,16 @@ export interface User {
     email: string;
     first_name: string;
     last_name: string;
+    name: string;
     role_name: string;
     role_code: string;
     department: string;
+    title: string;
     is_approver: boolean;
     is_superuser: boolean;
     is_staff: boolean;
     role: number
+    image: string
 }
 
 export interface LoginResponse {

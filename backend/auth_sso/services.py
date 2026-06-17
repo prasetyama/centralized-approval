@@ -52,7 +52,7 @@ class MockAuthService(AuthInterface):
             'user_id': user.id,
             'username': user.username,
             'email': user.email,
-            'role': user.role.code if user.role else None,
+            'role': user.user_roles.first().role.code if user.user_roles.first() and user.user_roles.first().role else None,
             'is_approver': user.is_approver,
             'exp': expires_at,
             'iat': datetime.datetime.now(datetime.timezone.utc),

@@ -6,7 +6,8 @@ Registers all models with the Django admin for easy data management.
 from django.contrib import admin
 from core.models import (
     Module, Role, User, WorkflowDefinition, WorkflowStepDefinition,
-    ApprovalRequest, ApprovalStep, AuditLog, Division, Brand, UserBrand, MasterWorkflowCriteria, ModuleVariable
+    ApprovalRequest, ApprovalStep, AuditLog, Division, Brand, UserBrand, MasterWorkflowCriteria, ModuleVariable,
+    UserRole
 )
 
 
@@ -55,11 +56,16 @@ class RoleAdmin(admin.ModelAdmin):
     search_fields = ['name', 'code']
 
 
+class UserRoleInline(admin.TabularInline):
+    model = UserRole
+    extra = 1
+
 @admin.register(User)
 class UserAdmin(admin.ModelAdmin):
-    list_display = ['username', 'email', 'role', 'division', 'department', 'is_approver', 'is_active']
-    list_filter = ['role', 'division', 'is_approver', 'is_active']
+    list_display = ['username', 'email', 'division', 'department', 'is_approver', 'is_active']
+    list_filter = ['division', 'is_approver', 'is_active']
     search_fields = ['username', 'email', 'first_name', 'last_name']
+    inlines = [UserRoleInline]
 
 
 class WorkflowStepDefinitionInline(admin.TabularInline):

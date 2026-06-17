@@ -126,14 +126,18 @@ export const Sidebar = ({ isExpanded = false, setIsExpanded, isMobileOpen, setIs
             <div className="border-t border-slate-200 p-3 bg-white">
                 <div className={cn("mb-4 mt-2 flex items-center", isExpanded ? "px-2" : "justify-center")}>
                     <div className="h-9 w-9 shrink-0 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 font-semibold border border-slate-200">
-                        {user?.username?.[0]?.toUpperCase()}
+                        {user?.image ? (
+                            <img src={user.image} alt={user.name} className="w-full h-full object-cover rounded-full" />
+                        ) : (
+                            user?.username?.[0]?.toUpperCase()
+                        )}
                     </div>
                     {isExpanded && (
                         <div className="ml-3 overflow-hidden">
                             <p className="truncate text-sm font-semibold text-slate-900">
-                                {user?.first_name} {user?.last_name}
+                                {user?.name}
                             </p>
-                            <p className="truncate text-xs text-slate-500 font-medium">{user?.role_name}</p>
+                            <p className="truncate text-xs text-slate-500 font-medium">{user?.department}</p>
                         </div>
                     )}
                 </div>

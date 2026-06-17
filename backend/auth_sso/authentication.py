@@ -5,7 +5,7 @@ DRF authentication class that integrates with MockAuthService.
 """
 from rest_framework.authentication import BaseAuthentication
 from rest_framework.exceptions import AuthenticationFailed
-from core.models import User, Role
+from core.models import User, Role, UserRole
 from auth_sso.services import auth_service
 
 
@@ -52,13 +52,14 @@ class JWTAuthentication(BaseAuthentication):
             # Optionally update role and department from SSO
             module_roles = payload.get('module_roles', {})
             role_code = module_roles.get('approval') or module_roles.get('APPROVAL')
-            if role_code and (not user.role or user.role.code.lower() != role_code.lower()):
-                
+            if role_code:
                 role = Role.objects.filter(code__iexact=role_code).first()
                 if role:
-                    user.role = role
-                    user.is_approver = True
-                    user.save(update_fields=['role', 'is_approver'])
+                    
+                    UserRole.objects.get_or_create(user=user, role=role)
+                    if not user.is_approver:
+                        user.is_approver = True
+                        user.save(update_fields=['is_approver'])
 
         except User.DoesNotExist:
             
@@ -88,10 +89,12 @@ class JWTAuthentication(BaseAuthentication):
                 email=email,
                 first_name=first_name,
                 last_name=last_name,
-                role=role,
                 department=payload.get('department', ''),
                 is_active=True,
                 is_approver=True if role else False
             )
+
+            if role:
+                UserRole.objects.create(user=user, role=role)
 
         return (user, payload)

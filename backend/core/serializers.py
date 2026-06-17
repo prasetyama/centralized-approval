@@ -7,7 +7,8 @@ from rest_framework import serializers
 from core.models import (
     Module, Role, User, WorkflowDefinition, WorkflowStepDefinition,
     ApprovalRequest, ApprovalStep, AuditLog, Division, RequestFeedback,
-    Brand, UserBrand, MasterWorkflowCriteria, RequestWatcher, ModuleVariable
+    Brand, UserBrand, MasterWorkflowCriteria, RequestWatcher, ModuleVariable,
+    UserRole
 )
 
 
@@ -66,6 +67,7 @@ class RoleSerializer(serializers.ModelSerializer):
 
 class UserListSerializer(serializers.ModelSerializer):
     """Lightweight user serializer for list views."""
+    role = serializers.SerializerMethodField()
     role_name = serializers.SerializerMethodField()
     role_code = serializers.SerializerMethodField()
     division_name = serializers.SerializerMethodField()
@@ -78,11 +80,17 @@ class UserListSerializer(serializers.ModelSerializer):
             'is_superuser', 'is_staff',
         ]
 
+    def get_role(self, obj):
+        ur = obj.user_roles.first()
+        return ur.role.id if ur and ur.role else None
+
     def get_role_name(self, obj):
-        return obj.role.name if obj.role else None
+        ur = obj.user_roles.first()
+        return ur.role.name if ur and ur.role else None
 
     def get_role_code(self, obj):
-        return obj.role.code if obj.role else None
+        ur = obj.user_roles.first()
+        return ur.role.code if ur and ur.role else None
 
     def get_division_name(self, obj):
         """Look up division name by its code string."""
@@ -96,26 +104,44 @@ class UserListSerializer(serializers.ModelSerializer):
 
 class UserDetailSerializer(serializers.ModelSerializer):
     """Full user serializer for detail/create/update views."""
-    role_details = RoleSerializer(source='role', read_only=True)
+    role = serializers.IntegerField(write_only=True, required=False, allow_null=True)
+    role_details = serializers.SerializerMethodField()
     division_details = serializers.SerializerMethodField()
     role_name = serializers.SerializerMethodField()
     role_code = serializers.SerializerMethodField()
+    roles = serializers.SerializerMethodField()
     password = serializers.CharField(write_only=True, required=False, min_length=6)
 
     class Meta:
         model = User
         fields = [
             'id', 'username', 'email', 'first_name', 'last_name',
-            'role', 'role_name', 'role_code', 'role_details', 'division', 'division_details', 'department', 'phone',
+            'role', 'role_name', 'role_code', 'role_details', 'roles', 'division', 'division_details', 'department', 'phone',
             'is_approver', 'is_active', 'is_superuser', 'is_staff', 'password', 'date_joined',
         ]
         read_only_fields = ['date_joined']
 
+    def get_role_details(self, obj):
+        ur = obj.user_roles.first()
+        return RoleSerializer(ur.role).data if ur and ur.role else None
+
     def get_role_name(self, obj):
-        return obj.role.name if obj.role else None
+        ur = obj.user_roles.first()
+        return ur.role.name if ur and ur.role else None
 
     def get_role_code(self, obj):
-        return obj.role.code if obj.role else None
+        ur = obj.user_roles.first()
+        return ur.role.code if ur and ur.role else None
+
+    def get_roles(self, obj):
+        return [
+            {
+                "id": ur.role.id,
+                "name": ur.role.name,
+                "code": ur.role.code
+            }
+            for ur in obj.user_roles.all()
+        ]
 
     def get_division_details(self, obj):
         """Look up full division details by its code string."""
@@ -129,21 +155,42 @@ class UserDetailSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         password = validated_data.pop('password', None)
+        role_id = validated_data.pop('role', None)
         user = User(**validated_data)
         if password:
             user.set_password(password)
         else:
             user.set_unusable_password()
         user.save()
+        
+        if role_id:
+            try:
+                role = Role.objects.get(id=role_id)
+                UserRole.objects.create(user=user, role=role)
+            except Role.DoesNotExist:
+                pass
+                
         return user
 
     def update(self, instance, validated_data):
         password = validated_data.pop('password', None)
+        role_id = validated_data.pop('role', None)
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         if password:
             instance.set_password(password)
         instance.save()
+        
+        if role_id is not None:
+            try:
+                role = Role.objects.get(id=role_id)
+                # For backwards compatibility with single role expectation, 
+                # we clear old roles and set the new one
+                instance.user_roles.all().delete()
+                UserRole.objects.create(user=instance, role=role)
+            except Role.DoesNotExist:
+                pass
+
         return instance
 
 

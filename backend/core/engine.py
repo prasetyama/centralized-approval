@@ -607,7 +607,7 @@ class WorkflowEngine:
                 is_authorized = (current_step.assigned_to == current_user)
             
             if not is_authorized and current_step.role_required:
-                is_authorized = (current_user.role == current_step.role_required)
+                is_authorized = current_user.user_roles.filter(role=current_step.role_required).exists()
 
         if not is_authorized:
             raise ValidationError("You are not authorized to delegate this step.")
