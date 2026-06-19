@@ -28,16 +28,24 @@ export interface LoginResponse {
     };
 }
 
+const getCookieDomain = () => {
+    return window.location.hostname.includes('ceresnl.com') ? '.ceresnl.com' : window.location.hostname;
+};
+
+const removeCookie = (name: string) => {
+    const domain = getCookieDomain();
+    document.cookie = name + "=;expires=Thu, 01 Jan 1970 00:00:00 GMT;domain=" + domain + ";path=/";
+};
+
 /**
  * Auth Service.
  * Manages authentication API calls and token storage.
+ * Uses cookies (sso_token) instead of localStorage.
  */
 export const authService = {
     login: async (credentials: any): Promise<LoginResponse> => {
         const response: any = await api.post('/auth/login', credentials);
-        if (response.success) {
-            localStorage.setItem('auth_token', response.data.token);
-        }
+        // Token is managed via SSO cookie, no need to store manually
         return response;
     },
 
@@ -45,7 +53,7 @@ export const authService = {
         try {
             await api.post('/auth/logout');
         } finally {
-            localStorage.removeItem('auth_token');
+            removeCookie('sso_token');
         }
     },
 

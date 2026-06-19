@@ -11,6 +11,26 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const getCookieDomain = () => {
+    return window.location.hostname.includes('ceresnl.com') ? '.ceresnl.com' : window.location.hostname;
+};
+
+const getCookie = (name: string) => {
+    const nameEQ = name + "=";
+    const ca = document.cookie.split(';');
+    for (let i = 0; i < ca.length; i++) {
+        let c = ca[i];
+        while (c.charAt(0) == ' ') c = c.substring(1, c.length);
+        if (c.indexOf(nameEQ) == 0) return decodeURIComponent(c.substring(nameEQ.length, c.length));
+    }
+    return null;
+};
+
+const removeCookie = (name: string) => {
+    const domain = getCookieDomain();
+    document.cookie = name + "=;expires=Thu, 01 Jan 1970 00:00:00 GMT;domain=" + domain + ";path=/";
+};
+
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const [user, setUser] = useState<User | null>(null);
     const [loading, setLoading] = useState(true);
@@ -21,7 +41,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     };
 
     const performLogout = () => {
-        localStorage.removeItem('auth_token');
+        removeCookie('sso_token');
         window.location.href = `${import.meta.env.VITE_SSO_URL}/logout?redirect_url=${encodeURIComponent(window.location.origin + window.location.pathname)}`;
     };
 
@@ -31,12 +51,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         const tokenFromUrl = urlParams.get('token');
 
         if (tokenFromUrl) {
-            localStorage.setItem('auth_token', tokenFromUrl);
+            // In a shared cookie setup, SSO already set the cookie.
             // Clean up URL
             window.history.replaceState({}, document.title, window.location.pathname);
         }
 
-        const token = localStorage.getItem('auth_token');
+        const token = getCookie('sso_token');
 
         if (token) {
             try {
@@ -85,7 +105,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 setIsAuthenticated(true);
             } catch (error) {
                 console.error('SSO Error:', error);
-                localStorage.removeItem('auth_token');
+                removeCookie('sso_token');
                 redirectToSSO();
             }
         } else {
@@ -107,17 +127,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return () => logoutChannel.close();
     }, []);
 
-    // Fallback: listen for localStorage changes from other tabs
+    // Poll cookie for global logout (cross-domain SSO logout detection)
     useEffect(() => {
-        const handleStorageChange = (event: StorageEvent) => {
-            if (event.key === 'auth_token' && event.newValue === null) {
-                performLogout();
+        if (!isAuthenticated) return;
+        const interval = setInterval(() => {
+            const token = getCookie('sso_token');
+            if (!token) {
+                setIsAuthenticated(false);
+                setUser(null);
+                window.location.href = `${import.meta.env.VITE_SSO_URL}/login?redirect_url=${encodeURIComponent(window.location.origin + window.location.pathname)}`;
             }
-        };
-
-        window.addEventListener('storage', handleStorageChange);
-        return () => window.removeEventListener('storage', handleStorageChange);
-    }, []);
+        }, 2000);
+        return () => clearInterval(interval);
+    }, [isAuthenticated]);
 
     const login = () => {
         redirectToSSO();
