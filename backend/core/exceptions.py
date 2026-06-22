@@ -8,6 +8,9 @@ from rest_framework.response import Response
 from rest_framework import status
 
 
+import logging
+logger = logging.getLogger(__name__)
+
 def custom_exception_handler(exc, context):
     """
     Custom exception handler that wraps all errors in a consistent format.
@@ -36,6 +39,7 @@ def custom_exception_handler(exc, context):
         response.data = error_data
     else:
         # Unhandled exception
+        logger.error("Unhandled API Exception:", exc_info=exc)
         error_data = {
             'success': False,
             'error': {

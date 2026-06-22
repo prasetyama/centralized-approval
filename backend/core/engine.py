@@ -299,9 +299,11 @@ class WorkflowEngine:
                         if condition.owner:
                             assignee = condition.owner
                     except Brand.DoesNotExist:
-                        raise ValidationError(f"Condition '{master_code}' not found for criteria '{step_def.master_workflow_criteria.name}'.")
+                        # Fallback to standard role assignment if the condition is not mapped
+                        pass
                 else:
-                    raise ValidationError(f"Master workflow criteria value not found for key '{payload_key}'.")
+                    # Fallback to standard role assignment if the payload key is missing
+                    pass
             
             # 2. Fallback to standard logic if not brand-conditional or brand assignee not found
             if assignee is None:

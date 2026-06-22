@@ -11,6 +11,8 @@ from rest_framework.response import Response
 from django.db import transaction
 from django.db.models import Q, Prefetch, Count
 from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework.exceptions import ValidationError
+import logging
 
 from core.models import (
     Module, Role, User, WorkflowDefinition, WorkflowStepDefinition,
@@ -59,19 +61,25 @@ class WorkflowSubmitView(generics.CreateAPIView):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        approval_request = WorkflowEngine.submit_request(
-            module_code=serializer.validated_data['module_code'],
-            workflow_id=serializer.validated_data['workflow_id'],
-            requester=request.user,
-            title=serializer.validated_data['title'],
-            payload=serializer.validated_data['payload'],
-            description=serializer.validated_data.get('description', ''),
-            priority=serializer.validated_data.get('priority', 'MEDIUM'),
-            reference_id=serializer.validated_data.get('reference_id', ''),
-            division_id=serializer.validated_data.get('division_id'),
-            ip_address=_get_client_ip(request),
-            watcher_ids=serializer.validated_data.get('watcher_ids', []),
-        )
+        try:
+            approval_request = WorkflowEngine.submit_request(
+                module_code=serializer.validated_data['module_code'],
+                workflow_id=serializer.validated_data['workflow_id'],
+                requester=request.user,
+                title=serializer.validated_data['title'],
+                payload=serializer.validated_data['payload'],
+                description=serializer.validated_data.get('description', ''),
+                priority=serializer.validated_data.get('priority', 'MEDIUM'),
+                reference_id=serializer.validated_data.get('reference_id', ''),
+                division_id=serializer.validated_data.get('division_id'),
+                ip_address=_get_client_ip(request),
+                watcher_ids=serializer.validated_data.get('watcher_ids', []),
+            )
+        except Exception as e:
+            # Catch any unexpected errors during submission (e.g., DataError, TypeError, KeyError)
+            # and return them as a 400 Bad Request instead of a 500 Internal Server Error
+            logging.getLogger(__name__).error("Submit workflow failed: %s", str(e), exc_info=True)
+            raise ValidationError(f"Workflow submission failed: {str(e)}")
 
         return Response(
             {
