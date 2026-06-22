@@ -41,7 +41,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     };
 
     const performLogout = () => {
-        removeCookie('sso_token');
         window.location.href = `${import.meta.env.VITE_SSO_URL}/logout?redirect_url=${encodeURIComponent(window.location.origin + window.location.pathname)}`;
     };
 
