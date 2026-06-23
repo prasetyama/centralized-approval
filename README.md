@@ -206,3 +206,71 @@ Backend Django (Gunicorn Socket)
 ```bash
 curl --unix-socket /opt/centralized-approval/backend/gunicorn.sock localhost
 ```
+
+---
+
+# 📊 10. Flow Diagram Workflow Approval
+
+Berikut adalah *Mermaid diagram* yang menggambarkan alur proses dari awal *submit request*, penentuan kondisi *assignee*, hingga proses *approve* atau *reject* beserta *fallback* dan sinkronisasi eksternalnya.
+
+```mermaid
+graph TD
+    A([Start: API Submit Request]) --> B{Validate Module & Workflow}
+    B -- Invalid --> ERR1[Raise ValidationError]
+    B -- Valid --> C[Create ApprovalRequest]
+    
+    C --> D[Loop: Generate Steps from Definition]
+    D --> E{Is Brand Conditional?}
+    
+    %% Brand Logic
+    E -- Yes --> F{Payload contains<br/>Master Criteria Key?}
+    F -- Yes --> G{Brand Mapped<br/>to Owner?}
+    G -- Yes --> H[Assign Step to Brand Owner]
+    
+    %% Fallback Logic
+    F -- No --> I[Fallback to Standard Logic]
+    G -- No --> I
+    E -- No --> I
+    
+    I --> J{Approver Type?}
+    J -- Specific User --> K[Assign Step to User Required]
+    J -- Role Based --> L[Assign to 1st User matching<br/>Role & Division]
+    
+    %% Condition Evaluation
+    H --> M{Evaluate Step Conditions<br/>from Payload}
+    K --> M
+    L --> M
+    
+    M -- Conditions Met --> N[Step Status: PENDING]
+    M -- Conditions Not Met --> O[Step Status: ADDITIONAL / Skipped]
+    
+    N --> P[End Loop]
+    O --> P
+    
+    P --> Q{First Valid Step Available?}
+    Q -- Yes --> R[Set First Step to WAITING<br/>Status = IN_PROGRESS]
+    Q -- No --> S([Status: APPROVED])
+    
+    R --> ACTION[Wait for User Action]
+    
+    %% Actions
+    ACTION --> T[Action: Approve Step]
+    ACTION --> U[Action: Reject Step]
+    ACTION --> DEL[Action: Delegate Step]
+    
+    DEL --> R
+    
+    T --> V{Is Last Step?}
+    V -- No --> W[Activate Next Step to WAITING] --> ACTION
+    V -- Yes --> X([Status: APPROVED])
+    
+    U --> Y([Status: REJECTED])
+    
+    %% External Notification
+    X --> Z[[Notify External System<br/>Webhook/Database Sync]]
+    Y --> Z
+    
+    %% Revise Logic
+    Y --> REV[Action: Revise Request<br/>By Original Requester]
+    REV --> R2[Reset Workflow State] --> R
+```
