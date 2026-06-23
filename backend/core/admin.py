@@ -7,7 +7,7 @@ from django.contrib import admin
 from core.models import (
     Module, Role, User, WorkflowDefinition, WorkflowStepDefinition,
     ApprovalRequest, ApprovalStep, AuditLog, Division, Brand, UserBrand, MasterWorkflowCriteria, ModuleVariable,
-    UserRole
+    UserRole, APIAuditLog
 )
 
 
@@ -108,3 +108,17 @@ class AuditLogAdmin(admin.ModelAdmin):
     list_filter = ['action']
     search_fields = ['details']
     readonly_fields = ['request', 'step', 'actor', 'action', 'details', 'ip_address', 'payload_snapshot', 'timestamp']
+
+@admin.register(APIAuditLog)
+class APIAuditLogAdmin(admin.ModelAdmin):
+    list_display = ['endpoint', 'method', 'response_status', 'user', 'execution_time_ms', 'timestamp']
+    list_filter = ['method', 'response_status', 'endpoint']
+    search_fields = ['endpoint', 'error_message', 'payload']
+    readonly_fields = [f.name for f in APIAuditLog._meta.fields]
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+

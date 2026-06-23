@@ -665,3 +665,46 @@ class UserBrand(models.Model):
 
     def __str__(self):
         return f"{self.user.username} -> {self.brand.name}"
+
+
+class APIAuditLog(models.Model):
+    """
+    Central API audit trail to log all incoming API requests, payloads, status codes, and errors.
+    """
+    user = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='api_audit_logs',
+        help_text="User who made the request (if authenticated)"
+    )
+    endpoint = models.CharField(max_length=500, help_text="API Endpoint called")
+    method = models.CharField(max_length=20, help_text="HTTP Method (GET, POST, etc.)")
+    payload = models.JSONField(
+        null=True, 
+        blank=True,
+        help_text="Request payload (passwords scrubbed)"
+    )
+    response_status = models.IntegerField(help_text="HTTP Response Status Code")
+    error_message = models.TextField(
+        null=True, 
+        blank=True,
+        help_text="Error message if the request failed"
+    )
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.TextField(blank=True, default='')
+    execution_time_ms = models.FloatField(help_text="Execution time in milliseconds")
+    timestamp = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        db_table = 'aw_api_audit_log'
+        ordering = ['-timestamp']
+        indexes = [
+            models.Index(fields=['response_status', 'timestamp'], name='idx_api_audit_status_time'),
+            models.Index(fields=['endpoint', 'timestamp'], name='idx_api_audit_endpoint_time'),
+        ]
+
+    def __str__(self):
+        return f"[{self.response_status}] {self.method} {self.endpoint} at {self.timestamp}"
+
