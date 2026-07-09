@@ -18,6 +18,7 @@ from core.models import (
     Brand, RequestWatcher
 )
 from core.state_machine import can_transition
+from core import email_service
 
 
 class WorkflowEngine:
@@ -79,6 +80,7 @@ class WorkflowEngine:
         """
         Find and activate the next non-skipped step.
         If no more steps, mark the request as APPROVED.
+        Sends email notification to the next approver, or final approved email to requester.
         """
         next_step = ApprovalStep.objects.filter(
             request=approval_request,
@@ -97,14 +99,20 @@ class WorkflowEngine:
             next_step.save(update_fields=['status'])
             approval_request.current_step = next_step.step_order
             approval_request.save(update_fields=['current_step', 'updated_at'])
-            return False # Not finished
+            # Notify next approver via email after commit
+            _captured_step = next_step
+            transaction.on_commit(lambda: email_service.send_step_notification(_captured_step))
+            return False  # Not finished
         else:
             # Final step reached
             if not can_transition(approval_request.status, ApprovalRequest.Status.APPROVED):
                 raise ValidationError("Invalid state transition to APPROVED.")
             approval_request.status = ApprovalRequest.Status.APPROVED
             approval_request.save(update_fields=['status', 'updated_at'])
-            return True # Finished
+            # Notify requester that request is fully approved
+            _captured_req = approval_request
+            transaction.on_commit(lambda: email_service.send_final_approved_notification(_captured_req))
+            return True  # Finished
 
     @staticmethod
     def notify_external_system(approval_request):
@@ -383,6 +391,14 @@ class WorkflowEngine:
             payload_snapshot=payload,
         )
 
+        # Send email to the first approver (step 1 is already WAITING at this point)
+        first_waiting_step = approval_request.steps.filter(
+            status=ApprovalStep.StepStatus.WAITING
+        ).order_by('step_order').first()
+        if first_waiting_step:
+            _captured_step = first_waiting_step
+            transaction.on_commit(lambda: email_service.send_step_notification(_captured_step))
+
         return approval_request
 
     @staticmethod
@@ -567,6 +583,11 @@ class WorkflowEngine:
 
         # Notify external system after commit
         transaction.on_commit(lambda: WorkflowEngine.notify_external_system(approval_request))
+
+        # Notify requester about rejection via email
+        _captured_req = approval_request
+        _captured_step = current_step
+        transaction.on_commit(lambda: email_service.send_rejected_notification(_captured_req, _captured_step))
 
         return approval_request
 

@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Permintaan Approval</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: #f4f5f7;
+      font-family: 'Segoe UI', Arial, sans-serif;
+      color: #333;
+    }
+
+    .wrapper {
+      max-width: 620px;
+      margin: 32px auto;
+      background: #ffffff;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    }
+
+    .header {
+      background: linear-gradient(135deg, #3032DC 0%, #1e20b0 100%);
+      padding: 32px 40px;
+      text-align: center;
+    }
+
+    .header h1 {
+      color: #fff;
+      margin: 0;
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+    }
+
+    .header p {
+      color: rgba(255, 255, 255, 0.75);
+      margin: 6px 0 0;
+      font-size: 13px;
+    }
+
+    .badge {
+      display: inline-block;
+      background: rgba(255, 255, 255, 0.2);
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 3px 10px;
+      border-radius: 20px;
+      margin-top: 10px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .body {
+      padding: 36px 40px;
+    }
+
+    .greeting {
+      font-size: 16px;
+      color: #333;
+      margin-bottom: 20px;
+    }
+
+    .info-card {
+      background: #f8f9fc;
+      border: 1px solid #e5e8f0;
+      border-radius: 8px;
+      padding: 20px 24px;
+      margin-bottom: 24px;
+    }
+
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 7px 0;
+      border-bottom: 1px solid #eaecf2;
+      font-size: 14px;
+    }
+
+    .info-row:last-child {
+      border-bottom: none;
+    }
+
+    .info-label {
+      color: #777;
+      font-weight: 600;
+      min-width: 140px;
+    }
+
+    .info-value {
+      color: #222;
+      font-weight: 500;
+      text-align: right;
+    }
+
+    .step-badge {
+      display: inline-block;
+      background: #eff0fd;
+      color: #3032DC;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 2px 10px;
+      border-radius: 20px;
+    }
+
+    .priority-HIGH,
+    .priority-URGENT {
+      color: #dc2626;
+      font-weight: 700;
+    }
+
+    .priority-MEDIUM {
+      color: #d97706;
+      font-weight: 700;
+    }
+
+    .priority-LOW {
+      color: #16a34a;
+      font-weight: 700;
+    }
+
+    .cta {
+      text-align: center;
+      margin: 28px 0 8px;
+    }
+
+    .cta a {
+      display: inline-block;
+      background: #3032DC;
+      color: #ffffff !important;
+      text-decoration: none;
+      padding: 13px 36px;
+      border-radius: 8px;
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: 0.2px;
+    }
+
+    .cta a:hover {
+      background: #1e20b0;
+    }
+
+    .footer {
+      background: #f8f9fc;
+      border-top: 1px solid #eaecf2;
+      padding: 20px 40px;
+      text-align: center;
+      font-size: 12px;
+      color: #999;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="wrapper">
+    <div class="header">
+      <h1>🔔 Permintaan Approval</h1>
+      <p>{{ module_name }}</p>
+    </div>
+    <div class="body">
+      <p class="greeting">Halo, <strong>{{ approver_name }}</strong>,</p>
+      <p style="font-size:15px; color:#555; line-height:1.6;">
+        Terdapat permintaan approval yang memerlukan persetujuan Anda
+      </p>
+
+      <div class="info-card">
+        <div class="info-row">
+          <span class="info-label">Judul</span>
+          <span class="info-value"><strong>{{ request_title }}</strong></span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Modul</span>
+          <span class="info-value">{{ module_name }}</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">No. Referensi</span>
+          <span class="info-value">{{ reference_id }}</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Diajukan oleh</span>
+          <span class="info-value">{{ requester_name }}</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Prioritas</span>
+          <span class="info-value priority-{{ priority }}">{{ priority }}</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Progress</span>
+          <span class="info-value"><span class="step-badge">Step {{ step_order }} dari {{ total_steps }}</span></span>
+        </div>
+        {% if description %}
+        <div class="info-row" style="flex-direction: column; gap: 4px;">
+          <span class="info-label">Keterangan</span>
+          <span style="color:#555; font-size:13px; margin-top:4px;">{{ description }}</span>
+        </div>
+        {% endif %}
+      </div>
+
+      <div class="cta">
+        <a href="{{ approval_url }}">Lihat</a>
+      </div>
+      <p style="text-align:center; font-size:12px; color:#aaa; margin-top:12px;">
+        Atau kunjungi: <a href="{{ approval_url }}" style="color:#3032DC;">{{ approval_url }}</a>
+      </p>
+    </div>
+    <div class="footer">
+      Email ini dikirim otomatis oleh sistem. Harap tidak membalas email ini.<br />
+      &copy; 2026 Approval HUB
+    </div>
+  </div>
+</body>
+
+</html>

@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Request Disetujui</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: #f4f5f7;
+      font-family: 'Segoe UI', Arial, sans-serif;
+      color: #333;
+    }
+
+    .wrapper {
+      max-width: 620px;
+      margin: 32px auto;
+      background: #ffffff;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    }
+
+    .header {
+      background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
+      padding: 32px 40px;
+      text-align: center;
+    }
+
+    .header h1 {
+      color: #fff;
+      margin: 0;
+      font-size: 22px;
+      font-weight: 700;
+    }
+
+    .header p {
+      color: rgba(255, 255, 255, 0.8);
+      margin: 6px 0 0;
+      font-size: 13px;
+    }
+
+    .icon {
+      font-size: 48px;
+      margin-bottom: 8px;
+    }
+
+    .body {
+      padding: 36px 40px;
+    }
+
+    .greeting {
+      font-size: 16px;
+      color: #333;
+      margin-bottom: 20px;
+    }
+
+    .info-card {
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      border-radius: 8px;
+      padding: 20px 24px;
+      margin-bottom: 24px;
+    }
+
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 7px 0;
+      border-bottom: 1px solid #d1fae5;
+      font-size: 14px;
+    }
+
+    .info-row:last-child {
+      border-bottom: none;
+    }
+
+    .info-label {
+      color: #666;
+      font-weight: 600;
+      min-width: 140px;
+    }
+
+    .info-value {
+      color: #222;
+      font-weight: 500;
+      text-align: right;
+    }
+
+    .status-badge {
+      display: inline-block;
+      background: #16a34a;
+      color: #fff;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 3px 12px;
+      border-radius: 20px;
+      text-transform: uppercase;
+    }
+
+    .cta {
+      text-align: center;
+      margin: 28px 0 8px;
+    }
+
+    .cta a {
+      display: inline-block;
+      background: #16a34a;
+      color: #ffffff !important;
+      text-decoration: none;
+      padding: 13px 36px;
+      border-radius: 8px;
+      font-size: 15px;
+      font-weight: 700;
+    }
+
+    .footer {
+      background: #f8f9fc;
+      border-top: 1px solid #eaecf2;
+      padding: 20px 40px;
+      text-align: center;
+      font-size: 12px;
+      color: #999;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="wrapper">
+    <div class="header">
+      <div class="icon">✅</div>
+      <h1>Permintaan Disetujui</h1>
+      <p>{{ module_name }}</p>
+    </div>
+    <div class="body">
+      <p class="greeting">Halo, <strong>{{ requester_name }}</strong>,</p>
+      <p style="font-size:15px; color:#555; line-height:1.6;">
+        Permintaan Anda telah <strong>disetujui oleh semua approver</strong>. Proses selanjutnya dapat dilanjutkan.
+      </p>
+
+      <div class="info-card">
+        <div class="info-row">
+          <span class="info-label">Judul</span>
+          <span class="info-value"><strong>{{ request_title }}</strong></span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Modul</span>
+          <span class="info-value">{{ module_name }}</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">No. Referensi</span>
+          <span class="info-value">{{ reference_id }}</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Status</span>
+          <span class="info-value"><span class="status-badge">APPROVED</span></span>
+        </div>
+      </div>
+
+      <div class="cta">
+        <a href="{{ detail_url }}">Lihat Detail</a>
+      </div>
+    </div>
+    <div class="footer">
+      Email ini dikirim otomatis oleh sistem. Harap tidak membalas email ini.<br />
+      &copy; 2026 Approval HUB
+    </div>
+  </div>
+</body>
+
+</html>

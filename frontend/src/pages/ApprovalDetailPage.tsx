@@ -96,6 +96,10 @@ export const ApprovalDetailPage = () => {
         }
     };
 
+    const backToApprovalList = () => {
+        navigate('/approval', { replace: true });
+    };
+
     if (isError) {
         return (
             <div className="flex flex-col items-center justify-center min-h-[60vh] p-8 text-center animate-in fade-in duration-500">
@@ -104,7 +108,7 @@ export const ApprovalDetailPage = () => {
                 </div>
                 <h2 className="text-3xl font-extrabold text-slate-900 mb-3 tracking-tight">Access Denied</h2>
                 <div className="flex gap-4">
-                    <Button variant="outline" onClick={() => navigate(-1)} className="font-bold px-8 h-12 rounded-xl">
+                    <Button variant="outline" onClick={() => backToApprovalList()} className="font-bold px-8 h-12 rounded-xl">
                         Go Back
                     </Button>
                     <Button onClick={() => window.location.reload()} className="bg-slate-900 text-white font-bold px-8 h-12 rounded-xl shadow-lg shadow-slate-200">
@@ -144,7 +148,7 @@ export const ApprovalDetailPage = () => {
         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div className="flex items-center gap-4">
-                    <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="rounded-full">
+                    <Button variant="ghost" size="icon" onClick={() => backToApprovalList()} className="rounded-full">
                         <ArrowLeft size={20} />
                     </Button>
                     <div>
