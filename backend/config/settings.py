@@ -136,6 +136,10 @@ JWT_EXPIRATION_HOURS = int(os.getenv('JWT_EXPIRATION_HOURS'))
 # Frontend URL
 FRONTEND_URL = os.getenv('FRONTEND_URL')
 
+LOGS_DIR = os.path.join(BASE_DIR, 'logs')
+if not os.path.exists(LOGS_DIR):
+    os.makedirs(LOGS_DIR)
+
 # ─── Email / SMTP ────────────────────────────────────────────────────────────
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = os.getenv('EMAIL_HOST')
@@ -162,10 +166,28 @@ LOGGING = {
             'class': 'logging.StreamHandler',
             'formatter': 'verbose',
         },
+        'logs': {
+            'level': 'INFO',
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': os.path.join(LOGS_DIR, 'log.log'),
+            'maxBytes': 1024 * 1024 * 5,
+            'backupCount': 5,
+            'formatter': 'verbose',
+        },
     },
     'loggers': {
         'core.email_service': {
-            'handlers': ['console'],
+            'handlers': ['console', 'logs'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'core.views': {
+            'handlers': ['console', 'logs'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'core.engine': {
+            'handlers': ['console', 'logs'],
             'level': 'INFO',
             'propagate': False,
         },

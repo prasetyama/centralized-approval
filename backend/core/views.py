@@ -207,6 +207,7 @@ class WorkflowDelegateView(generics.GenericAPIView):
 
     def post(self, request, pk):
         if not request.user.is_superuser:
+            logging.getLogger(__name__).error("[Core.Views] Unauthorized delegate for workflow id %s by user %s", pk, request.user.username)
             return Response({'error': 'Only superusers can delegate steps.'}, status=status.HTTP_403_FORBIDDEN)
 
         serializer = self.get_serializer(data=request.data)
@@ -215,6 +216,7 @@ class WorkflowDelegateView(generics.GenericAPIView):
         try:
             new_assignee = User.objects.get(id=serializer.validated_data['new_assignee_id'])
         except User.DoesNotExist:
+            logging.getLogger(__name__).error("[Core.Views] New assignee not found: %s", str(e), exc_info=True)
             return Response({'error': 'New assignee not found.'}, status=status.HTTP_404_NOT_FOUND)
 
         approval_request = WorkflowEngine.delegate_step(
@@ -399,6 +401,7 @@ class WatcherListView(generics.ListCreateAPIView):
             created = True
 
         if not created:
+            logging.getLogger(__name__).info("[Core.Views] User is already a watcher: %s", request.user.username)
             return Response({'message': 'User is already a watcher.'}, status=status.HTTP_200_OK)
 
         # Audit log for adding watcher
@@ -422,12 +425,14 @@ class WatcherRemoveView(generics.GenericAPIView):
     def delete(self, request):
         watcher_id = request.data.get('watcher_id')
         if not watcher_id:
+            logging.getLogger(__name__).error("[Core.Views] Watcher ID is required: %s", request.user.username)
             return Response({'error': 'watcher_id is required.'}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             watcher = RequestWatcher.objects.get(id=watcher_id, deleted_at=None)
             
             if watcher.created_by != request.user and not request.user.is_superuser:
+                logging.getLogger(__name__).warning("[Core.Views] Unauthorized watcher removal: %s", request.user.username)
                 return Response({'error': 'You are not authorized to remove this watcher.'}, status=status.HTTP_403_FORBIDDEN)
 
             request_obj = watcher.request
@@ -447,6 +452,7 @@ class WatcherRemoveView(generics.GenericAPIView):
 
             return Response({'message': 'Watcher removed successfully.'})
         except RequestWatcher.DoesNotExist:
+            logging.getLogger(__name__).error("[Core.Views] Watcher not found: %s", watcher_id)
             return Response({'error': 'Watcher not found.'}, status=status.HTTP_404_NOT_FOUND)
 
 
