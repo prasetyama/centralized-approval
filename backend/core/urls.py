@@ -14,7 +14,7 @@ from core.views import (
     ModuleViewSet, RoleViewSet, UserViewSet, DivisionViewSet,
     WorkflowDefinitionViewSet, ApprovalRequestViewSet, RequestFeedbackViewSet,
     BrandViewSet, UserBrandViewSet, MasterWorkflowCriteriaViewSet,
-    ModuleVariableViewSet
+    ModuleVariableViewSet, system_logs
 )
 
 router = DefaultRouter()
@@ -52,5 +52,6 @@ urlpatterns = [
     path('dashboard/summary', dashboard_summary, name='dashboard-summary'),
 
     # Admin CRUD (via router)
+    path('admin/system-logs', system_logs, name='system-logs'),
     path('', include(router.urls)),
 ]

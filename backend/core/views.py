@@ -114,11 +114,25 @@ class WorkflowDetailView(generics.RetrieveAPIView):
         if user.is_superuser:
             return self.queryset
 
-        return self.queryset.filter(
-            Q(requester=user) |
-            Q(steps__assigned_to=user) |
-            Q(watchers__user=user) & Q(watchers__deleted_at=None)
-        ).distinct()
+        try:
+            request_obj = self.queryset.filter(
+                Q(requester=user) |
+                Q(steps__assigned_to=user) |
+                Q(watchers__user=user) & Q(watchers__deleted_at=None)
+            ).distinct()
+            if not request_obj:
+                logging.getLogger(__name__).error(
+                    "[Core.Views] User %s not authorized to view workflow %s", 
+                    self.request.user.username, self.kwargs.get('pk')
+                )
+                raise ValidationError("You are not authorized to view this request.")
+            return request_obj
+        except Exception as e:
+            logging.getLogger(__name__).error(
+                "[Core.Views] Error in get_queryset for user %s and request %s", 
+                self.request.user.username, self.kwargs.get('pk')
+            )
+            raise ValidationError("You are not authorized to view this request.")
 
 
 class WorkflowApproveView(generics.GenericAPIView):
@@ -133,12 +147,19 @@ class WorkflowApproveView(generics.GenericAPIView):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        approval_request = WorkflowEngine.approve_step(
-            request_id=pk,
-            approver=request.user,
-            comments=serializer.validated_data.get('comments', ''),
-            ip_address=_get_client_ip(request),
-        )
+        try:
+            approval_request = WorkflowEngine.approve_step(
+                request_id=pk,
+                approver=request.user,
+                comments=serializer.validated_data.get('comments', ''),
+                ip_address=_get_client_ip(request),
+            )
+        except Exception as e:
+            logging.getLogger(__name__).error(
+                "[Core.Views] User %s not authorized to approve workflow %s", 
+                self.request.user.username, self.kwargs.get('pk')
+            )
+            raise ValidationError("You are not authorized to approve this request.")
 
         return Response({
             'success': True,
@@ -159,12 +180,19 @@ class WorkflowRejectView(generics.GenericAPIView):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        approval_request = WorkflowEngine.reject_step(
-            request_id=pk,
-            approver=request.user,
-            comments=serializer.validated_data.get('comments', ''),
-            ip_address=_get_client_ip(request),
-        )
+        try:
+            approval_request = WorkflowEngine.reject_step(
+                request_id=pk,
+                approver=request.user,
+                comments=serializer.validated_data.get('comments', ''),
+                ip_address=_get_client_ip(request),
+            )
+        except Exception as e:
+            logging.getLogger(__name__).error(
+                "[Core.Views] Failed to reject workflow %s by user %s: %s", 
+                pk, request.user.username, str(e), exc_info=True
+            )
+            raise ValidationError(f"You are not authorized to reject this request or an error occurred: {str(e)}")
 
         return Response({
             'success': True,
@@ -255,54 +283,62 @@ class InboxView(generics.ListAPIView):
         user = self.request.user
         tab = self.request.query_params.get('tab', 'inbox')
 
-        if user.is_superuser:
-            queryset = ApprovalRequest.objects.all()
-        elif tab == 'watching':
-            watched_ids = RequestWatcher.objects.filter(
-                user=user,
-                deleted_at=None
-            ).values_list('request_id', flat=True)
-            queryset = ApprovalRequest.objects.filter(id__in=watched_ids)
-        else:
-            # 1. Requests where user is the active approver
-            waiting_ids = ApprovalStep.objects.filter(
-                status=ApprovalStep.StepStatus.WAITING
-            ).filter(
-                Q(assigned_to=user)
-            ).values_list('request_id', flat=True)
+        try:
+            if user.is_superuser:
+                queryset = ApprovalRequest.objects.all()
+            elif tab == 'watching':
+                watched_ids = RequestWatcher.objects.filter(
+                    user=user,
+                    deleted_at=None
+                ).values_list('request_id', flat=True)
+                queryset = ApprovalRequest.objects.filter(id__in=watched_ids)
+            else:
+                # 1. Requests where user is the active approver
+                waiting_ids = ApprovalStep.objects.filter(
+                    status=ApprovalStep.StepStatus.WAITING
+                ).filter(
+                    Q(assigned_to=user)
+                ).values_list('request_id', flat=True)
 
-            # 2. Requests where user has participated in the discussion
-            discussion_ids = RequestFeedback.objects.filter(
-                user=user
-            ).values_list('request_id', flat=True)
+                # 2. Requests where user has participated in the discussion
+                discussion_ids = RequestFeedback.objects.filter(
+                    user=user
+                ).values_list('request_id', flat=True)
 
-            # Combine all relevant request IDs
-            all_ids = set(waiting_ids) | set(discussion_ids)
+                # Combine all relevant request IDs
+                all_ids = set(waiting_ids) | set(discussion_ids)
 
-            queryset = ApprovalRequest.objects.filter(
-                id__in=all_ids,
-                status=ApprovalRequest.Status.IN_PROGRESS
+                queryset = ApprovalRequest.objects.filter(
+                    id__in=all_ids,
+                    status=ApprovalRequest.Status.IN_PROGRESS
+                )
+
+            queryset = queryset.select_related('module', 'requester').distinct()
+
+            # Filtering
+            module_code = self.request.query_params.get('module')
+            if module_code:
+                queryset = queryset.filter(module__code=module_code)
+
+            priority = self.request.query_params.get('priority')
+            if priority:
+                queryset = queryset.filter(priority=priority)
+
+            search = self.request.query_params.get('search')
+            if search:
+                queryset = queryset.filter(
+                    Q(title__icontains=search) |
+                    Q(reference_id__icontains=search)
+                )
+
+            return queryset
+
+        except Exception as e:
+            logging.getLogger(__name__).error(
+                "[Core.Views] Error in InboxView get_queryset for user %s: %s", 
+                user.username, str(e), exc_info=True
             )
-
-        queryset = queryset.select_related('module', 'requester').distinct()
-
-        # Filtering
-        module_code = self.request.query_params.get('module')
-        if module_code:
-            queryset = queryset.filter(module__code=module_code)
-
-        priority = self.request.query_params.get('priority')
-        if priority:
-            queryset = queryset.filter(priority=priority)
-
-        search = self.request.query_params.get('search')
-        if search:
-            queryset = queryset.filter(
-                Q(title__icontains=search) |
-                Q(reference_id__icontains=search)
-            )
-
-        return queryset
+            raise ValidationError(f"Failed to load inbox: {str(e)}")
 
 
 # ─────────────────────────────────────────────
@@ -321,33 +357,41 @@ class HistoryView(generics.ListAPIView):
     def get_queryset(self):
         user = self.request.user
 
-        # Requests where the logged-in user is the actor for APPROVED or REJECTED actions
-        request_ids = AuditLog.objects.filter(
-            actor=user,
-            action__in=[AuditLog.Action.APPROVED, AuditLog.Action.REJECTED]
-        ).values_list('request_id', flat=True).distinct()
+        try:
+            # Requests where the logged-in user is the actor for APPROVED or REJECTED actions
+            request_ids = AuditLog.objects.filter(
+                actor=user,
+                action__in=[AuditLog.Action.APPROVED, AuditLog.Action.REJECTED]
+            ).values_list('request_id', flat=True).distinct()
 
-        queryset = ApprovalRequest.objects.filter(
-            id__in=request_ids
-        ).select_related('module', 'requester')
+            queryset = ApprovalRequest.objects.filter(
+                id__in=request_ids
+            ).select_related('module', 'requester')
 
-        # Filtering
-        module_code = self.request.query_params.get('module')
-        if module_code:
-            queryset = queryset.filter(module__code=module_code)
+            # Filtering
+            module_code = self.request.query_params.get('module')
+            if module_code:
+                queryset = queryset.filter(module__code=module_code)
 
-        status_param = self.request.query_params.get('status')
-        if status_param:
-            queryset = queryset.filter(status=status_param)
+            status_param = self.request.query_params.get('status')
+            if status_param:
+                queryset = queryset.filter(status=status_param)
 
-        search = self.request.query_params.get('search')
-        if search:
-            queryset = queryset.filter(
-                Q(title__icontains=search) |
-                Q(reference_id__icontains=search)
+            search = self.request.query_params.get('search')
+            if search:
+                queryset = queryset.filter(
+                    Q(title__icontains=search) |
+                    Q(reference_id__icontains=search)
+                )
+
+            return queryset
+
+        except Exception as e:
+            logging.getLogger(__name__).error(
+                "[Core.Views] Error in HistoryView get_queryset for user %s: %s", 
+                user.username, str(e), exc_info=True
             )
-
-        return queryset
+            raise ValidationError(f"Failed to load history: {str(e)}")
 
 
 class WatcherListView(generics.ListCreateAPIView):
@@ -366,15 +410,24 @@ class WatcherListView(generics.ListCreateAPIView):
         try:
             approval_request = ApprovalRequest.objects.get(id=pk)
         except ApprovalRequest.DoesNotExist:
+            logging.getLogger(__name__).error(
+                "[Core.Views] Request %s not found", pk
+            )
             return Response({'error': 'Request not found.'}, status=status.HTTP_404_NOT_FOUND)
 
         user_id = request.data.get('user_id')
         if not user_id:
+            logging.getLogger(__name__).error(
+                "[Core.Views] user_id is required for request %s", pk
+            )
             return Response({'error': 'user_id is required.'}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             target_user = User.objects.get(id=user_id)
         except User.DoesNotExist:
+            logging.getLogger(__name__).error(
+                "[Core.Views] User %s not found", user_id
+            )
             return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
 
         existing_watcher = RequestWatcher.objects.filter(
@@ -469,86 +522,125 @@ def dashboard_summary(request):
     """
     user = request.user
 
-    # Count requests by status, filtered by user involvement
-    if user.is_superuser:
-        relevant_requests = ApprovalRequest.objects.all()
-    else:
-        # 1. Tasks I have handled in the past (Approved/Rejected)
-        acted_request_ids = AuditLog.objects.filter(actor=user).values_list('request_id', flat=True)
-        
-        # 2. Combined relevance filter:
-        relevant_requests = ApprovalRequest.objects.filter(
-            Q(requester=user) |                          # I am the requester
-            Q(id__in=acted_request_ids) 
-        ).distinct()
+    try:
+        # Count requests by status, filtered by user involvement
+        if user.is_superuser:
+            relevant_requests = ApprovalRequest.objects.all()
+        else:
+            # 1. Tasks I have handled in the past (Approved/Rejected)
+            acted_request_ids = AuditLog.objects.filter(actor=user).values_list('request_id', flat=True)
+            
+            # 2. Combined relevance filter:
+            relevant_requests = ApprovalRequest.objects.filter(
+                Q(requester=user) |                          # I am the requester
+                Q(id__in=acted_request_ids) 
+            ).distinct()
 
-    status_counts = dict(
-        relevant_requests.values_list('status')
-        .annotate(count=Count('id', distinct=True))
-        .values_list('status', 'count')
-    )
+        status_counts = dict(
+            relevant_requests.values_list('status')
+            .annotate(count=Count('id', distinct=True))
+            .values_list('status', 'count')
+        )
 
-    # Pending for current user (inbox count)
-    if user.is_superuser:
-        inbox_count = ApprovalRequest.objects.filter(status=ApprovalRequest.Status.IN_PROGRESS).count()
-    else:
-        waiting_ids = ApprovalStep.objects.filter(
-            status=ApprovalStep.StepStatus.WAITING
-        ).filter(
-            Q(assigned_to=user)
-        ).values_list('request_id', flat=True)
+        # Pending for current user (inbox count)
+        if user.is_superuser:
+            inbox_count = ApprovalRequest.objects.filter(status=ApprovalRequest.Status.IN_PROGRESS).count()
+        else:
+            waiting_ids = ApprovalStep.objects.filter(
+                status=ApprovalStep.StepStatus.WAITING
+            ).filter(
+                Q(assigned_to=user)
+            ).values_list('request_id', flat=True)
 
-        discussion_ids = RequestFeedback.objects.filter(
-            user=user
-        ).values_list('request_id', flat=True)
+            discussion_ids = RequestFeedback.objects.filter(
+                user=user
+            ).values_list('request_id', flat=True)
 
-        inbox_count = ApprovalRequest.objects.filter(
-            id__in=set(waiting_ids) | set(discussion_ids),
-            status=ApprovalRequest.Status.IN_PROGRESS
-        ).distinct().count()
+            inbox_count = ApprovalRequest.objects.filter(
+                id__in=set(waiting_ids) | set(discussion_ids),
+                status=ApprovalRequest.Status.IN_PROGRESS
+            ).distinct().count()
 
-    # My submitted requests
-    my_requests_count = ApprovalRequest.objects.filter(requester=user).count()
+        # My submitted requests
+        my_requests_count = ApprovalRequest.objects.filter(requester=user).count()
 
-    # Recent activity (last 10 audit logs)
-    if user.is_superuser:
-        recent_logs = AuditLog.objects.all()
-    else:
-        # Modules where the user's role is an approver
-        relevant_module_ids = WorkflowStepDefinition.objects.filter(
-            role_required__in=user.user_roles.values_list('role__id', flat=True)
-        ).values_list('workflow__module_id', flat=True).distinct()
-        
-        recent_logs = AuditLog.objects.filter(
-            Q(request__module_id__in=relevant_module_ids) | Q(request__requester=user)
-        ).distinct()
-    recent_logs = recent_logs.select_related('request', 'actor', 'request__module')[:10]
-    activity_serializer = AuditLogSerializer(recent_logs, many=True)
+        # Recent activity (last 10 audit logs)
+        if user.is_superuser:
+            recent_logs = AuditLog.objects.all()
+        else:
+            # Modules where the user's role is an approver
+            relevant_module_ids = WorkflowStepDefinition.objects.filter(
+                role_required__in=user.user_roles.values_list('role__id', flat=True)
+            ).values_list('workflow__module_id', flat=True).distinct()
+            
+            recent_logs = AuditLog.objects.filter(
+                Q(request__module_id__in=relevant_module_ids) | Q(request__requester=user)
+            ).distinct()
+        recent_logs = recent_logs.select_related('request', 'actor', 'request__module')[:10]
+        activity_serializer = AuditLogSerializer(recent_logs, many=True)
 
-    # Module counts
-    module_counts = [
-        {'code': m['code'], 'name': m['name'], 'count': m['request_count']}
-        for m in Module.objects.annotate(request_count=Count('approval_requests')).values('code', 'name', 'request_count')
-    ]
+        # Module counts
+        module_counts = [
+            {'code': m['code'], 'name': m['name'], 'count': m['request_count']}
+            for m in Module.objects.annotate(request_count=Count('approval_requests')).values('code', 'name', 'request_count')
+        ]
 
-    return Response({
-        'success': True,
-        'data': {
-            'status_counts': {
-                'draft': status_counts.get('DRAFT', 0),
-                'pending': status_counts.get('PENDING', 0),
-                'in_progress': status_counts.get('IN_PROGRESS', 0),
-                'approved': status_counts.get('APPROVED', 0),
-                'rejected': status_counts.get('REJECTED', 0),
-                'revised': status_counts.get('REVISED', 0),
-            },
-            'inbox_count': inbox_count,
-            'my_requests_count': my_requests_count,
-            'watching_count': RequestWatcher.objects.filter(user=user).count(),
-            'recent_activity': activity_serializer.data,
-            'module_counts': module_counts
-        }
-    })
+        return Response({
+            'success': True,
+            'data': {
+                'status_counts': {
+                    'draft': status_counts.get('DRAFT', 0),
+                    'pending': status_counts.get('PENDING', 0),
+                    'in_progress': status_counts.get('IN_PROGRESS', 0),
+                    'approved': status_counts.get('APPROVED', 0),
+                    'rejected': status_counts.get('REJECTED', 0),
+                    'revised': status_counts.get('REVISED', 0),
+                },
+                'inbox_count': inbox_count,
+                'my_requests_count': my_requests_count,
+                'watching_count': RequestWatcher.objects.filter(user=user).count(),
+                'recent_activity': activity_serializer.data,
+                'module_counts': module_counts
+            }
+        })
+    except Exception as e:
+        logging.getLogger(__name__).error(
+            "[Core.Views] Error in dashboard_summary for user %s: %s",
+            user.username, str(e), exc_info=True
+        )
+        return Response(
+            {'success': False, 'error': 'Failed to load dashboard summary.'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+# ─────────────────────────────────────────────
+# System Logs Endpoint
+# ─────────────────────────────────────────────
+
+import os
+from django.conf import settings
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def system_logs(request):
+    """
+    GET /api/v1/admin/system-logs
+    Reads the system log file.
+    """
+    if not request.user.is_superuser:
+        return Response({'error': 'Only superusers can view logs.'}, status=status.HTTP_403_FORBIDDEN)
+
+    log_file_path = os.path.join(settings.BASE_DIR, 'logs', 'log.log')
+    try:
+        with open(log_file_path, 'r') as f:
+            lines = f.readlines()
+            # Return last 2000 lines, reversed (newest first)
+            log_content = "".join(reversed(lines[-2000:]))
+            return Response({'success': True, 'data': log_content})
+    except FileNotFoundError:
+        return Response({'success': False, 'error': 'Log file not found.'}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({'success': False, 'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 # ─────────────────────────────────────────────
