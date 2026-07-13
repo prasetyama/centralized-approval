@@ -56,4 +56,15 @@ api.interceptors.response.use(
     }
 );
 
+export const ssoApi = {
+    getModules: async () => {
+        const response = await axios.get(`${import.meta.env.VITE_SSO_BACKEND_URL}/user/modules/`, {
+            headers: {
+                Authorization: `Bearer ${getCookie('sso_token')}`
+            }
+        });
+        return response.data;
+    }
+};
+
 export default api;

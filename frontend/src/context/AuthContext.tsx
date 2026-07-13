@@ -31,6 +31,12 @@ const removeCookie = (name: string) => {
     document.cookie = name + "=;expires=Thu, 01 Jan 1970 00:00:00 GMT;domain=" + domain + ";path=/";
 };
 
+export interface SSOModule {
+    code: string;
+    name: string;
+    redirect_url: string;
+}
+
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const [user, setUser] = useState<User | null>(null);
     const [loading, setLoading] = useState(true);

@@ -11,6 +11,7 @@ from django.db import transaction
 from django.utils import timezone
 from django.conf import settings
 from rest_framework.exceptions import ValidationError
+import logging
 
 from core.models import (
     Module, WorkflowDefinition, WorkflowStepDefinition,
@@ -172,6 +173,10 @@ class WorkflowEngine:
             with urllib.request.urlopen(req, timeout=10) as response:
                 pass
         except Exception as e:
+            logging.getLogger(__name__).error(
+                "[Core.Engine] Failed to notify external system (WEBHOOK) for request %s: %s", 
+                approval_request.id, str(e), exc_info=True
+            )
             print(f"Failed to notify external system (WEBHOOK): {e}")
 
     @staticmethod
@@ -220,6 +225,10 @@ class WorkflowEngine:
             conn.commit()
             conn.close()
         except Exception as e:
+            logging.getLogger(__name__).error(
+                "[Core.Engine] Failed to notify external system (DATABASE) for request %s: %s", 
+                approval_request.id, str(e), exc_info=True
+            )
             print(f"Failed to notify external system (DATABASE): {e}")
 
     @staticmethod

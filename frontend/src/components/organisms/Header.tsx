@@ -1,5 +1,6 @@
 import { Bell, Search, Menu } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
+import AppDrawer from '@/components/atoms/AppDrawer';
 
 export const Header = ({ onMenuClick }: { onMenuClick?: () => void }) => {
     const { user } = useAuth();
@@ -26,6 +27,7 @@ export const Header = ({ onMenuClick }: { onMenuClick?: () => void }) => {
             </div>
 
             <div className="flex items-center space-x-4">
+                <AppDrawer />
                 <button className="relative rounded-full p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-900 transition-colors">
                     <Bell size={20} />
                     <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-red-500 ring-2 ring-white"></span>

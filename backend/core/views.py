@@ -635,7 +635,7 @@ def system_logs(request):
         with open(log_file_path, 'r') as f:
             lines = f.readlines()
             # Return last 2000 lines, reversed (newest first)
-            log_content = "".join(reversed(lines[-2000:]))
+            log_content = "".join(lines[-2000:])
             return Response({'success': True, 'data': log_content})
     except FileNotFoundError:
         return Response({'success': False, 'error': 'Log file not found.'}, status=status.HTTP_404_NOT_FOUND)
