@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Save, X } from 'lucide-react';
 import api from '@/services/api';
+import { useToast } from '@/context/ToastContext';
 import { Card } from '@/components/atoms/Card';
 import { Button } from '@/components/atoms/Button';
 import { Input } from '@/components/atoms/Input';
@@ -30,6 +31,7 @@ interface User {
 export const UserForm: React.FC<UserFormProps> = ({ initialData, onClose }) => {
 
     const queryClient = useQueryClient();
+    const { addToast } = useToast();
     const isEdit = !!initialData;
 
     const [formData, setFormData] = useState<User>({
@@ -59,8 +61,26 @@ export const UserForm: React.FC<UserFormProps> = ({ initialData, onClose }) => {
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+            addToast(`User successfully ${isEdit ? 'updated' : 'created'}`, 'success');
             onClose();
         },
+        onError: (error: any) => {
+            let msg = 'Failed to save user';
+            if (typeof error === 'string') {
+                try {
+                    const parsed = JSON.parse(error);
+                    if (parsed.message) msg = parsed.message;
+                    else if (parsed.detail) msg = parsed.detail;
+                    else if (parsed.details) msg = Object.values(parsed.details).flat().join(', ');
+                    else msg = error;
+                } catch (e) {
+                    msg = error;
+                }
+            } else if (error?.message) {
+                msg = error.message;
+            }
+            addToast(msg, 'error');
+        }
     });
 
     const handleSubmit = (e: React.FormEvent) => {

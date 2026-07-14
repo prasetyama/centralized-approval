@@ -51,7 +51,20 @@ api.interceptors.response.use(
             }
         }
         const errorData = error.response?.data;
-        const errorMessage = errorData?.error || errorData?.detail || errorData?.message || error.message;
+        let errorMessage = errorData?.error || errorData?.detail || errorData?.message;
+        
+        if (!errorMessage && errorData && typeof errorData === 'object') {
+            // For DRF field validation errors like {"password": ["This field may not be blank."]}
+            const vals = Object.values(errorData).flat();
+            if (vals.length > 0 && typeof vals[0] === 'string') {
+                errorMessage = vals.join('\n');
+            }
+        }
+        
+        if (!errorMessage) {
+            errorMessage = error.message;
+        }
+        
         return Promise.reject(typeof errorMessage === 'string' ? errorMessage : JSON.stringify(errorMessage));
     }
 );

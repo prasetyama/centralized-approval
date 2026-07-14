@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { ToastProvider } from './context/ToastContext';
 import { AuthGuard } from './components/organisms/AuthGuard';
 import { MainLayout } from './components/organisms/MainLayout';
 import { DashboardPage } from './pages/DashboardPage';
@@ -52,9 +53,11 @@ const AppRoutes = () => {
 
 function App() {
     return (
-        <AuthProvider>
-            <AppRoutes />
-        </AuthProvider>
+        <ToastProvider>
+            <AuthProvider>
+                <AppRoutes />
+            </AuthProvider>
+        </ToastProvider>
     );
 }
 
