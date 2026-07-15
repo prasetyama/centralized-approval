@@ -297,14 +297,16 @@ class WorkflowDefinitionWriteSerializer(serializers.ModelSerializer):
 class ApprovalStepSerializer(serializers.ModelSerializer):
     """Serializer for ApprovalStep instances."""
     assigned_to_name = serializers.SerializerMethodField()
+    assigned_to_email = serializers.CharField(source='assigned_to.email', read_only=True)
     role_name = serializers.CharField(source='role_required.name', read_only=True)
     user_required_name = serializers.SerializerMethodField()
+    user_required_email = serializers.CharField(source='user_required.email', read_only=True)
  
     class Meta:
         model = ApprovalStep
         fields = [
-            'id', 'step_order', 'name', 'approver_type', 'assigned_to', 'assigned_to_name',
-            'role_required', 'role_name', 'user_required', 'user_required_name',
+            'id', 'step_order', 'name', 'approver_type', 'assigned_to', 'assigned_to_name', 'assigned_to_email',
+            'role_required', 'role_name', 'user_required', 'user_required_name', 'user_required_email',
             'status', 'comments', 'acted_at',
         ]
  
@@ -339,11 +341,12 @@ class AuditLogSerializer(serializers.ModelSerializer):
 class RequestWatcherSerializer(serializers.ModelSerializer):
     """Serializer for RequestWatcher model."""
     user_name = serializers.CharField(source='user.username', read_only=True)
+    user_email = serializers.CharField(source='user.email', read_only=True)
     user_full_name = serializers.SerializerMethodField()
 
     class Meta:
         model = RequestWatcher
-        fields = ['id', 'user', 'user_name', 'user_full_name', 'created_at']
+        fields = ['id', 'user', 'user_name', 'user_email', 'user_full_name', 'created_at']
 
     def get_user_full_name(self, obj):
         return obj.user.get_full_name() or obj.user.username

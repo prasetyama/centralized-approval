@@ -134,15 +134,24 @@ export const ApprovalDetailPage = () => {
     const detail = request as any;
     if (!detail) return null;
 
-    const isApprover = detail?.steps?.some((s: any) =>
-        s.step_order === detail.current_step &&
-        s.role_required === user?.role &&
-        detail.status === 'IN_PROGRESS'
-    );
-
-    const isWatcher = detail?.watchers?.some((w: any) => w.user === user?.id);
-
     const activeStep = detail?.steps?.find((s: any) => s.step_order === detail.current_step);
+
+    const isApprover = (() => {
+        if (!activeStep) return false;
+
+        if (detail.status !== 'IN_PROGRESS' && detail.status !== 'WAITING') return false;
+        if (activeStep.status !== 'WAITING') return false;
+
+        // Use email for matching since user.id is from SSO and activeStep.assigned_to is from local DB
+        if (activeStep.assigned_to_email === user?.email) return true;
+        if (activeStep.approver_type === 'USER' && activeStep.user_required_email === user?.email) return true;
+        if (activeStep.approver_type === 'ROLE' && activeStep.role_required == user?.role) return true;
+
+        return false;
+    })();
+
+    // Check watcher using email mapping
+    const isWatcher = detail?.watchers?.some((w: any) => w.user_email === user?.email);
 
     return (
         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
