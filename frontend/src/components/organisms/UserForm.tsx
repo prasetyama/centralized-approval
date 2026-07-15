@@ -16,7 +16,6 @@ interface UserFormProps {
 interface User {
     id?: number;
     username: string;
-    password: string;
     email: string;
     first_name: string;
     last_name: string;
@@ -36,7 +35,6 @@ export const UserForm: React.FC<UserFormProps> = ({ initialData, onClose }) => {
 
     const [formData, setFormData] = useState<User>({
         username: initialData?.username || '',
-        password: initialData?.password || '',
         email: initialData?.email || '',
         first_name: initialData?.first_name || '',
         last_name: initialData?.last_name || '',
@@ -65,21 +63,8 @@ export const UserForm: React.FC<UserFormProps> = ({ initialData, onClose }) => {
             onClose();
         },
         onError: (error: any) => {
-            let msg = 'Failed to save user';
-            if (typeof error === 'string') {
-                try {
-                    const parsed = JSON.parse(error);
-                    if (parsed.message) msg = parsed.message;
-                    else if (parsed.detail) msg = parsed.detail;
-                    else if (parsed.details) msg = Object.values(parsed.details).flat().join(', ');
-                    else msg = error;
-                } catch (e) {
-                    msg = error;
-                }
-            } else if (error?.message) {
-                msg = error.message;
-            }
-            addToast(msg, 'error');
+            const msg = JSON.parse(error);
+            addToast(msg.message, 'error');
         }
     });
 
@@ -141,14 +126,6 @@ export const UserForm: React.FC<UserFormProps> = ({ initialData, onClose }) => {
                         value={formData.last_name}
                         onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
                         required
-                    />
-                    <Input
-                        label="Password"
-                        type="password"
-                        placeholder="••••••••"
-                        value={formData.password}
-                        onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                        required={!isEdit}
                     />
                 </Card>
 
