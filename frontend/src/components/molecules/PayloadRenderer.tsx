@@ -40,7 +40,7 @@ export const PayloadRenderer = ({ moduleCode, payload }: PayloadRendererProps) =
                         {(payload.items || []).map((item: any, i: number) => (
                             <tr key={i} className="hover:bg-slate-50/50">
                                 <td className="px-4 py-3 font-medium text-slate-800">{item.name}</td>
-                                <td className="px-4 py-3 text-right text-slate-600">{item.qty}</td>
+                                <td className="px-4 py-3 text-right text-slate-600">{item.qty} {item.uom}</td>
                                 <td className="px-4 py-3 text-right text-slate-600">{formatCurrency(item.price)}</td>
                                 <td className="px-4 py-3 text-right font-semibold text-slate-900">
                                     {formatCurrency(item.qty * item.price)}
