@@ -408,12 +408,16 @@ class WorkflowEngine:
             _captured_step = first_waiting_step
             transaction.on_commit(lambda: email_service.send_step_notification(_captured_step))
 
-        # Send CC notification for eOrder Information if module is EORDER or title contains eorder
-        if module_code.upper() == 'EORDER' or 'eorder' in title.lower():
-            _req = approval_request
-            transaction.on_commit(lambda: email_service.send_eorder_info_cc_notification(_req))
-
         return approval_request
+
+    @staticmethod
+    def send_eorder_info_cc_notification(payload):
+        """
+        Send eOrder Information CC email notification for a given reference_id.
+        """
+        return transaction.on_commit(lambda: email_service.send_eorder_info_cc_notification(payload))
+        
+
 
     @staticmethod
     @transaction.atomic

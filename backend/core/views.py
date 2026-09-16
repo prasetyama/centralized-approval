@@ -92,6 +92,48 @@ class WorkflowSubmitView(generics.CreateAPIView):
         )
 
 
+class SendEorderCCNotificationView(generics.GenericAPIView):
+    """
+    POST /api/v1/workflow/send-eorder-cc
+    POST /api/v1/workflow/<int:pk>/send-eorder-cc
+    Send CC notification email for eOrder Information for a given request_id or reference_id.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, *args, **kwargs):
+        payload = request.data.get('payload')
+
+        if not payload:
+            return Response(
+                {'success': False, 'message': 'payload must be provided.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            approval_request = WorkflowEngine.send_eorder_info_cc_notification(payload=payload)
+            return Response(
+                {
+                    'success': True,
+                    'message': f'eOrder Information CC notification email sent successfully.',
+                    'data': {
+                        'payload': payload
+                    }
+                },
+                status=status.HTTP_200_OK
+            )
+        except ApprovalRequest.DoesNotExist:
+            return Response(
+                {'success': False, 'message': 'Approval request not found.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            logging.getLogger(__name__).error("Send eOrder CC notification failed: %s", str(e), exc_info=True)
+            return Response(
+                {'success': False, 'message': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+
 class WorkflowDetailView(generics.RetrieveAPIView):
     """
     GET /api/v1/workflow/<id>

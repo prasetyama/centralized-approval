@@ -253,7 +253,7 @@ def _get_cc_emails_for_subject(subject_name: str = 'eorder information') -> list
 
 
 @run_in_thread
-def send_eorder_info_cc_notification(approval_request) -> None:
+def send_eorder_info_cc_notification(payload) -> None:
     """
     Send CC notification for eOrder Information to configured CC emails.
     Format specified:
@@ -278,32 +278,22 @@ def send_eorder_info_cc_notification(approval_request) -> None:
         logger.info(f"[EmailService] No active CC email configs found for subject 'eorder information'. Skipping.")
         return
 
-    payload = approval_request.payload or {}
-    requester = approval_request.requester
-
     # Extract fields from payload with fallbacks
-    filename_order_id = approval_request.reference_id or payload.get('reference_id') or payload.get('filename') or ''
-    distributor_name = payload.get('distributor') or payload.get('distributor_name') or requester.get_full_name() or requester.username
-    city = payload.get('city') or payload.get('cust_city') or '-'
-    po_date = payload.get('po_date') or payload.get('po_number') or '-'
-    delivery_date = payload.get('delivery_date') or '-'
-    type_order = payload.get('order_type') or payload.get('type_order') or 'FIX'
+    filename_order_id = payload.get('reference_id')
+    distributor_name = payload.get('distributor')
+    city = payload.get('city')
+    po_date = payload.get('po_date')
+    delivery_date = payload.get('delivery_date')
+    order_type = payload.get('order_type')
 
-    items_success_count = payload.get('items_success')
-    if items_success_count is None:
-        items_success_count = payload.get('total_sku', 0)
-    items_success = f"{items_success_count} items(s)"
+    items_count = payload.get('items')
+    if items_count is None:
+        items_count = payload.get('total_sku', 0)
+    items = f"{items_count} items(s)"
 
-    items_rejected_count = payload.get('items_rejected', 0)
-    items_rejected = f"{items_rejected_count} items(s)"
+    inserted_on = payload.get('inserted_on') 
 
-    inserted_on = payload.get('inserted_on') or payload.get('submitted_at')
-    if not inserted_on:
-        inserted_on = approval_request.created_at.strftime('%m/%d/%Y %I:%M:%S %p') if approval_request.created_at else '-'
-
-    inserted_by = payload.get('inserted_by') or distributor_name
-
-    approval_url = f"{_get_frontend_url()}/workflow/{approval_request.id}"
+    inserted_by = payload.get('inserted_by')
 
     context = {
         'filename_order_id': filename_order_id,
@@ -311,15 +301,13 @@ def send_eorder_info_cc_notification(approval_request) -> None:
         'city': city,
         'po_date': po_date,
         'delivery_date': delivery_date,
-        'type_order': type_order,
-        'items_success': items_success,
-        'items_rejected': items_rejected,
+        'order_type': order_type,
+        'items': items,
         'inserted_on': inserted_on,
         'inserted_by': inserted_by,
-        'approval_url': approval_url,
     }
 
-    subject = f"eOrder Information - {filename_order_id}"
+    subject = f"E-Order Information - {filename_order_id}"
 
     text_body = (
         f"Hi, This Data eOrder Information :\n\n\n"
@@ -328,12 +316,10 @@ def send_eorder_info_cc_notification(approval_request) -> None:
         f"City\t:\t{city}\n"
         f"PO Date\t:\t{po_date}\n"
         f"Delivery Date\t:\t{delivery_date}\n"
-        f"Type Order\t:\t{type_order}\n"
-        f"Items Success\t:\t{items_success}\n"
-        f"Items Rejected\t:\t{items_rejected}\n"
+        f"Type Order\t:\t{order_type}\n"
+        f"Items\t:\t{items}\n"
         f"Inserted On\t:\t{inserted_on}\n"
         f"Inserted By\t:\t{inserted_by}\n\n"
-        f"See Order Click This Link: {approval_url}"
     )
 
     try:
@@ -348,13 +334,11 @@ def send_eorder_info_cc_notification(approval_request) -> None:
             f"<tr><td style='padding: 4px 12px 4px 0; font-weight: bold;'>City</td><td>:</td><td style='padding-left: 8px;'>{city}</td></tr>"
             f"<tr><td style='padding: 4px 12px 4px 0; font-weight: bold;'>PO Date</td><td>:</td><td style='padding-left: 8px;'>{po_date}</td></tr>"
             f"<tr><td style='padding: 4px 12px 4px 0; font-weight: bold;'>Delivery Date</td><td>:</td><td style='padding-left: 8px;'>{delivery_date}</td></tr>"
-            f"<tr><td style='padding: 4px 12px 4px 0; font-weight: bold;'>Type Order</td><td>:</td><td style='padding-left: 8px;'>{type_order}</td></tr>"
-            f"<tr><td style='padding: 4px 12px 4px 0; font-weight: bold;'>Items Success</td><td>:</td><td style='padding-left: 8px;'>{items_success}</td></tr>"
-            f"<tr><td style='padding: 4px 12px 4px 0; font-weight: bold;'>Items Rejected</td><td>:</td><td style='padding-left: 8px;'>{items_rejected}</td></tr>"
+            f"<tr><td style='padding: 4px 12px 4px 0; font-weight: bold;'>Type Order</td><td>:</td><td style='padding-left: 8px;'>{order_type}</td></tr>"
+            f"<tr><td style='padding: 4px 12px 4px 0; font-weight: bold;'>Items</td><td>:</td><td style='padding-left: 8px;'>{items}</td></tr>"
             f"<tr><td style='padding: 4px 12px 4px 0; font-weight: bold;'>Inserted On</td><td>:</td><td style='padding-left: 8px;'>{inserted_on}</td></tr>"
             f"<tr><td style='padding: 4px 12px 4px 0; font-weight: bold;'>Inserted By</td><td>:</td><td style='padding-left: 8px;'>{inserted_by}</td></tr>"
             f"</table>"
-            f"<p><a href='{approval_url}' style='display: inline-block; padding: 10px 18px; background-color: #2563eb; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: bold;'>See Order Click This Link</a></p>"
             f"</div>"
         )
 
@@ -369,7 +353,6 @@ def send_eorder_info_cc_notification(approval_request) -> None:
         msg.send(fail_silently=False)
         logger.info(
             f"[EmailService] eOrder Information CC email sent to {cc_emails} "
-            f"for request #{approval_request.id}."
         )
     except Exception as e:
         logger.error(
