@@ -17,7 +17,8 @@ import logging
 from core.models import (
     Module, Role, User, WorkflowDefinition, WorkflowStepDefinition,
     ApprovalRequest, ApprovalStep, AuditLog, Division, RequestFeedback,
-    Brand, UserBrand, MasterWorkflowCriteria, RequestWatcher, ModuleVariable
+    Brand, UserBrand, MasterWorkflowCriteria, RequestWatcher, ModuleVariable,
+    CCEmailConfig
 )
 from core.serializers import (
     ModuleSerializer, RoleSerializer, UserListSerializer, UserDetailSerializer,
@@ -27,7 +28,7 @@ from core.serializers import (
     ApprovalStepSerializer, AuditLogSerializer, ActionSerializer,
     DivisionSerializer, DelegateRequestSerializer, RequestFeedbackSerializer,
     BrandSerializer, UserBrandSerializer, MasterWorkflowCriteriaSerializer,
-    RequestWatcherSerializer, ModuleVariableSerializer
+    RequestWatcherSerializer, ModuleVariableSerializer, CCEmailConfigSerializer
 )
 from core.engine import WorkflowEngine
 from django.utils import timezone
@@ -771,4 +772,37 @@ class MasterWorkflowCriteriaViewSet(viewsets.ModelViewSet):
     """ViewSet for managing MasterWorkflowCondition mapping."""
     queryset = MasterWorkflowCriteria.objects.all()
     serializer_class = MasterWorkflowCriteriaSerializer
+
+
+class CCEmailConfigViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for managing CC Email Configurations.
+    """
+    queryset = CCEmailConfig.objects.select_related('created_by').all()
+    serializer_class = CCEmailConfigSerializer
+    permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = ['is_active', 'subject']
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        search = self.request.query_params.get('search', None)
+        if search:
+            qs = qs.filter(Q(email__icontains=search) | Q(subject__icontains=search))
+        return qs
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user)
+
+    @action(detail=True, methods=['patch', 'post'], url_path='toggle-active')
+    def toggle_active(self, request, pk=None):
+        config = self.get_object()
+        config.is_active = not config.is_active
+        config.save()
+        return Response({
+            'success': True,
+            'is_active': config.is_active,
+            'message': f"Config for {config.email} is now {'active' if config.is_active else 'inactive'}."
+        })
+
 

@@ -11,7 +11,8 @@ import {
     X,
     Play,
     Settings,
-    Terminal
+    Terminal,
+    Mail
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
@@ -24,6 +25,7 @@ const navItems = [
     { name: 'User Management', href: '/admin/users', icon: Users, adminOnly: true },
     { name: 'Simulator', href: '/admin/workflow/simulator', icon: Play, adminOnly: true },
     { name: 'Master Data', href: '/admin/master-data', icon: Settings, adminOnly: true },
+    { name: 'CC Email Config', href: '/admin/cc-email-config', icon: Mail, adminOnly: true },
     { name: 'System Logs', href: '/admin/system-logs', icon: Terminal, adminOnly: true },
 ];
 

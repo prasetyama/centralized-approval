@@ -12,6 +12,7 @@ import { AdminWorkflowPage } from './pages/AdminWorkflowPage';
 import { WorkflowSimulatorPage } from './pages/WorkflowSimulatorPage';
 import { BrandMasterPage } from './pages/BrandMasterPage';
 import { AdminLogsPage } from './pages/AdminLogsPage';
+import { CcEmailConfigPage } from './pages/CcEmailConfigPage';
 
 const AppRoutes = () => {
     const { loading } = useAuth();
@@ -44,6 +45,7 @@ const AppRoutes = () => {
                 <Route path="admin/workflows/new" element={<AdminWorkflowPage />} />
                 <Route path="admin/workflow/simulator" element={<WorkflowSimulatorPage />} />
                 <Route path="admin/master-data" element={<BrandMasterPage />} />
+                <Route path="admin/cc-email-config" element={<CcEmailConfigPage />} />
                 <Route path="admin/system-logs" element={<AdminLogsPage />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
             </Route>

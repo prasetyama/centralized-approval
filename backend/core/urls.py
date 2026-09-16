@@ -14,7 +14,7 @@ from core.views import (
     ModuleViewSet, RoleViewSet, UserViewSet, DivisionViewSet,
     WorkflowDefinitionViewSet, ApprovalRequestViewSet, RequestFeedbackViewSet,
     BrandViewSet, UserBrandViewSet, MasterWorkflowCriteriaViewSet,
-    ModuleVariableViewSet, system_logs
+    ModuleVariableViewSet, CCEmailConfigViewSet, system_logs
 )
 
 router = DefaultRouter()
@@ -29,6 +29,7 @@ router.register(r'admin/brands', BrandViewSet, basename='brand')
 router.register(r'admin/user-brands', UserBrandViewSet, basename='user-brand')
 router.register(r'admin/master-workflow-conditions', MasterWorkflowCriteriaViewSet, basename='master-condition')
 router.register(r'admin/module-variables', ModuleVariableViewSet, basename='module-variable')
+router.register(r'admin/cc-email-configs', CCEmailConfigViewSet, basename='cc-email-config')
 
 urlpatterns = [
     # Module Variables (Direct access as per spec)

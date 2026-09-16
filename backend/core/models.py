@@ -708,3 +708,40 @@ class APIAuditLog(models.Model):
     def __str__(self):
         return f"[{self.response_status}] {self.method} {self.endpoint} at {self.timestamp}"
 
+
+class CCEmailConfig(models.Model):
+    """
+    Configuration management for CC email recipients based on email subject options.
+    Specifically supports 'eorder information' and customizable subjects.
+    """
+    SUBJECT_CHOICES = [
+        ('eorder information', 'eorder information'),
+    ]
+
+    email = models.EmailField(help_text="Email address to receive CC notifications")
+    subject = models.CharField(
+        max_length=150,
+        default='eorder information',
+        help_text="Target email subject option (e.g. 'eorder information')"
+    )
+    is_active = models.BooleanField(default=True, help_text="Active status flag")
+    created_at = models.DateTimeField(auto_now_add=True)
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='cc_email_configs',
+        help_text="User who created this config"
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'aw_cc_email_config'
+        ordering = ['-created_at']
+        unique_together = ['email', 'subject']
+
+    def __str__(self):
+        return f"{self.email} [{self.subject}] ({'Active' if self.is_active else 'Inactive'})"
+
+

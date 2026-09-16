@@ -8,7 +8,7 @@ from core.models import (
     Module, Role, User, WorkflowDefinition, WorkflowStepDefinition,
     ApprovalRequest, ApprovalStep, AuditLog, Division, RequestFeedback,
     Brand, UserBrand, MasterWorkflowCriteria, RequestWatcher, ModuleVariable,
-    UserRole
+    UserRole, CCEmailConfig
 )
 
 
@@ -477,3 +477,24 @@ class DelegateRequestSerializer(serializers.Serializer):
     """Serializer for the delegate step endpoint."""
     new_assignee_id = serializers.IntegerField()
     comments = serializers.CharField(required=False, default='', allow_blank=True)
+
+
+class CCEmailConfigSerializer(serializers.ModelSerializer):
+    """Serializer for CCEmailConfig model."""
+    created_by_username = serializers.CharField(source='created_by.username', read_only=True, allow_null=True)
+    created_by_full_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = CCEmailConfig
+        fields = [
+            'id', 'email', 'subject', 'is_active',
+            'created_at', 'updated_at', 'created_by',
+            'created_by_username', 'created_by_full_name'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at', 'created_by']
+
+    def get_created_by_full_name(self, obj):
+        if obj.created_by:
+            return obj.created_by.get_full_name() or obj.created_by.username
+        return None
+
