@@ -273,9 +273,9 @@ def send_eorder_info_cc_notification(payload) -> None:
 
     See Order Click This Link: <URL>
     """
-    cc_emails = _get_cc_emails_for_subject('eorder information')
+    cc_emails = _get_cc_emails_for_subject(payload.get('subject'))
     if not cc_emails:
-        logger.info(f"[EmailService] No active CC email configs found for subject 'eorder information'. Skipping.")
+        logger.info(f"[EmailService] No active CC email configs found for subject '{subject}'. Skipping.")
         return
 
     # Extract fields from payload with fallbacks
