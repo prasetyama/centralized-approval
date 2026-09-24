@@ -116,7 +116,7 @@ class WorkflowEngine:
             return True  # Finished
 
     @staticmethod
-    def notify_external_system(approval_request):
+    def notify_external_system(approval_request, dlvdate=None, acted_step=None):
         """
         Notify the external system about a status change.
         Supports WEBHOOK (HTTP POST) and DATABASE (Direct SQL Update).
@@ -124,12 +124,12 @@ class WorkflowEngine:
         module = approval_request.module
         
         if module.notification_strategy == 'WEBHOOK' and module.callback_url:
-            WorkflowEngine._notify_webhook(approval_request)
+            WorkflowEngine._notify_webhook(approval_request, dlvdate=dlvdate, acted_step=acted_step)
         elif module.notification_strategy == 'DATABASE' and module.db_type:
-            WorkflowEngine._notify_database(approval_request)
+            WorkflowEngine._notify_database(approval_request, dlvdate=dlvdate, acted_step=acted_step)
 
     @staticmethod
-    def _notify_webhook(approval_request):
+    def _notify_webhook(approval_request, dlvdate=None, acted_step=None):
         """Send a notification to the source module's callback URL."""
         module = approval_request.module
         # Dynamic status mapping
@@ -149,19 +149,25 @@ class WorkflowEngine:
             'updated_at': approval_request.updated_at.isoformat(),
         }
 
-        # Include details of the current step
-        current_step = approval_request.steps.filter(
+        if dlvdate:
+            payload['dlvdate'] = dlvdate
+
+        # Include details of the current or acted step
+        step_obj = acted_step or approval_request.steps.filter(
             step_order=approval_request.current_step
         ).first()
 
-        if current_step:
-            payload['step'] = {
-                'order': current_step.step_order,
-                'name': current_step.name,
-                'status': current_step.status,
-                'approver': current_step.assigned_to.username if current_step.assigned_to else None,
-                'comments': current_step.comments,
+        if step_obj:
+            step_dict = {
+                'order': step_obj.step_order,
+                'name': step_obj.name,
+                'status': step_obj.status,
+                'approver': step_obj.assigned_to.username if step_obj.assigned_to else None,
+                'comments': step_obj.comments,
             }
+            if dlvdate:
+                step_dict['dlvdate'] = dlvdate
+            payload['step'] = step_dict
 
         try:
             req = urllib.request.Request(
@@ -421,7 +427,7 @@ class WorkflowEngine:
 
     @staticmethod
     @transaction.atomic
-    def approve_step(request_id, approver, comments='', ip_address=None):
+    def approve_step(request_id, approver, comments='', ip_address=None, dlvdate=None):
         """
         Approve the current step of an approval request.
         If this is the final step, the entire request is marked as APPROVED.
@@ -432,6 +438,7 @@ class WorkflowEngine:
             approver (User): User performing the approval.
             comments (str): Optional approval comments.
             ip_address (str): IP address of the approver.
+            dlvdate (str): Optional delivery date provided during approval.
 
         Returns:
             ApprovalRequest: The updated approval request.
@@ -482,6 +489,14 @@ class WorkflowEngine:
         if not is_authorized:
             raise ValidationError("You are not authorized to approve this step.")
 
+        acted_step = current_step
+
+        if dlvdate:
+            if not isinstance(approval_request.payload, dict):
+                approval_request.payload = {}
+            approval_request.payload['dlvdate'] = dlvdate
+            approval_request.save(update_fields=['payload', 'updated_at'])
+
         # Approve the current step
         current_step.status = ApprovalStep.StepStatus.APPROVED
         current_step.assigned_to = approver
@@ -504,7 +519,11 @@ class WorkflowEngine:
         )
 
         # Notify external system after commit
-        transaction.on_commit(lambda: WorkflowEngine.notify_external_system(approval_request))
+        _captured_dlvdate = dlvdate
+        _captured_step = acted_step
+        transaction.on_commit(lambda: WorkflowEngine.notify_external_system(
+            approval_request, dlvdate=_captured_dlvdate, acted_step=_captured_step
+        ))
 
         return approval_request
 

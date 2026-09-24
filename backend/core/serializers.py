@@ -471,6 +471,8 @@ class SubmitRequestSerializer(serializers.Serializer):
 class ActionSerializer(serializers.Serializer):
     """Serializer for approve/reject actions."""
     comments = serializers.CharField(required=False, default='', allow_blank=True)
+    dlvdate = serializers.CharField(required=False, default='', allow_blank=True, allow_null=True)
+    dlv_date = serializers.CharField(required=False, default='', allow_blank=True, allow_null=True)
 
 
 class DelegateRequestSerializer(serializers.Serializer):

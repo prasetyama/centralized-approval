@@ -5,18 +5,21 @@ import { Card } from '@/components/atoms/Card';
 import { cn } from '@/lib/utils';
 
 interface ActionButtonsProps {
-    requestId: number;
-    onApprove: (comments: string) => Promise<void>;
+    requestId?: number;
+    onApprove: (comments: string, dlvdate?: string) => Promise<void>;
     onReject: (comments: string) => Promise<void>;
     isLoading: boolean;
     canAction: boolean;
     isWatcher?: boolean;
+    showDlvDateForm?: boolean;
 }
 
-export const ActionButtons = ({ onApprove, onReject, isLoading, canAction, isWatcher }: Omit<ActionButtonsProps, 'requestId'>) => {
+export const ActionButtons = ({ onApprove, onReject, isLoading, canAction, isWatcher, showDlvDateForm }: ActionButtonsProps) => {
     const [showModal, setShowModal] = useState<'APPROVE' | 'REJECT' | null>(null);
     const [comments, setComments] = useState('');
+    const [dlvdate, setDlvdate] = useState('');
     const [error, setError] = useState<string | null>(null);
+    const [dlvDateError, setDlvDateError] = useState<string | null>(null);
 
     const handleAction = async () => {
         if (!showModal) return;
@@ -26,12 +29,19 @@ export const ActionButtons = ({ onApprove, onReject, isLoading, canAction, isWat
             return;
         }
 
+        if (showModal === 'APPROVE' && showDlvDateForm && !dlvdate.trim()) {
+            setDlvDateError('Delivery Date is required for urgent orders');
+            return;
+        }
+
         try {
             setError(null);
-            if (showModal === 'APPROVE') await onApprove(comments);
+            setDlvDateError(null);
+            if (showModal === 'APPROVE') await onApprove(comments, showDlvDateForm ? dlvdate : undefined);
             if (showModal === 'REJECT') await onReject(comments);
             setShowModal(null);
             setComments('');
+            setDlvdate('');
         } catch (error) {
             console.error('Action failed:', error);
         }
@@ -81,6 +91,31 @@ export const ActionButtons = ({ onApprove, onReject, isLoading, canAction, isWat
                                 You are about to {showModal.toLowerCase()} this request. Please provide any comments or feedback for the requester.
                             </p>
 
+                            {showModal === 'APPROVE' && showDlvDateForm && (
+                                <div className="space-y-2">
+                                    <div className="flex justify-between items-center">
+                                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                                            Delivery Date (Tanggal Pengiriman) <span className="text-red-500">*</span>
+                                        </label>
+                                        {dlvDateError && <span className="text-[10px] font-bold text-red-500 uppercase animate-pulse">{dlvDateError}</span>}
+                                    </div>
+                                    <input
+                                        type="date"
+                                        className={cn(
+                                            "w-full rounded-xl border p-3 text-sm transition-all focus:outline-none focus:ring-4",
+                                            dlvDateError
+                                                ? "border-red-200 bg-red-50/30 focus:ring-red-100"
+                                                : "border-slate-200 bg-slate-50 focus:bg-white focus:ring-blue-100"
+                                        )}
+                                        value={dlvdate}
+                                        onChange={(e) => {
+                                            setDlvdate(e.target.value);
+                                            if (e.target.value.trim()) setDlvDateError(null);
+                                        }}
+                                    />
+                                </div>
+                            )}
+
                             <div className="space-y-2">
                                 <div className="flex justify-between items-center">
                                     <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Comments</label>
@@ -107,7 +142,11 @@ export const ActionButtons = ({ onApprove, onReject, isLoading, canAction, isWat
                                 <Button
                                     variant="ghost"
                                     className="flex-1"
-                                    onClick={() => setShowModal(null)}
+                                    onClick={() => {
+                                        setShowModal(null);
+                                        setError(null);
+                                        setDlvDateError(null);
+                                    }}
                                 >
                                     Cancel
                                 </Button>

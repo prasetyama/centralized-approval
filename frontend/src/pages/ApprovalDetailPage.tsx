@@ -37,8 +37,8 @@ export const ApprovalDetailPage = () => {
     });
 
     const actionMutation = useMutation({
-        mutationFn: ({ action, comments }: { action: string, comments: string }) =>
-            api.post(`/workflow/${id}/${action}`, { comments }),
+        mutationFn: ({ action, comments, dlvdate }: { action: string, comments: string, dlvdate?: string }) =>
+            api.post(`/workflow/${id}/${action}`, { comments, dlvdate }),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['workflow-detail', id] });
             queryClient.invalidateQueries({ queryKey: ['inbox'] });
@@ -152,6 +152,17 @@ export const ApprovalDetailPage = () => {
 
     // Check watcher using email mapping
     const isWatcher = detail?.watchers?.some((w: any) => w.user_email === user?.email);
+
+    const isUrgentOrder = detail?.payload?.order_type === '3'
+
+    const isScmStep =
+        activeStep &&
+        (activeStep.step_order === 2 ||
+            activeStep.name?.toUpperCase().includes('SCM') ||
+            String(activeStep.role_required || '').toUpperCase().includes('SCM') ||
+            String(activeStep.role_name || '').toUpperCase().includes('SCM'));
+
+    const showDlvDateForm = Boolean(isScmStep && isUrgentOrder);
 
     return (
         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -330,11 +341,12 @@ export const ApprovalDetailPage = () => {
                     </Card>
 
                     <ActionButtons
-                        onApprove={async (comments) => { await actionMutation.mutateAsync({ action: 'approve', comments }); }}
+                        onApprove={async (comments, dlvdate) => { await actionMutation.mutateAsync({ action: 'approve', comments, dlvdate }); }}
                         onReject={async (comments) => { await actionMutation.mutateAsync({ action: 'reject', comments }); }}
                         isLoading={actionMutation.isPending}
                         canAction={isApprover === true}
                         isWatcher={isWatcher}
+                        showDlvDateForm={showDlvDateForm}
                     />
 
                     {isWatcher && (

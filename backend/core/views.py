@@ -190,19 +190,22 @@ class WorkflowApproveView(generics.GenericAPIView):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
+        dlvdate = serializer.validated_data.get('dlvdate') or serializer.validated_data.get('dlv_date') or None
+
         try:
             approval_request = WorkflowEngine.approve_step(
                 request_id=pk,
                 approver=request.user,
                 comments=serializer.validated_data.get('comments', ''),
                 ip_address=_get_client_ip(request),
+                dlvdate=dlvdate,
             )
         except Exception as e:
             logging.getLogger(__name__).error(
-                "[Core.Views] User %s not authorized to approve workflow %s", 
-                self.request.user.username, self.kwargs.get('pk')
+                "[Core.Views] User %s not authorized to approve workflow %s: %s", 
+                self.request.user.username, self.kwargs.get('pk'), str(e)
             )
-            raise ValidationError("You are not authorized to approve this request.")
+            raise ValidationError(f"You are not authorized to approve this request or an error occurred: {str(e)}")
 
         return Response({
             'success': True,
