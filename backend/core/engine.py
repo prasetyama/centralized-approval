@@ -116,7 +116,7 @@ class WorkflowEngine:
             return True  # Finished
 
     @staticmethod
-    def notify_external_system(approval_request, dlvdate=None, acted_step=None):
+    def notify_external_system(approval_request, dlvdate=None, acted_step=None, approver=None):
         """
         Notify the external system about a status change.
         Supports WEBHOOK (HTTP POST) and DATABASE (Direct SQL Update).
@@ -124,12 +124,12 @@ class WorkflowEngine:
         module = approval_request.module
         
         if module.notification_strategy == 'WEBHOOK' and module.callback_url:
-            WorkflowEngine._notify_webhook(approval_request, dlvdate=dlvdate, acted_step=acted_step)
+            WorkflowEngine._notify_webhook(approval_request, dlvdate=dlvdate, acted_step=acted_step, approver=approver)
         elif module.notification_strategy == 'DATABASE' and module.db_type:
             WorkflowEngine._notify_database(approval_request, dlvdate=dlvdate, acted_step=acted_step)
 
     @staticmethod
-    def _notify_webhook(approval_request, dlvdate=None, acted_step=None):
+    def _notify_webhook(approval_request, dlvdate=None, acted_step=None, approver=None):
         """Send a notification to the source module's callback URL."""
         module = approval_request.module
         # Dynamic status mapping
@@ -139,6 +139,16 @@ class WorkflowEngine:
         
         external_status = module.status_mapping.get(status_key, approval_request.status)
 
+        approved_by_val = None
+        if isinstance(approver, str):
+            approved_by_val = approver
+        elif hasattr(approver, 'username'):
+            approved_by_val = approver.username
+        elif isinstance(approver, dict):
+            approved_by_val = approver.get('username') or approver.get('name') or str(approver)
+        elif approver is not None:
+            approved_by_val = str(approver)
+
         payload = {
             'request_id': approval_request.id,
             'reference_id': approval_request.reference_id,
@@ -147,6 +157,7 @@ class WorkflowEngine:
             'external_status': external_status,
             'current_step': approval_request.current_step,
             'updated_at': approval_request.updated_at.isoformat(),
+            'approved_by': approved_by_val,
         }
 
         if dlvdate:
@@ -522,7 +533,7 @@ class WorkflowEngine:
         _captured_dlvdate = dlvdate
         _captured_step = acted_step
         transaction.on_commit(lambda: WorkflowEngine.notify_external_system(
-            approval_request, dlvdate=_captured_dlvdate, acted_step=_captured_step
+            approval_request, dlvdate=_captured_dlvdate, acted_step=_captured_step, approver=approver
         ))
 
         return approval_request
@@ -619,7 +630,11 @@ class WorkflowEngine:
         )
 
         # Notify external system after commit
-        transaction.on_commit(lambda: WorkflowEngine.notify_external_system(approval_request))
+        _captured_step = current_step
+        _captured_approver = approver
+        transaction.on_commit(lambda: WorkflowEngine.notify_external_system(
+            approval_request, acted_step=_captured_step, approver=_captured_approver
+        ))
 
         # Notify requester about rejection via email
         _captured_req = approval_request
