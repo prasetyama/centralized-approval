@@ -4,11 +4,11 @@ import logging
 from django.utils.deprecation import MiddlewareMixin
 from core.models import APIAuditLog
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger('core.middleware')
 
 class APIAuditMiddleware(MiddlewareMixin):
     """
-    Middleware to log all API requests and their responses.
+    Middleware to log all API requests and their responses into database and log files.
     """
 
     def process_request(self, request):
@@ -34,6 +34,20 @@ class APIAuditMiddleware(MiddlewareMixin):
         elif isinstance(payload, list):
             return [self._scrub_payload(item) for item in payload]
         return payload
+
+    def process_exception(self, request, exception):
+        """
+        Log unhandled exceptions that occur during view processing.
+        """
+        path = request.path
+        method = request.method
+        user_str = str(getattr(request, 'user', 'Anonymous'))
+        logger.error(
+            "Unhandled exception on %s %s [User: %s]: %s",
+            method, path, user_str, str(exception),
+            exc_info=exception
+        )
+        return None
 
     def process_response(self, request, response):
         path = request.path
@@ -84,6 +98,27 @@ class APIAuditMiddleware(MiddlewareMixin):
                 return x_forwarded_for.split(',')[0]
             return req.META.get('REMOTE_ADDR')
 
+        client_ip = get_client_ip(request)
+        user_label = user.username if user else 'Anonymous'
+
+        # Log request summary to file logger
+        if response.status_code >= 500:
+            logger.error(
+                "API %s %s [%d] - %.2fms | IP: %s | User: %s | Error: %s",
+                request.method, path, response.status_code, execution_time_ms, client_ip, user_label, error_message
+            )
+        elif response.status_code >= 400:
+            logger.warning(
+                "API %s %s [%d] - %.2fms | IP: %s | User: %s | Error: %s",
+                request.method, path, response.status_code, execution_time_ms, client_ip, user_label, error_message
+            )
+        else:
+            logger.info(
+                "API %s %s [%d] - %.2fms | IP: %s | User: %s",
+                request.method, path, response.status_code, execution_time_ms, client_ip, user_label
+            )
+
+        # Database audit log
         try:
             APIAuditLog.objects.create(
                 user=user,
@@ -92,7 +127,7 @@ class APIAuditMiddleware(MiddlewareMixin):
                 payload=payload,
                 response_status=response.status_code,
                 error_message=error_message,
-                ip_address=get_client_ip(request),
+                ip_address=client_ip,
                 user_agent=request.META.get('HTTP_USER_AGENT', '')[:500], # Safely truncate
                 execution_time_ms=execution_time_ms
             )
@@ -101,3 +136,4 @@ class APIAuditMiddleware(MiddlewareMixin):
             logger.error(f"Failed to save APIAuditLog: {e}", exc_info=True)
 
         return response
+

@@ -93,12 +93,13 @@ class UserListSerializer(serializers.ModelSerializer):
         return ur.role.code if ur and ur.role else None
 
     def get_division_name(self, obj):
-        """Look up division name by its code string."""
+        """Look up division name by its code string safely."""
         if obj.division:
             try:
-                return Division.objects.get(code=obj.division).name
-            except Division.DoesNotExist:
-                return obj.division
+                div = Division.objects.filter(code=obj.division).first()
+                return div.name if div else str(obj.division)
+            except Exception:
+                return str(obj.division)
         return None
 
 
@@ -141,16 +142,19 @@ class UserDetailSerializer(serializers.ModelSerializer):
                 "code": ur.role.code
             }
             for ur in obj.user_roles.all()
+            if ur and ur.role
         ]
 
     def get_division_details(self, obj):
-        """Look up full division details by its code string."""
+        """Look up full division details by its code string safely."""
         if obj.division:
             try:
-                div = Division.objects.get(code=obj.division)
-                return DivisionSerializer(div).data
-            except Division.DoesNotExist:
+                div = Division.objects.filter(code=obj.division).first()
+                if div:
+                    return DivisionSerializer(div).data
                 return {"code": obj.division, "name": obj.division}
+            except Exception:
+                return {"code": obj.division, "name": str(obj.division)}
         return None
 
     def create(self, validated_data):

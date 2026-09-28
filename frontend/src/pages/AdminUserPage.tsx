@@ -116,56 +116,62 @@ export const AdminUserPage = () => {
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {(users?.results || []).map((user: any) => (
-                            <TableRow key={user.id}>
-                                <TableCell>
-                                    <div className="flex items-center gap-3">
-                                        <div className="h-10 w-10 rounded-full bg-slate-100 flex items-center justify-center font-bold text-slate-600 border border-slate-200">
-                                            {user.first_name[0]?.toUpperCase()}
+                        {(users?.results || []).map((user: any) => {
+                            const initial = (user.first_name?.[0] || user.username?.[0] || 'U').toUpperCase();
+                            const fullName = `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.username || 'User';
+
+                            return (
+                                <TableRow key={user.id}>
+                                    <TableCell>
+                                        <div className="flex items-center gap-3">
+                                            <div className="h-10 w-10 rounded-full bg-slate-100 flex items-center justify-center font-bold text-slate-600 border border-slate-200">
+                                                {initial}
+                                            </div>
+                                            <div>
+                                                <p className="font-bold text-slate-900">{fullName}</p>
+                                                <p className="text-xs text-slate-400">@{user.username}</p>
+                                            </div>
                                         </div>
+                                    </TableCell>
+                                    <TableCell>
                                         <div>
-                                            <p className="font-bold text-slate-900">{user.first_name} {user.last_name}</p>
+                                            <p className="font-bold text-slate-900">{user.email}</p>
                                         </div>
-                                    </div>
-                                </TableCell>
-                                <TableCell>
-                                    <div>
-                                        <p className="font-bold text-slate-900">{user.email}</p>
-                                    </div>
-                                </TableCell>
-                                <TableCell>
-                                    <Badge variant="secondary" className="font-bold tracking-tight">
-                                        {user.role_name}
-                                    </Badge>
-                                </TableCell>
-                                <TableCell>
-                                    <div className="flex items-center gap-1.5 text-slate-600">
-                                        <span className="text-sm font-medium">{user.division || '-'}</span>
-                                    </div>
-                                </TableCell>
-                                <TableCell>
-                                    <div className="flex items-center gap-1.5 text-slate-600">
-                                        <Building size={14} className="text-slate-400" />
-                                        <span className="text-sm font-medium">{user.department || '-'}</span>
-                                    </div>
-                                </TableCell>
-                                <TableCell>
-                                    <Badge variant={user.is_active ? 'success' : 'secondary'}>
-                                        {user.is_active ? 'Active' : 'Inactive'}
-                                    </Badge>
-                                </TableCell>
-                                <TableCell className="text-right">
-                                    <div className="flex justify-end gap-1">
-                                        <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-blue-600" onClick={() => { setEditingUser(user); setIsAdding(true); }}>
-                                            <Edit2 size={16} />
-                                        </Button>
-                                        <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-red-600">
-                                            <Trash2 size={16} />
-                                        </Button>
-                                    </div>
-                                </TableCell>
-                            </TableRow>
-                        ))}
+                                    </TableCell>
+                                    <TableCell>
+                                        <Badge variant="secondary" className="font-bold tracking-tight">
+                                            {user.role_name || 'No Role'}
+                                        </Badge>
+                                    </TableCell>
+                                    <TableCell>
+                                        <div className="flex items-center gap-1.5 text-slate-600">
+                                            <span className="text-sm font-medium">{user.division_name || user.division || '-'}</span>
+                                        </div>
+                                    </TableCell>
+                                    <TableCell>
+                                        <div className="flex items-center gap-1.5 text-slate-600">
+                                            <Building size={14} className="text-slate-400" />
+                                            <span className="text-sm font-medium">{user.department || '-'}</span>
+                                        </div>
+                                    </TableCell>
+                                    <TableCell>
+                                        <Badge variant={user.is_active ? 'success' : 'secondary'}>
+                                            {user.is_active ? 'Active' : 'Inactive'}
+                                        </Badge>
+                                    </TableCell>
+                                    <TableCell className="text-right">
+                                        <div className="flex justify-end gap-1">
+                                            <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-blue-600" onClick={() => { setEditingUser(user); setIsAdding(true); }}>
+                                                <Edit2 size={16} />
+                                            </Button>
+                                            <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-red-600">
+                                                <Trash2 size={16} />
+                                            </Button>
+                                        </div>
+                                    </TableCell>
+                                </TableRow>
+                            );
+                        })}
                     </TableBody>
                 </Table>
             </Card>

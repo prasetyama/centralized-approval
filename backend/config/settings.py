@@ -43,6 +43,7 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'auth_sso.middleware.JWTAuthMiddleware',
+    'core.middleware.APIAuditMiddleware',
 ]
 
 ROOT_URLCONF = 'config.urls'
@@ -130,19 +131,19 @@ REST_FRAMEWORK = {
 
 # JWT Settings
 JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY')
-JWT_EXPIRATION_HOURS = int(os.getenv('JWT_EXPIRATION_HOURS'))
+JWT_EXPIRATION_HOURS = int(os.getenv('JWT_EXPIRATION_HOURS', 24))
 
 # Frontend URL
 FRONTEND_URL = os.getenv('FRONTEND_URL')
 
 LOGS_DIR = os.path.join(BASE_DIR, 'logs')
 if not os.path.exists(LOGS_DIR):
-    os.makedirs(LOGS_DIR)
+    os.makedirs(LOGS_DIR, exist_ok=True)
 
 # ─── Email / SMTP ────────────────────────────────────────────────────────────
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = os.getenv('EMAIL_HOST')
-EMAIL_PORT = int(os.getenv('EMAIL_PORT'))
+EMAIL_PORT = int(os.getenv('EMAIL_PORT', 587))
 EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'False').lower() in ('true', '1', 'yes')
 EMAIL_USE_SSL = os.getenv('EMAIL_USE_SSL', 'False').lower() in ('true', '1', 'yes')
 EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER')
@@ -155,7 +156,12 @@ LOGGING = {
     'disable_existing_loggers': False,
     'formatters': {
         'verbose': {
-            'format': '[{levelname}] {asctime} {name}: {message}',
+            'format': '[{asctime}] [{levelname}] [{name}:{lineno}] {message}',
+            'style': '{',
+            'datefmt': '%Y-%m-%d %H:%M:%S',
+        },
+        'simple': {
+            'format': '[{levelname}] {message}',
             'style': '{',
         },
     },
@@ -165,28 +171,58 @@ LOGGING = {
             'class': 'logging.StreamHandler',
             'formatter': 'verbose',
         },
-        'logs': {
+        'app_file': {
             'level': 'INFO',
             'class': 'logging.handlers.RotatingFileHandler',
-            'filename': os.path.join(LOGS_DIR, 'log.log'),
-            'maxBytes': 1024 * 1024 * 5,
-            'backupCount': 5,
+            'filename': os.path.join(LOGS_DIR, 'app.log'),
+            'maxBytes': 10 * 1024 * 1024,
+            'backupCount': 10,
+            'formatter': 'verbose',
+        },
+        'error_file': {
+            'level': 'ERROR',
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': os.path.join(LOGS_DIR, 'error.log'),
+            'maxBytes': 10 * 1024 * 1024,
+            'backupCount': 10,
+            'formatter': 'verbose',
+        },
+        'request_file': {
+            'level': 'INFO',
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': os.path.join(LOGS_DIR, 'request.log'),
+            'maxBytes': 10 * 1024 * 1024,
+            'backupCount': 10,
             'formatter': 'verbose',
         },
     },
     'loggers': {
-        'core.email_service': {
-            'handlers': ['console', 'logs'],
+        '': {
+            'handlers': ['console', 'app_file', 'error_file'],
+            'level': 'INFO',
+        },
+        'django': {
+            'handlers': ['console', 'app_file', 'error_file'],
             'level': 'INFO',
             'propagate': False,
         },
-        'core.views': {
-            'handlers': ['console', 'logs'],
+        'django.request': {
+            'handlers': ['console', 'app_file', 'error_file'],
+            'level': 'ERROR',
+            'propagate': False,
+        },
+        'core': {
+            'handlers': ['console', 'app_file', 'error_file'],
             'level': 'INFO',
             'propagate': False,
         },
-        'core.engine': {
-            'handlers': ['console', 'logs'],
+        'core.middleware': {
+            'handlers': ['console', 'request_file', 'error_file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'auth_sso': {
+            'handlers': ['console', 'app_file', 'error_file'],
             'level': 'INFO',
             'propagate': False,
         },

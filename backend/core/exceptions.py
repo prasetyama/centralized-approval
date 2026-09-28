@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 def custom_exception_handler(exc, context):
     """
-    Custom exception handler that wraps all errors in a consistent format.
+    Custom exception handler that wraps all errors in a consistent format and logs errors.
 
     Response format:
     {
@@ -25,26 +25,48 @@ def custom_exception_handler(exc, context):
         }
     }
     """
+    request = context.get('request')
+    path = request.path if request else 'Unknown'
+    method = request.method if request else 'Unknown'
+    user = getattr(request, 'user', 'Anonymous') if request else 'Unknown'
+
     response = exception_handler(exc, context)
 
     if response is not None:
+        error_msg = _extract_message(response.data)
+        if response.status_code >= 500:
+            logger.error(
+                "API Server Error [%d] on %s %s [User: %s]: %s",
+                response.status_code, method, path, user, error_msg,
+                exc_info=exc
+            )
+        else:
+            logger.warning(
+                "API Client Error [%d] on %s %s [User: %s]: %s",
+                response.status_code, method, path, user, error_msg
+            )
+
         error_data = {
             'success': False,
             'error': {
                 'code': _get_error_code(response.status_code),
-                'message': _extract_message(response.data),
+                'message': error_msg,
                 'details': response.data if isinstance(response.data, dict) else None,
             }
         }
         response.data = error_data
     else:
         # Unhandled exception
-        logger.error("Unhandled API Exception:", exc_info=exc)
+        logger.error(
+            "Unhandled API Exception on %s %s [User: %s]: %s",
+            method, path, user, str(exc),
+            exc_info=exc
+        )
         error_data = {
             'success': False,
             'error': {
                 'code': 'INTERNAL_SERVER_ERROR',
-                'message': 'An unexpected error occurred.',
+                'message': f"An unexpected error occurred: {str(exc)}",
                 'details': None,
             }
         }
