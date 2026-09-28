@@ -80,17 +80,31 @@ class UserListSerializer(serializers.ModelSerializer):
             'is_superuser', 'is_staff',
         ]
 
+    def _get_user_role_tuple(self, obj):
+        """
+        Safely fetch the primary user role info, catching Role.DoesNotExist if
+        the UserRole title/code does not exist in the Role table.
+        """
+        try:
+            for ur in obj.user_roles.all():
+                try:
+                    if ur.role:
+                        return (ur.role.id, ur.role.name, ur.role.code)
+                except Exception:
+                    role_str = getattr(ur, 'role_id', None) or 'Unknown'
+                    return (None, str(role_str), str(role_str))
+        except Exception:
+            pass
+        return (None, None, None)
+
     def get_role(self, obj):
-        ur = obj.user_roles.first()
-        return ur.role.id if ur and ur.role else None
+        return self._get_user_role_tuple(obj)[0]
 
     def get_role_name(self, obj):
-        ur = obj.user_roles.first()
-        return ur.role.name if ur and ur.role else None
+        return self._get_user_role_tuple(obj)[1]
 
     def get_role_code(self, obj):
-        ur = obj.user_roles.first()
-        return ur.role.code if ur and ur.role else None
+        return self._get_user_role_tuple(obj)[2]
 
     def get_division_name(self, obj):
         """Look up division name by its code string safely."""
@@ -122,28 +136,66 @@ class UserDetailSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['date_joined']
 
+    def _get_user_role_obj(self, obj):
+        try:
+            for ur in obj.user_roles.all():
+                try:
+                    if ur.role:
+                        return ur.role
+                except Exception:
+                    pass
+        except Exception:
+            pass
+        return None
+
     def get_role_details(self, obj):
-        ur = obj.user_roles.first()
-        return RoleSerializer(ur.role).data if ur and ur.role else None
+        role = self._get_user_role_obj(obj)
+        return RoleSerializer(role).data if role else None
 
     def get_role_name(self, obj):
-        ur = obj.user_roles.first()
-        return ur.role.name if ur and ur.role else None
+        role = self._get_user_role_obj(obj)
+        if role:
+            return role.name
+        # Fallback to UserRole role_id string if missing in Role table
+        try:
+            ur = obj.user_roles.first()
+            return getattr(ur, 'role_id', None)
+        except Exception:
+            return None
 
     def get_role_code(self, obj):
-        ur = obj.user_roles.first()
-        return ur.role.code if ur and ur.role else None
+        role = self._get_user_role_obj(obj)
+        if role:
+            return role.code
+        try:
+            ur = obj.user_roles.first()
+            return getattr(ur, 'role_id', None)
+        except Exception:
+            return None
 
     def get_roles(self, obj):
-        return [
-            {
-                "id": ur.role.id,
-                "name": ur.role.name,
-                "code": ur.role.code
-            }
-            for ur in obj.user_roles.all()
-            if ur and ur.role
-        ]
+        roles = []
+        try:
+            for ur in obj.user_roles.all():
+                try:
+                    r = ur.role
+                    if r:
+                        roles.append({
+                            "id": r.id,
+                            "name": r.name,
+                            "code": r.code
+                        })
+                except Exception:
+                    role_str = getattr(ur, 'role_id', None)
+                    if role_str:
+                        roles.append({
+                            "id": None,
+                            "name": str(role_str),
+                            "code": str(role_str)
+                        })
+        except Exception:
+            pass
+        return roles
 
     def get_division_details(self, obj):
         """Look up full division details by its code string safely."""

@@ -94,7 +94,13 @@ class UserRole(models.Model):
         unique_together = ['user', 'role']
 
     def __str__(self):
-        return f"{self.user.username} -> {self.role.name}"
+        try:
+            role_name = self.role.name if self.role else self.role_id
+        except Exception:
+            role_name = getattr(self, 'role_id', 'Unknown')
+        user_name = getattr(self, 'user', None)
+        username = user_name.username if user_name else 'Unknown'
+        return f"{username} -> {role_name}"
 
 
 class Module(models.Model):
