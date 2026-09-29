@@ -8,6 +8,7 @@ All approval logic is centralized here — modules should NOT implement their ow
 import json
 import urllib.request
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 from django.conf import settings
 from rest_framework.exceptions import ValidationError
@@ -15,7 +16,7 @@ import logging
 
 from core.models import (
     Module, WorkflowDefinition, WorkflowStepDefinition,
-    ApprovalRequest, ApprovalStep, AuditLog, User, Division,
+    ApprovalRequest, ApprovalStep, AuditLog, User, Division, Department,
     Brand, RequestWatcher
 )
 from core.state_machine import can_transition
@@ -339,11 +340,39 @@ class WorkflowEngine:
                     # Fallback to standard role assignment if the payload key is missing
                     pass
             
-            # 2. Fallback to standard logic if not brand-conditional or brand assignee not found
+            # 2. Dynamic step resolution for REQ_DEPT_HEAD, FINANCE_DEPT_HEAD, TARGET_DEPT_ROLE, USER, or ROLE
             if assignee is None:
                 if step_def.approver_type == WorkflowStepDefinition.ApproverType.USER:
-                    # Direct user assignment
                     assignee = step_def.user_required
+                elif step_def.approver_type == WorkflowStepDefinition.ApproverType.REQ_DEPT_HEAD:
+                    # Dynamically resolve Requestor Department Head
+                    if requester.department_ref and requester.department_ref.dept_head:
+                        assignee = requester.department_ref.dept_head
+                    elif requester.department:
+                        dept = Department.objects.filter(Q(code=requester.department) | Q(name=requester.department)).first()
+                        if dept and dept.dept_head:
+                            assignee = dept.dept_head
+                        else:
+                            assignee = User.objects.filter(
+                                department=requester.department, is_active=True, is_approver=True
+                            ).first()
+                elif step_def.approver_type == WorkflowStepDefinition.ApproverType.FINANCE_DEPT_HEAD:
+                    # Dynamically resolve Finance Department Head / Officer
+                    fin_dept = Department.objects.filter(Q(code='DEPT_FIN') | Q(name__icontains='Finance')).first()
+                    if fin_dept and fin_dept.dept_head:
+                        assignee = fin_dept.dept_head
+                    else:
+                        assignee = User.objects.filter(
+                            Q(department__icontains='Finance') | Q(user_roles__role__code__icontains='FINANCE'),
+                            is_active=True, is_approver=True
+                        ).first()
+                elif step_def.approver_type == WorkflowStepDefinition.ApproverType.TARGET_DEPT_ROLE:
+                    if step_def.target_department and step_def.role_required:
+                        assignee = User.objects.filter(
+                            department_ref=step_def.target_department,
+                            user_roles__role=step_def.role_required,
+                            is_active=True, is_approver=True
+                        ).first()
                 else:
                     # Role-based assignment: Auto-assign to first user with the required role and matching division
                     assignee_qs = User.objects.filter(
@@ -351,7 +380,6 @@ class WorkflowEngine:
                     )
                     
                     if division_id:
-                        # User.division is a CharField, filter by the code string directly
                         assignee_qs = assignee_qs.filter(division=division_id)
                         
                     assignee = assignee_qs.first()
@@ -376,6 +404,8 @@ class WorkflowEngine:
                     assigned_to=assignee,
                     role_required=step_def.role_required,
                     user_required=step_def.user_required,
+                    target_department=step_def.target_department,
+                    required_inputs=step_def.required_inputs,
                     status=step_status,
                 )
 
@@ -438,7 +468,7 @@ class WorkflowEngine:
 
     @staticmethod
     @transaction.atomic
-    def approve_step(request_id, approver, comments='', ip_address=None, dlvdate=None):
+    def approve_step(request_id, approver, comments='', ip_address=None, dlvdate=None, step_data=None):
         """
         Approve the current step of an approval request.
         If this is the final step, the entire request is marked as APPROVED.
@@ -450,6 +480,7 @@ class WorkflowEngine:
             comments (str): Optional approval comments.
             ip_address (str): IP address of the approver.
             dlvdate (str): Optional delivery date provided during approval.
+            step_data (dict): Optional metadata entered by approver (e.g., PO Number & Quotation).
 
         Returns:
             ApprovalRequest: The updated approval request.
@@ -480,18 +511,28 @@ class WorkflowEngine:
         # Verify the approver is authorized
         is_authorized = False
         
-        # 1. Check if user is specifically required/assigned
-        if current_step.user_required:
-            if current_step.user_required == approver:
+        # Superuser master override
+        if approver.is_superuser:
+            is_authorized = True
+        elif current_step.assigned_to and current_step.assigned_to == approver:
+            is_authorized = True
+        elif current_step.user_required and current_step.user_required == approver:
+            is_authorized = True
+        elif current_step.approver_type == WorkflowStepDefinition.ApproverType.REQ_DEPT_HEAD:
+            req_dept = approval_request.requester.department
+            if approver.department == req_dept and (approver.is_approver or approver.user_roles.filter(role__code__in=['MGR', 'DEPT_HEAD']).exists()):
                 is_authorized = True
-        elif current_step.assigned_to:
-            if current_step.assigned_to == approver:
+            elif approver.headed_departments.filter(Q(code=req_dept) | Q(name=req_dept)).exists():
                 is_authorized = True
-        
-        # 2. Check if user has the required role (unless specifically assigned to someone else)
-        if not is_authorized and current_step.role_required:
+        elif current_step.approver_type == WorkflowStepDefinition.ApproverType.FINANCE_DEPT_HEAD:
+            if 'finance' in (approver.department or '').lower() or approver.user_roles.filter(role__code__icontains='FINANCE').exists():
+                is_authorized = True
+        elif current_step.approver_type == WorkflowStepDefinition.ApproverType.TARGET_DEPT_ROLE:
+            if current_step.target_department and approver.department_ref == current_step.target_department:
+                if not current_step.role_required or approver.user_roles.filter(role=current_step.role_required).exists():
+                    is_authorized = True
+        elif current_step.role_required:
             if approver.user_roles.filter(role=current_step.role_required).exists():
-                # Role matches, now check division if necessary
                 if not approval_request.division or approver.division == approval_request.division:
                     is_authorized = True
                 else:
@@ -500,18 +541,35 @@ class WorkflowEngine:
         if not is_authorized:
             raise ValidationError("You are not authorized to approve this step.")
 
+        # Validate required_inputs if defined for this step
+        if current_step.required_inputs:
+            step_data = step_data or {}
+            missing_fields = []
+            for field in current_step.required_inputs:
+                field_key = field.get('key') if isinstance(field, dict) else field
+                if not step_data.get(field_key):
+                    field_label = field.get('label', field_key) if isinstance(field, dict) else field_key
+                    missing_fields.append(str(field_label))
+            if missing_fields:
+                raise ValidationError(f"Data wajib berikut harus diisi sebelum Approve: {', '.join(missing_fields)}")
+
         acted_step = current_step
 
-        if dlvdate:
+        if dlvdate or step_data:
             if not isinstance(approval_request.payload, dict):
                 approval_request.payload = {}
-            approval_request.payload['dlvdate'] = dlvdate
+            if dlvdate:
+                approval_request.payload['dlvdate'] = dlvdate
+            if step_data:
+                approval_request.payload.update(step_data)
             approval_request.save(update_fields=['payload', 'updated_at'])
 
         # Approve the current step
         current_step.status = ApprovalStep.StepStatus.APPROVED
         current_step.assigned_to = approver
         current_step.comments = comments
+        if step_data:
+            current_step.step_data = step_data
         current_step.acted_at = timezone.now()
         current_step.save()
 

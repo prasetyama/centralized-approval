@@ -29,6 +29,32 @@ class Division(models.Model):
         return f"{self.name} ({self.code})"
 
 
+class Department(models.Model):
+    """
+    Department structure used for contextual and organizational approval routing.
+    """
+    name = models.CharField(max_length=100, unique=True, help_text="Department name (e.g., 'Finance', 'Marketing', 'Procurement')")
+    code = models.CharField(max_length=50, unique=True, help_text="Unique code (e.g., 'DEPT_FIN', 'DEPT_MKT')")
+    dept_head = models.ForeignKey(
+        'User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='headed_departments',
+        help_text="User designated as the Head of this Department"
+    )
+    description = models.TextField(blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'aw_department'
+        ordering = ['name']
+
+    def __str__(self):
+        return f"{self.name} ({self.code})"
+
+
 class Role(models.Model):
     """
     User roles for approval routing.
@@ -57,6 +83,14 @@ class User(AbstractUser):
     email = models.EmailField(unique=True)
     division = models.CharField(max_length=50, blank=True, default='')
     department = models.CharField(max_length=100, blank=True, default='')
+    department_ref = models.ForeignKey(
+        Department,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='department_users',
+        help_text="Linked Department instance"
+    )
     phone = models.CharField(max_length=20, blank=True, default='')
     is_approver = models.BooleanField(default=False, help_text="Whether this user can approve requests")
 
@@ -66,6 +100,7 @@ class User(AbstractUser):
 
     def __str__(self):
         return f"{self.get_full_name() or self.username}"
+
 
 
 class UserRole(models.Model):
@@ -235,6 +270,9 @@ class WorkflowStepDefinition(models.Model):
     class ApproverType(models.TextChoices):
         ROLE = 'ROLE', 'Role-based'
         USER = 'USER', 'Specific User'
+        REQ_DEPT_HEAD = 'REQ_DEPT_HEAD', 'Requestor Dept Head'
+        FINANCE_DEPT_HEAD = 'FINANCE_DEPT_HEAD', 'Finance Dept Head / Team'
+        TARGET_DEPT_ROLE = 'TARGET_DEPT_ROLE', 'Target Dept Role'
 
     workflow = models.ForeignKey(
         WorkflowDefinition,
@@ -246,12 +284,21 @@ class WorkflowStepDefinition(models.Model):
     name = models.CharField(max_length=200, help_text="Step name (e.g., 'Manager Review')")
     
     approver_type = models.CharField(
-        max_length=10,
+        max_length=30,
         choices=ApproverType.choices,
         default=ApproverType.ROLE,
-        help_text="Whether to assign by role or a specific user"
+        help_text="Approver designation type"
     )
     
+    target_department = models.ForeignKey(
+        'Department',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='step_definitions',
+        help_text="Target department for TARGET_DEPT_ROLE step"
+    )
+
     role_required = models.ForeignKey(
         Role,
         on_delete=models.PROTECT,
@@ -267,6 +314,11 @@ class WorkflowStepDefinition(models.Model):
         null=True,
         blank=True,
         help_text="Specific user required to approve this step (if type is USER)"
+    )
+    required_inputs = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="List of required input field keys approver must fill (e.g. ['po_number', 'quotation'])"
     )
     is_brand_conditional = models.BooleanField(default=False, help_text="If true, uses Brand-Specific Approval logic")
     master_workflow_criteria = models.ForeignKey(
@@ -298,6 +350,8 @@ class WorkflowStepDefinition(models.Model):
             raise ValidationError("role_required was not provided for ROLE-based step.")
         if self.approver_type == self.ApproverType.USER and not self.user_required:
             raise ValidationError("user_required was not provided for USER-based step.")
+        if self.approver_type == self.ApproverType.TARGET_DEPT_ROLE and not self.target_department:
+            raise ValidationError("target_department was not provided for TARGET_DEPT_ROLE step.")
 
     def save(self, *args, **kwargs):
         self.full_clean()
@@ -306,8 +360,10 @@ class WorkflowStepDefinition(models.Model):
     def __str__(self):
         if self.approver_type == self.ApproverType.ROLE:
             approver = self.role_required.code if self.role_required else "No Role"
-        else:
+        elif self.approver_type == self.ApproverType.USER:
             approver = self.user_required.username if self.user_required else "No User"
+        else:
+            approver = self.approver_type
         return f"Step {self.step_order}: {self.name} ({approver})"
 
 
@@ -450,12 +506,19 @@ class ApprovalStep(models.Model):
     name = models.CharField(max_length=200)
     
     approver_type = models.CharField(
-        max_length=10,
+        max_length=30,
         choices=WorkflowStepDefinition.ApproverType.choices,
         default=WorkflowStepDefinition.ApproverType.ROLE,
-        help_text="Whether this step was assigned by role or specific user"
+        help_text="Whether this step was assigned by role, user, dept head, or finance"
     )
 
+    target_department = models.ForeignKey(
+        'Department',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='assigned_approval_steps'
+    )
     assigned_to = models.ForeignKey(
         User,
         on_delete=models.SET_NULL,
@@ -479,6 +542,16 @@ class ApprovalStep(models.Model):
         null=True,
         blank=True,
         help_text="Specific user required for this step"
+    )
+    required_inputs = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Required input keys approver must fill (e.g. ['po_number', 'quotation'])"
+    )
+    step_data = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Data entered by approver during step execution (e.g., PO Number & Quotation)"
     )
     status = models.CharField(
         max_length=20,

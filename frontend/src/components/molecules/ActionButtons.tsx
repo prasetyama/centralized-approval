@@ -6,42 +6,75 @@ import { cn } from '@/lib/utils';
 
 interface ActionButtonsProps {
     requestId?: number;
-    onApprove: (comments: string, dlvdate?: string) => Promise<void>;
+    onApprove: (comments: string, dlvdate?: string, step_data?: Record<string, any>) => Promise<void>;
     onReject: (comments: string) => Promise<void>;
     isLoading: boolean;
     canAction: boolean;
     isWatcher?: boolean;
     showDlvDateForm?: boolean;
+    requiredInputs?: any[];
 }
 
-export const ActionButtons = ({ onApprove, onReject, isLoading, canAction, isWatcher, showDlvDateForm }: ActionButtonsProps) => {
+export const ActionButtons = ({ onApprove, onReject, isLoading, canAction, isWatcher, showDlvDateForm, requiredInputs }: ActionButtonsProps) => {
     const [showModal, setShowModal] = useState<'APPROVE' | 'REJECT' | null>(null);
     const [comments, setComments] = useState('');
     const [dlvdate, setDlvdate] = useState('');
+    const [poNumber, setPoNumber] = useState('');
+    const [quotation, setQuotation] = useState('');
     const [error, setError] = useState<string | null>(null);
     const [dlvDateError, setDlvDateError] = useState<string | null>(null);
+    const [poError, setPoError] = useState<string | null>(null);
+    const [quotationError, setQuotationError] = useState<string | null>(null);
+
+    const requiresPo = requiredInputs?.some((i: any) => (typeof i === 'string' ? i : i.key) === 'po_number');
+    const requiresQuotation = requiredInputs?.some((i: any) => (typeof i === 'string' ? i : i.key) === 'quotation');
 
     const handleAction = async () => {
         if (!showModal) return;
 
-        if (!comments.trim()) {
-            setError('Comments are required');
-            return;
-        }
+        let hasError = false;
 
         if (showModal === 'APPROVE' && showDlvDateForm && !dlvdate.trim()) {
             setDlvDateError('Delivery Date is required for urgent orders');
-            return;
+            hasError = true;
         }
+
+        if (showModal === 'APPROVE') {
+            if (requiresPo && !poNumber.trim()) {
+                setPoError('PO Number wajib diisi');
+                hasError = true;
+            }
+            if (requiresQuotation && !quotation.trim()) {
+                setQuotationError('Quotation wajib diisi');
+                hasError = true;
+            }
+        }
+
+        if (hasError) return;
 
         try {
             setError(null);
             setDlvDateError(null);
-            if (showModal === 'APPROVE') await onApprove(comments, showDlvDateForm ? dlvdate : undefined);
+            setPoError(null);
+            setQuotationError(null);
+
+            const stepData: Record<string, any> = {};
+            if (poNumber.trim()) stepData.po_number = poNumber.trim();
+            if (quotation.trim()) stepData.quotation = quotation.trim();
+
+            if (showModal === 'APPROVE') {
+                await onApprove(
+                    comments, 
+                    showDlvDateForm ? dlvdate : undefined, 
+                    Object.keys(stepData).length > 0 ? stepData : undefined
+                );
+            }
             if (showModal === 'REJECT') await onReject(comments);
             setShowModal(null);
             setComments('');
             setDlvdate('');
+            setPoNumber('');
+            setQuotation('');
         } catch (error) {
             console.error('Action failed:', error);
         }
@@ -88,8 +121,56 @@ export const ActionButtons = ({ onApprove, onReject, isLoading, canAction, isWat
                             </div>
 
                             <p className="text-sm text-slate-500 font-medium leading-relaxed">
-                                You are about to {showModal.toLowerCase()} this request. Please provide any comments or feedback for the requester.
+                                You are about to {showModal.toLowerCase()} this request. Please provide any required information or comments.
                             </p>
+
+                            {showModal === 'APPROVE' && requiresPo && (
+                                <div className="space-y-1">
+                                    <div className="flex justify-between items-center">
+                                        <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                                            PO Number <span className="text-red-500">*</span>
+                                        </label>
+                                        {poError && <span className="text-[10px] font-bold text-red-500 uppercase">{poError}</span>}
+                                    </div>
+                                    <input
+                                        type="text"
+                                        placeholder="Contoh: PO-2026/09/00142"
+                                        className={cn(
+                                            "w-full rounded-xl border p-3 text-sm transition-all focus:outline-none focus:ring-4",
+                                            poError ? "border-red-300 bg-red-50/30" : "border-slate-200 bg-slate-50 focus:bg-white"
+                                        )}
+                                        value={poNumber}
+                                        onChange={(e) => {
+                                            setPoNumber(e.target.value);
+                                            if (e.target.value.trim()) setPoError(null);
+                                        }}
+                                    />
+                                </div>
+                            )}
+
+                            {showModal === 'APPROVE' && requiresQuotation && (
+                                <div className="space-y-1">
+                                    <div className="flex justify-between items-center">
+                                        <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                                            Quotation / Ref Penawaran <span className="text-red-500">*</span>
+                                        </label>
+                                        {quotationError && <span className="text-[10px] font-bold text-red-500 uppercase">{quotationError}</span>}
+                                    </div>
+                                    <input
+                                        type="text"
+                                        placeholder="Contoh: QUO-VENDOR-88912"
+                                        className={cn(
+                                            "w-full rounded-xl border p-3 text-sm transition-all focus:outline-none focus:ring-4",
+                                            quotationError ? "border-red-300 bg-red-50/30" : "border-slate-200 bg-slate-50 focus:bg-white"
+                                        )}
+                                        value={quotation}
+                                        onChange={(e) => {
+                                            setQuotation(e.target.value);
+                                            if (e.target.value.trim()) setQuotationError(null);
+                                        }}
+                                    />
+                                </div>
+                            )}
 
                             {showModal === 'APPROVE' && showDlvDateForm && (
                                 <div className="space-y-2">

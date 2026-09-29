@@ -6,10 +6,19 @@ DRF serializers for all core models.
 from rest_framework import serializers
 from core.models import (
     Module, Role, User, WorkflowDefinition, WorkflowStepDefinition,
-    ApprovalRequest, ApprovalStep, AuditLog, Division, RequestFeedback,
+    ApprovalRequest, ApprovalStep, AuditLog, Division, Department, RequestFeedback,
     Brand, UserBrand, MasterWorkflowCriteria, RequestWatcher, ModuleVariable,
     UserRole, CCEmailConfig
 )
+
+
+class DepartmentSerializer(serializers.ModelSerializer):
+    """Serializer for Department model."""
+    dept_head_name = serializers.CharField(source='dept_head.get_full_name', read_only=True)
+    class Meta:
+        model = Department
+        fields = ['id', 'name', 'code', 'dept_head', 'dept_head_name', 'description', 'created_at', 'updated_at']
+        read_only_fields = ['created_at', 'updated_at']
 
 
 class DivisionSerializer(serializers.ModelSerializer):
@@ -274,6 +283,7 @@ class WorkflowStepDefinitionSerializer(serializers.ModelSerializer):
     role_name = serializers.CharField(source='role_required.name', read_only=True)
     user_name = serializers.SerializerMethodField()
     role_users = serializers.SerializerMethodField()
+    target_department_name = serializers.CharField(source='target_department.name', read_only=True)
     master_workflow_criteria_key_param_json = serializers.CharField(source='master_workflow_criteria.key_param_json', read_only=True)
 
     class Meta:
@@ -281,6 +291,7 @@ class WorkflowStepDefinitionSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'step_order', 'name', 'approver_type', 
             'role_required', 'role_name', 'user_required', 'user_name', 
+            'target_department', 'target_department_name', 'required_inputs',
             'is_brand_conditional', 'master_workflow_criteria', 'master_workflow_criteria_key_param_json', 
             'is_optional', 'conditions', 'role_users'
         ]
@@ -357,12 +368,14 @@ class ApprovalStepSerializer(serializers.ModelSerializer):
     role_name = serializers.CharField(source='role_required.name', read_only=True)
     user_required_name = serializers.SerializerMethodField()
     user_required_email = serializers.CharField(source='user_required.email', read_only=True)
- 
+    target_department_name = serializers.CharField(source='target_department.name', read_only=True)
+
     class Meta:
         model = ApprovalStep
         fields = [
             'id', 'step_order', 'name', 'approver_type', 'assigned_to', 'assigned_to_name', 'assigned_to_email',
             'role_required', 'role_name', 'user_required', 'user_required_name', 'user_required_email',
+            'target_department', 'target_department_name', 'required_inputs', 'step_data',
             'status', 'comments', 'acted_at',
         ]
  
@@ -529,6 +542,9 @@ class ActionSerializer(serializers.Serializer):
     comments = serializers.CharField(required=False, default='', allow_blank=True)
     dlvdate = serializers.CharField(required=False, default='', allow_blank=True, allow_null=True)
     dlv_date = serializers.CharField(required=False, default='', allow_blank=True, allow_null=True)
+    step_data = serializers.JSONField(required=False, default=dict)
+    po_number = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    quotation = serializers.CharField(required=False, allow_blank=True, allow_null=True)
 
 
 class DelegateRequestSerializer(serializers.Serializer):

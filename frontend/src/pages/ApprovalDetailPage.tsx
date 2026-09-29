@@ -37,8 +37,8 @@ export const ApprovalDetailPage = () => {
     });
 
     const actionMutation = useMutation({
-        mutationFn: ({ action, comments, dlvdate }: { action: string, comments: string, dlvdate?: string }) =>
-            api.post(`/workflow/${id}/${action}`, { comments, dlvdate }),
+        mutationFn: ({ action, comments, dlvdate, step_data }: { action: string, comments: string, dlvdate?: string, step_data?: Record<string, any> }) =>
+            api.post(`/workflow/${id}/${action}`, { comments, dlvdate, step_data, ...(step_data || {}) }),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['workflow-detail', id] });
             queryClient.invalidateQueries({ queryKey: ['inbox'] });
@@ -341,12 +341,13 @@ export const ApprovalDetailPage = () => {
                     </Card>
 
                     <ActionButtons
-                        onApprove={async (comments, dlvdate) => { await actionMutation.mutateAsync({ action: 'approve', comments, dlvdate }); }}
+                        onApprove={async (comments, dlvdate, step_data) => { await actionMutation.mutateAsync({ action: 'approve', comments, dlvdate, step_data }); }}
                         onReject={async (comments) => { await actionMutation.mutateAsync({ action: 'reject', comments }); }}
                         isLoading={actionMutation.isPending}
                         canAction={isApprover === true}
                         isWatcher={isWatcher}
                         showDlvDateForm={showDlvDateForm}
+                        requiredInputs={activeStep?.required_inputs || []}
                     />
 
                     {isWatcher && (

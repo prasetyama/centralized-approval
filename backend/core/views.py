@@ -16,7 +16,7 @@ import logging
 
 from core.models import (
     Module, Role, User, WorkflowDefinition, WorkflowStepDefinition,
-    ApprovalRequest, ApprovalStep, AuditLog, Division, RequestFeedback,
+    ApprovalRequest, ApprovalStep, AuditLog, Division, Department, RequestFeedback,
     Brand, UserBrand, MasterWorkflowCriteria, RequestWatcher, ModuleVariable,
     CCEmailConfig
 )
@@ -26,7 +26,7 @@ from core.serializers import (
     WorkflowStepDefinitionSerializer, ApprovalRequestListSerializer,
     ApprovalRequestDetailSerializer, SubmitRequestSerializer,
     ApprovalStepSerializer, AuditLogSerializer, ActionSerializer,
-    DivisionSerializer, DelegateRequestSerializer, RequestFeedbackSerializer,
+    DivisionSerializer, DepartmentSerializer, DelegateRequestSerializer, RequestFeedbackSerializer,
     BrandSerializer, UserBrandSerializer, MasterWorkflowCriteriaSerializer,
     RequestWatcherSerializer, ModuleVariableSerializer, CCEmailConfigSerializer
 )
@@ -191,6 +191,13 @@ class WorkflowApproveView(generics.GenericAPIView):
         serializer.is_valid(raise_exception=True)
 
         dlvdate = serializer.validated_data.get('dlvdate') or serializer.validated_data.get('dlv_date') or None
+        step_data = serializer.validated_data.get('step_data') or {}
+        
+        # Merge individual fields if present
+        if serializer.validated_data.get('po_number'):
+            step_data['po_number'] = serializer.validated_data['po_number']
+        if serializer.validated_data.get('quotation'):
+            step_data['quotation'] = serializer.validated_data['quotation']
 
         try:
             approval_request = WorkflowEngine.approve_step(
@@ -199,6 +206,7 @@ class WorkflowApproveView(generics.GenericAPIView):
                 comments=serializer.validated_data.get('comments', ''),
                 ip_address=_get_client_ip(request),
                 dlvdate=dlvdate,
+                step_data=step_data,
             )
         except Exception as e:
             logging.getLogger(__name__).error(
@@ -692,6 +700,14 @@ def system_logs(request):
 # ─────────────────────────────────────────────
 # Admin CRUD ViewSets
 # ─────────────────────────────────────────────
+
+class DepartmentViewSet(viewsets.ModelViewSet):
+    """CRUD for Departments."""
+    queryset = Department.objects.all()
+    serializer_class = DepartmentSerializer
+    permission_classes = [IsAuthenticated]
+    search_fields = ['name', 'code']
+
 
 class DivisionViewSet(viewsets.ModelViewSet):
     """CRUD for Divisions."""
