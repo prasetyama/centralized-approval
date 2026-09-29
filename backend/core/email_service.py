@@ -294,6 +294,12 @@ def send_eorder_info_cc_notification(payload) -> None:
     inserted_on = payload.get('inserted_on') 
 
     inserted_by = payload.get('inserted_by')
+    order_id = payload.get('order_id')
+    print('order_id', order_id)
+    if order_id:
+        order_url = f"{settings.FRONTEND_URL_EORDER}/order/{order_id}"
+    else:
+        order_url = ""
 
     context = {
         'filename_order_id': filename_order_id,
@@ -305,6 +311,7 @@ def send_eorder_info_cc_notification(payload) -> None:
         'items': items,
         'inserted_on': inserted_on,
         'inserted_by': inserted_by,
+        'order_url': order_url,
     }
 
     subject = f"E-Order Information - {filename_order_id}"
@@ -320,6 +327,7 @@ def send_eorder_info_cc_notification(payload) -> None:
         f"Items\t:\t{items}\n"
         f"Inserted On\t:\t{inserted_on}\n"
         f"Inserted By\t:\t{inserted_by}\n\n"
+        f"See Order Click This Link: {order_url}\n"
     )
 
     try:
@@ -339,6 +347,9 @@ def send_eorder_info_cc_notification(payload) -> None:
             f"<tr><td style='padding: 4px 12px 4px 0; font-weight: bold;'>Inserted On</td><td>:</td><td style='padding-left: 8px;'>{inserted_on}</td></tr>"
             f"<tr><td style='padding: 4px 12px 4px 0; font-weight: bold;'>Inserted By</td><td>:</td><td style='padding-left: 8px;'>{inserted_by}</td></tr>"
             f"</table>"
+            f"<div style='margin-top: 30px; text-align: left;'>"
+            f"<a href='{order_url}' style='display: inline-block; padding: 12px 24px; background-color: #2563eb; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 14px;'>See Order Click This Link</a>"
+            f"</div>"
             f"</div>"
         )
 
