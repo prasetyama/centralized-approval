@@ -12,12 +12,15 @@ from core.views import (
     WatcherListView, WatcherRemoveView,
     InboxView, HistoryView, dashboard_summary,
     ModuleViewSet, RoleViewSet, UserViewSet, DivisionViewSet, DepartmentViewSet,
+    CompanyViewSet, OrganizationStructureViewSet,
     WorkflowDefinitionViewSet, ApprovalRequestViewSet, RequestFeedbackViewSet,
     BrandViewSet, UserBrandViewSet, MasterWorkflowCriteriaViewSet,
     ModuleVariableViewSet, CCEmailConfigViewSet, system_logs
 )
 
 router = DefaultRouter()
+router.register(r'admin/companies', CompanyViewSet, basename='company')
+router.register(r'admin/org-structures', OrganizationStructureViewSet, basename='org-structure')
 router.register(r'admin/departments', DepartmentViewSet, basename='department')
 router.register(r'admin/divisions', DivisionViewSet, basename='division')
 router.register(r'admin/modules', ModuleViewSet, basename='module')

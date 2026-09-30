@@ -47,7 +47,7 @@ export const WorkflowSimulatorPage = () => {
 
     const { data: usersData } = useQuery({
         queryKey: ['users-all'],
-        queryFn: () => api.get('/admin/users', { params: { is_active: true } }) as Promise<any>,
+        queryFn: () => api.get('/admin/users', { params: { is_active: true, page_size: 1000 } }) as Promise<any>,
     });
 
     const users = usersData?.results || [];

@@ -29,6 +29,25 @@ class Division(models.Model):
         return f"{self.name} ({self.code})"
 
 
+class Company(models.Model):
+    """
+    Company / Business Entity model for multi-company support.
+    """
+    name = models.CharField(max_length=150, unique=True, help_text="Company name (e.g., 'PT. Sinar Jaya', 'PT. Global Distribusi')")
+    code = models.CharField(max_length=50, unique=True, help_text="Unique company code (e.g., 'PT_SJ', 'PT_GD')")
+    description = models.TextField(blank=True, default='')
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'aw_company'
+        ordering = ['name']
+
+    def __str__(self):
+        return f"{self.name} ({self.code})"
+
+
 class Department(models.Model):
     """
     Department structure used for contextual and organizational approval routing.
@@ -46,6 +65,12 @@ class Department(models.Model):
     description = models.TextField(blank=True, default='')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name='departments',
+        help_text="Linked Company instance"
+    )
 
     class Meta:
         db_table = 'aw_department'
@@ -82,15 +107,6 @@ class User(AbstractUser):
 
     email = models.EmailField(unique=True)
     division = models.CharField(max_length=50, blank=True, default='')
-    department = models.CharField(max_length=100, blank=True, default='')
-    department_ref = models.ForeignKey(
-        Department,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='department_users',
-        help_text="Linked Department instance"
-    )
     phone = models.CharField(max_length=20, blank=True, default='')
     is_approver = models.BooleanField(default=False, help_text="Whether this user can approve requests")
 
@@ -100,6 +116,62 @@ class User(AbstractUser):
 
     def __str__(self):
         return f"{self.get_full_name() or self.username}"
+
+    @property
+    def department(self):
+        org = self.org_positions.select_related('department').first()
+        return org.department.name if org and org.department else ''
+
+    @property
+    def department_ref(self):
+        org = self.org_positions.select_related('department').first()
+        return org.department if org else None
+
+
+class OrganizationStructure(models.Model):
+    """
+    Master Organization Structure.
+    Maps employees (User) to Company, Department, Position Title, Hierarchy Level, and Direct Reports To (Manager/Head).
+    """
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name='org_structures',
+        help_text="Company this node belongs to"
+    )
+    user = models.ForeignKey(
+        'User',
+        on_delete=models.CASCADE,
+        related_name='org_positions',
+        help_text="Employee user"
+    )
+    department = models.ForeignKey(
+        Department,
+        on_delete=models.CASCADE,
+        related_name='org_structures',
+        help_text="Department within the company"
+    )
+    position_title = models.CharField(max_length=150, help_text="e.g. Staff Marketing, Manager Marketing, Head of Department")
+    level_order = models.PositiveIntegerField(default=1, help_text="Hierarchy level: 1=Staff, 2=Manager, 3=Dept Head, 4=Director")
+    reports_to = models.ForeignKey(
+        'User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='direct_reports',
+        help_text="Direct manager or department head to report to"
+    )
+    is_dept_head = models.BooleanField(default=False, help_text="True if this node is the Department Head")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'aw_organization_structure'
+        unique_together = ['company', 'user', 'department']
+        ordering = ['company', 'department', 'level_order']
+
+    def __str__(self):
+        return f"[{self.company.code}] {self.user.username} - {self.position_title} ({self.department.name})"
 
 
 

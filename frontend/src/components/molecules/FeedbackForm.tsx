@@ -25,7 +25,7 @@ export const FeedbackForm: React.FC<FeedbackFormProps> = ({ onSubmit, isLoading 
 
     const { data: users } = useQuery<any>({
         queryKey: ['admin-users'],
-        queryFn: () => api.get('/admin/users'),
+        queryFn: () => api.get('/admin/users?page_size=1000'),
     });
 
     return (

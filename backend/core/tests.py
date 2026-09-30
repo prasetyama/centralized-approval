@@ -1,3 +1,170 @@
 from django.test import TestCase
+from django.contrib.auth import get_user_model
+from core.models import (
+    Company,
+    Department,
+    OrganizationStructure,
+    Module,
+    WorkflowDefinition,
+    WorkflowStepDefinition,
+    ApprovalRequest,
+    ApprovalStep
+)
+from core.engine import WorkflowEngine
 
-# Create your tests here.
+User = get_user_model()
+
+
+class WorkflowEngineOrgStructureTest(TestCase):
+    def setUp(self):
+        # 1. Create Company and Department
+        self.company = Company.objects.create(code='PTBSJ', name='PT Bintang Sinar Jaya')
+        self.dept = Department.objects.create(company=self.company, code='PROC', name='Procurement & Logistics')
+
+        # 2. Create Users
+        self.staff = User.objects.create_user(
+            username='staff_user',
+            email='staff@test.com',
+            password='password123'
+        )
+        self.manager = User.objects.create_user(
+            username='mgr_user',
+            email='mgr@test.com',
+            password='password123'
+        )
+        self.dept_head = User.objects.create_user(
+            username='dept_head_user',
+            email='dh@test.com',
+            password='password123'
+        )
+        self.finance_user = User.objects.create_user(
+            username='finance_user',
+            email='finance@test.com',
+            password='password123'
+        )
+
+        # 3. Create Org Structure: Staff -> Manager -> Dept Head
+        self.org_dh = OrganizationStructure.objects.create(
+            company=self.company,
+            user=self.dept_head,
+            department=self.dept,
+            position_title='Department Head Procurement',
+            level_order=1,
+            reports_to=None,
+            is_dept_head=True
+        )
+        self.org_mgr = OrganizationStructure.objects.create(
+            company=self.company,
+            user=self.manager,
+            department=self.dept,
+            position_title='Procurement Manager',
+            level_order=2,
+            reports_to=self.dept_head,
+            is_dept_head=False
+        )
+        self.org_staff = OrganizationStructure.objects.create(
+            company=self.company,
+            user=self.staff,
+            department=self.dept,
+            position_title='Procurement Staff',
+            level_order=3,
+            reports_to=self.manager,
+            is_dept_head=False
+        )
+
+        # 4. Create Module & Workflow Definition with REQ_DEPT_HEAD and FINANCE_DEPT_HEAD steps
+        self.module = Module.objects.create(code='EORDER', name='E-Order System')
+        self.workflow = WorkflowDefinition.objects.create(
+            name='PR Approval Workflow',
+            module=self.module,
+            is_active=True
+        )
+
+        self.step_dept = WorkflowStepDefinition.objects.create(
+            workflow=self.workflow,
+            step_order=1,
+            name='Department Approval',
+            approver_type='REQ_DEPT_HEAD'
+        )
+
+        self.step_fin = WorkflowStepDefinition.objects.create(
+            workflow=self.workflow,
+            step_order=2,
+            name='Purchasing Approval',
+            approver_type='FINANCE_DEPT_HEAD',
+            user_required=self.finance_user,
+            required_inputs=['po_number', 'quotation']
+        )
+
+    def test_get_org_approval_chain(self):
+        chain = WorkflowEngine.get_org_approval_chain(self.staff, 'PTBSJ')
+        self.assertEqual(len(chain), 2)
+        self.assertEqual(chain[0]['user'], self.manager)
+        self.assertEqual(chain[1]['user'], self.dept_head)
+
+    def test_submit_request_dynamic_org_expansion(self):
+        payload = {
+            "reference_id": "PR-2026-001",
+            "company_code": "PTBSJ",
+            "total_amount": 15000000
+        }
+        req = WorkflowEngine.submit_request(
+            module_code='EORDER',
+            workflow_id=self.workflow.id,
+            requester=self.staff,
+            title="PR Purchase Test",
+            payload=payload,
+            description="Testing dynamic org expansion"
+        )
+
+        steps = list(req.steps.all().order_by('step_order'))
+        # Should expand REQ_DEPT_HEAD (2 approvers: Manager & Dept Head) + FINANCE_DEPT_HEAD (1 approver) = 3 steps
+        self.assertEqual(len(steps), 3)
+
+        self.assertEqual(steps[0].user_required, self.manager)
+        self.assertEqual(steps[0].status, 'WAITING')
+
+        self.assertEqual(steps[1].user_required, self.dept_head)
+        self.assertEqual(steps[1].status, 'PENDING')
+
+        self.assertEqual(steps[2].user_required, self.finance_user)
+        self.assertEqual(steps[2].status, 'PENDING')
+
+    def test_finance_step_required_inputs(self):
+        payload = {
+            "reference_id": "PR-2026-002",
+            "company_code": "PTBSJ"
+        }
+        req = WorkflowEngine.submit_request(
+            module_code='EORDER',
+            workflow_id=self.workflow.id,
+            requester=self.staff,
+            title="PR Purchasing Inputs Test",
+            payload=payload,
+            description="Testing required inputs on finance step"
+        )
+
+        # Approve Department steps (steps 1 & 2: Manager & Dept Head)
+        for i in range(2):
+            current_step = req.steps.get(step_order=i+1)
+            WorkflowEngine.approve_step(req.id, current_step.user_required, comments=f"Approved step {i+1}")
+
+        fin_step = req.steps.get(step_order=3)
+        self.assertEqual(fin_step.status, 'WAITING')
+
+        # Approve finance step with po_number and quotation
+        step_data = {
+            "po_number": "PO/2026/0099",
+            "quotation": "QUOT-8821"
+        }
+        WorkflowEngine.approve_step(req.id, self.finance_user, comments="PO & Quotation attached", step_data=step_data)
+
+        fin_step.refresh_from_db()
+        self.assertEqual(fin_step.status, 'APPROVED')
+        self.assertEqual(fin_step.step_data, step_data)
+
+        req.refresh_from_db()
+        self.assertEqual(req.status, 'APPROVED')
+        self.assertEqual(req.payload.get('po_number'), 'PO/2026/0099')
+        self.assertEqual(req.payload.get('quotation'), 'QUOT-8821')
+

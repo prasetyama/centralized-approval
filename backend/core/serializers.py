@@ -7,9 +7,45 @@ from rest_framework import serializers
 from core.models import (
     Module, Role, User, WorkflowDefinition, WorkflowStepDefinition,
     ApprovalRequest, ApprovalStep, AuditLog, Division, Department, RequestFeedback,
-    Brand, UserBrand, MasterWorkflowCriteria, RequestWatcher, ModuleVariable,
+    Company, OrganizationStructure, Brand, UserBrand, MasterWorkflowCriteria, RequestWatcher, ModuleVariable,
     UserRole, CCEmailConfig
 )
+
+
+class CompanySerializer(serializers.ModelSerializer):
+    """Serializer for Company model."""
+    class Meta:
+        model = Company
+        fields = ['id', 'name', 'code', 'description', 'is_active', 'created_at', 'updated_at']
+        read_only_fields = ['created_at', 'updated_at']
+
+
+class OrganizationStructureSerializer(serializers.ModelSerializer):
+    """Serializer for OrganizationStructure master table."""
+    company_name = serializers.CharField(source='company.name', read_only=True)
+    company_code = serializers.CharField(source='company.code', read_only=True)
+    user_name = serializers.CharField(source='user.username', read_only=True)
+    user_full_name = serializers.SerializerMethodField()
+    department_name = serializers.CharField(source='department.name', read_only=True)
+    reports_to_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = OrganizationStructure
+        fields = [
+            'id', 'company', 'company_name', 'company_code',
+            'user', 'user_name', 'user_full_name',
+            'department', 'department_name',
+            'position_title', 'level_order',
+            'reports_to', 'reports_to_name', 'is_dept_head',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['created_at', 'updated_at']
+
+    def get_user_full_name(self, obj):
+        return obj.user.get_full_name() or obj.user.username if obj.user else ''
+
+    def get_reports_to_name(self, obj):
+        return obj.reports_to.get_full_name() or obj.reports_to.username if obj.reports_to else ''
 
 
 class DepartmentSerializer(serializers.ModelSerializer):

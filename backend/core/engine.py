@@ -17,7 +17,7 @@ import logging
 from core.models import (
     Module, WorkflowDefinition, WorkflowStepDefinition,
     ApprovalRequest, ApprovalStep, AuditLog, User, Division, Department,
-    Brand, RequestWatcher
+    Company, OrganizationStructure, Brand, RequestWatcher
 )
 from core.state_machine import can_transition
 from core import email_service
@@ -314,91 +314,196 @@ class WorkflowEngine:
             division=division_id, # Store the code string
         )
 
+    @staticmethod
+    def get_org_approval_chain(requester, company_code=None):
+        """
+        Traverse the master OrganizationStructure table to resolve the approval hierarchy chain
+        starting from the requester up to the Department Head / top level manager.
+        Returns a list of dicts: [{'user': User, 'title': str, 'level_order': int, 'is_dept_head': bool}]
+        """
+        chain = []
+        visited = set()
+        current_user = requester
+
+        # Determine company filter
+        company = None
+        if company_code:
+            company = Company.objects.filter(code=company_code).first()
+        if not company and requester:
+            req_org = OrganizationStructure.objects.filter(user=requester).select_related('company').first()
+            if req_org and req_org.company:
+                company = req_org.company
+
+        while current_user and current_user.id not in visited:
+            visited.add(current_user.id)
+
+            qs = OrganizationStructure.objects.filter(user=current_user).select_related('reports_to', 'department', 'company')
+            if company:
+                qs = qs.filter(company=company)
+
+            node = qs.first()
+            if not node or not node.reports_to:
+                break
+
+            manager_user = node.reports_to
+            if manager_user.id in visited:
+                break
+
+            mgr_qs = OrganizationStructure.objects.filter(user=manager_user)
+            if company:
+                mgr_qs = mgr_qs.filter(company=company)
+            mgr_node = mgr_qs.first()
+
+            chain.append({
+                'user': manager_user,
+                'title': mgr_node.position_title if mgr_node else (manager_user.get_full_name() or manager_user.username),
+                'level_order': mgr_node.level_order if mgr_node else 1,
+                'is_dept_head': mgr_node.is_dept_head if mgr_node else False,
+            })
+
+            current_user = manager_user
+            if mgr_node and mgr_node.is_dept_head:
+                break
+
+        return chain
+
+    @staticmethod
+    @transaction.atomic
+    def submit_request(module_code, workflow_id, requester, title, payload,
+                       description='', priority='MEDIUM', reference_id='', 
+                       division_id=None, ip_address=None, watcher_ids=None):
+        """
+        Submit a new approval request from any module.
+        Creates the ApprovalRequest and generates all ApprovalStep instances
+        based on the WorkflowDefinition.
+        """
+        # Validate module
+        try:
+            module = Module.objects.get(code=module_code, is_active=True)
+        except Module.DoesNotExist:
+            raise ValidationError(f"Module '{module_code}' not found or inactive.")
+
+        # Validate workflow
+        try:
+            workflow = WorkflowDefinition.objects.get(
+                id=workflow_id, module=module, is_active=True
+            )
+        except WorkflowDefinition.DoesNotExist:
+            raise ValidationError(f"Workflow ID {workflow_id} not found or inactive for module '{module_code}'.")
+
+        # Get step definitions
+        step_defs = WorkflowStepDefinition.objects.filter(
+            workflow=workflow
+        ).order_by('step_order')
+
+        if not step_defs.exists():
+            raise ValidationError("Workflow has no step definitions configured.")
+
+        # Create the approval request
+        approval_request = ApprovalRequest.objects.create(
+            reference_id=reference_id or f"{module_code}-{timezone.now().strftime('%Y%m%d%H%M%S')}",
+            module=module,
+            workflow=workflow,
+            requester=requester,
+            title=title,
+            description=description,
+            payload=payload,
+            status=ApprovalRequest.Status.PENDING,
+            current_step=1,
+            priority=priority,
+            division=division_id,
+        )
+
+        current_step_order = 1
+
         # Create approval steps from definitions
         for step_def in step_defs:
+            # Check for REQ_DEPT_HEAD (Department Approval) to expand dynamic organization hierarchy chain
+            if step_def.approver_type == WorkflowStepDefinition.ApproverType.REQ_DEPT_HEAD:
+                company_code = payload.get('company_code')
+                org_chain = WorkflowEngine.get_org_approval_chain(requester, company_code=company_code)
+
+                if org_chain:
+                    for link in org_chain:
+                        step_status = ApprovalStep.StepStatus.WAITING if current_step_order == 1 else ApprovalStep.StepStatus.PENDING
+                        ApprovalStep.objects.create(
+                            request=approval_request,
+                            step_order=current_step_order,
+                            name=f"{step_def.name} - {link['title']}",
+                            approver_type=step_def.approver_type,
+                            assigned_to=link['user'],
+                            user_required=link['user'],
+                            required_inputs=step_def.required_inputs,
+                            status=step_status,
+                        )
+                        current_step_order += 1
+                    continue
+                else:
+                    # Fallback to single Dept Head
+                    assignee = None
+                    req_org = OrganizationStructure.objects.filter(user=requester).select_related('department', 'department__dept_head').first()
+                    if req_org and req_org.department:
+                        if req_org.department.dept_head:
+                            assignee = req_org.department.dept_head
+                        else:
+                            dept_node = OrganizationStructure.objects.filter(department=req_org.department, user__is_active=True, user__is_approver=True).select_related('user').first()
+                            if dept_node:
+                                assignee = dept_node.user
+
+                    step_status = ApprovalStep.StepStatus.WAITING if current_step_order == 1 else ApprovalStep.StepStatus.PENDING
+                    ApprovalStep.objects.create(
+                        request=approval_request,
+                        step_order=current_step_order,
+                        name=step_def.name,
+                        approver_type=step_def.approver_type,
+                        assigned_to=assignee,
+                        required_inputs=step_def.required_inputs,
+                        status=step_status,
+                    )
+                    current_step_order += 1
+                    continue
+
+            # Standard processing for non-REQ_DEPT_HEAD steps
             assignee = None
-            
-            # 1. Check if step uses Brand-Specific Approval
             if step_def.is_brand_conditional and step_def.master_workflow_criteria:
-                # Use the criteria to find the key in the payload
                 payload_key = step_def.master_workflow_criteria.key_param_json
                 master_code = payload.get(payload_key)
-                
                 if master_code:
                     try:
-                        # Find matching master data entry (Brand/Zone/etc.)
-                        condition = Brand.objects.get(
-                            code=master_code,
-                            master_workflow_condition=step_def.master_workflow_criteria
-                        )
-                        if condition.owner:
-                            assignee = condition.owner
+                        condition = Brand.objects.get(code=master_code, master_workflow_condition=step_def.master_workflow_criteria)
+                        if condition.owner: assignee = condition.owner
                     except Brand.DoesNotExist:
-                        # Fallback to standard role assignment if the condition is not mapped
                         pass
-                else:
-                    # Fallback to standard role assignment if the payload key is missing
-                    pass
-            
-            # 2. Dynamic step resolution for REQ_DEPT_HEAD, FINANCE_DEPT_HEAD, TARGET_DEPT_ROLE, USER, or ROLE
+
             if assignee is None:
                 if step_def.approver_type == WorkflowStepDefinition.ApproverType.USER:
                     assignee = step_def.user_required
-                elif step_def.approver_type == WorkflowStepDefinition.ApproverType.REQ_DEPT_HEAD:
-                    # Dynamically resolve Requestor Department Head
-                    if requester.department_ref and requester.department_ref.dept_head:
-                        assignee = requester.department_ref.dept_head
-                    elif requester.department:
-                        dept = Department.objects.filter(Q(code=requester.department) | Q(name=requester.department)).first()
-                        if dept and dept.dept_head:
-                            assignee = dept.dept_head
-                        else:
-                            assignee = User.objects.filter(
-                                department=requester.department, is_active=True, is_approver=True
-                            ).first()
                 elif step_def.approver_type == WorkflowStepDefinition.ApproverType.FINANCE_DEPT_HEAD:
-                    # Dynamically resolve Finance Department Head / Officer
                     fin_dept = Department.objects.filter(Q(code='DEPT_FIN') | Q(name__icontains='Finance')).first()
                     if fin_dept and fin_dept.dept_head:
                         assignee = fin_dept.dept_head
                     else:
-                        assignee = User.objects.filter(
-                            Q(department__icontains='Finance') | Q(user_roles__role__code__icontains='FINANCE'),
-                            is_active=True, is_approver=True
-                        ).first()
+                        assignee = User.objects.filter(Q(org_positions__department__name__icontains='Finance') | Q(user_roles__role__code__icontains='FINANCE'), is_active=True, is_approver=True).distinct().first()
                 elif step_def.approver_type == WorkflowStepDefinition.ApproverType.TARGET_DEPT_ROLE:
                     if step_def.target_department and step_def.role_required:
-                        assignee = User.objects.filter(
-                            department_ref=step_def.target_department,
-                            user_roles__role=step_def.role_required,
-                            is_active=True, is_approver=True
-                        ).first()
+                        assignee = User.objects.filter(org_positions__department=step_def.target_department, user_roles__role=step_def.role_required, is_active=True, is_approver=True).distinct().first()
                 else:
-                    # Role-based assignment: Auto-assign to first user with the required role and matching division
-                    assignee_qs = User.objects.filter(
-                        user_roles__role=step_def.role_required, is_active=True, is_approver=True
-                    )
-                    
-                    if division_id:
-                        assignee_qs = assignee_qs.filter(division=division_id)
-                        
+                    assignee_qs = User.objects.filter(user_roles__role=step_def.role_required, is_active=True, is_approver=True)
+                    if division_id: assignee_qs = assignee_qs.filter(division=division_id)
                     assignee = assignee_qs.first()
 
             step_status = ApprovalStep.StepStatus.PENDING
-            
-            # 3. Check optional criteria
             if step_def.conditions:
                 if not WorkflowEngine._evaluate_conditions(payload, step_def.conditions):
                     step_status = ApprovalStep.StepStatus.ADDITIONAL
 
-            # Set first step to WAITING if not skipped
-            if step_def.step_order == 1 and step_status == ApprovalStep.StepStatus.PENDING:
+            if current_step_order == 1 and step_status == ApprovalStep.StepStatus.PENDING:
                 step_status = ApprovalStep.StepStatus.WAITING
 
             if step_status != ApprovalStep.StepStatus.ADDITIONAL:
                 ApprovalStep.objects.create(
                     request=approval_request,
-                    step_order=step_def.step_order,
+                    step_order=current_step_order,
                     name=step_def.name,
                     approver_type=step_def.approver_type,
                     assigned_to=assignee,
@@ -408,6 +513,7 @@ class WorkflowEngine:
                     required_inputs=step_def.required_inputs,
                     status=step_status,
                 )
+                current_step_order += 1
 
         # Transition to IN_PROGRESS since first step is activated
         # But wait, what if the first step was skipped?
@@ -528,7 +634,7 @@ class WorkflowEngine:
             if 'finance' in (approver.department or '').lower() or approver.user_roles.filter(role__code__icontains='FINANCE').exists():
                 is_authorized = True
         elif current_step.approver_type == WorkflowStepDefinition.ApproverType.TARGET_DEPT_ROLE:
-            if current_step.target_department and approver.department_ref == current_step.target_department:
+            if current_step.target_department and OrganizationStructure.objects.filter(user=approver, department=current_step.target_department).exists():
                 if not current_step.role_required or approver.user_roles.filter(role=current_step.role_required).exists():
                     is_authorized = True
         elif current_step.role_required:

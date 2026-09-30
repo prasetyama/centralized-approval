@@ -268,8 +268,8 @@ export const WorkflowForm: React.FC<WorkflowFormProps> = ({ initialData, onClose
                                             <Select
                                                 label="Approver Type"
                                                 options={[
-                                                    { value: 'REQ_DEPT_HEAD', label: 'Dept Head' },
-                                                    { value: 'FINANCE_DEPT_HEAD', label: 'Finance Approval' },
+                                                    { value: 'REQ_DEPT_HEAD', label: 'Department Approval' },
+                                                    { value: 'FINANCE_DEPT_HEAD', label: 'Purchasing Approval' },
                                                     { value: 'TARGET_DEPT_ROLE', label: 'Target Dept Role' },
                                                     { value: 'ROLE', label: 'Role-based (Global)' },
                                                     { value: 'USER', label: 'Specific User' }

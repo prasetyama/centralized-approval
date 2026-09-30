@@ -7,7 +7,7 @@ from django.contrib import admin
 from core.models import (
     Module, Role, User, WorkflowDefinition, WorkflowStepDefinition,
     ApprovalRequest, ApprovalStep, AuditLog, Division, Brand, UserBrand, MasterWorkflowCriteria, ModuleVariable,
-    UserRole, APIAuditLog
+    UserRole, APIAuditLog, Company, Department, OrganizationStructure
 )
 
 
@@ -15,6 +15,22 @@ from core.models import (
 class DivisionAdmin(admin.ModelAdmin):
     list_display = ['name', 'code', 'created_at']
     search_fields = ['name', 'code']
+
+@admin.register(Company)
+class CompanyAdmin(admin.ModelAdmin):
+    list_display = ['name', 'code', 'created_at']
+    search_fields = ['name', 'code']
+
+@admin.register(Department)
+class DepartmentAdmin(admin.ModelAdmin):
+    list_display = ['name', 'code', 'created_at']
+    search_fields = ['name', 'code']
+
+@admin.register(OrganizationStructure)
+class OrganizationStructureAdmin(admin.ModelAdmin):
+    list_display = ['user', 'company', 'department', 'position_title', 'level_order', 'reports_to', 'created_at']
+    list_filter = ['company', 'department', 'level_order']
+    search_fields = ['user__username', 'position_title']
 
 
 @admin.register(Brand)

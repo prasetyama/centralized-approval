@@ -17,7 +17,7 @@ import logging
 from core.models import (
     Module, Role, User, WorkflowDefinition, WorkflowStepDefinition,
     ApprovalRequest, ApprovalStep, AuditLog, Division, Department, RequestFeedback,
-    Brand, UserBrand, MasterWorkflowCriteria, RequestWatcher, ModuleVariable,
+    Company, OrganizationStructure, Brand, UserBrand, MasterWorkflowCriteria, RequestWatcher, ModuleVariable,
     CCEmailConfig
 )
 from core.serializers import (
@@ -26,7 +26,8 @@ from core.serializers import (
     WorkflowStepDefinitionSerializer, ApprovalRequestListSerializer,
     ApprovalRequestDetailSerializer, SubmitRequestSerializer,
     ApprovalStepSerializer, AuditLogSerializer, ActionSerializer,
-    DivisionSerializer, DepartmentSerializer, DelegateRequestSerializer, RequestFeedbackSerializer,
+    DivisionSerializer, DepartmentSerializer, CompanySerializer, OrganizationStructureSerializer,
+    DelegateRequestSerializer, RequestFeedbackSerializer,
     BrandSerializer, UserBrandSerializer, MasterWorkflowCriteriaSerializer,
     RequestWatcherSerializer, ModuleVariableSerializer, CCEmailConfigSerializer
 )
@@ -701,6 +702,23 @@ def system_logs(request):
 # Admin CRUD ViewSets
 # ─────────────────────────────────────────────
 
+class CompanyViewSet(viewsets.ModelViewSet):
+    """CRUD for Companies."""
+    queryset = Company.objects.all()
+    serializer_class = CompanySerializer
+    permission_classes = [IsAuthenticated]
+    search_fields = ['name', 'code']
+
+
+class OrganizationStructureViewSet(viewsets.ModelViewSet):
+    """CRUD for Organization Structure Master."""
+    queryset = OrganizationStructure.objects.all().select_related('company', 'user', 'department', 'reports_to')
+    serializer_class = OrganizationStructureSerializer
+    permission_classes = [IsAuthenticated]
+    filterset_fields = ['company', 'department', 'is_dept_head']
+    search_fields = ['position_title', 'user__username', 'company__name', 'department__name']
+
+
 class DepartmentViewSet(viewsets.ModelViewSet):
     """CRUD for Departments."""
     queryset = Department.objects.all()
@@ -750,10 +768,20 @@ class RoleViewSet(viewsets.ModelViewSet):
     search_fields = ['name', 'code']
 
 
+from rest_framework.pagination import PageNumberPagination
+
+
+class StandardResultsSetPagination(PageNumberPagination):
+    page_size = 20
+    page_size_query_param = 'page_size'
+    max_page_size = 1000
+
+
 class UserViewSet(viewsets.ModelViewSet):
     """CRUD for Users."""
     queryset = User.objects.prefetch_related('user_roles__role').all()
     permission_classes = [IsAuthenticated]
+    pagination_class = StandardResultsSetPagination
     search_fields = ['username', 'first_name', 'last_name', 'email']
     filterset_fields = ['user_roles__role', 'division', 'is_active', 'is_approver']
 

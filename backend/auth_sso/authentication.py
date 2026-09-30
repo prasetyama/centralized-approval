@@ -93,7 +93,6 @@ class JWTAuthentication(BaseAuthentication):
                 email=email,
                 first_name=first_name,
                 last_name=last_name,
-                department=department,
                 is_active=True,
                 is_approver=is_approver
             )

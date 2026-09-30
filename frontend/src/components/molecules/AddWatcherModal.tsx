@@ -25,7 +25,7 @@ export const AddWatcherModal = ({
         queryKey: ['users-list'],
         queryFn: async () => {
             const response: any = await api.get('/admin/users', {
-                params: { is_active: true }
+                params: { is_active: true, page_size: 1000 }
             });
             return response;
         },

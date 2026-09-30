@@ -12,7 +12,8 @@ import {
     Play,
     Settings,
     Terminal,
-    Mail
+    Mail,
+    Network
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
@@ -24,6 +25,7 @@ const navItems = [
     { name: 'Workflows', href: '/admin/workflows', icon: GitBranch, adminOnly: true },
     { name: 'User Management', href: '/admin/users', icon: Users, adminOnly: true },
     { name: 'Simulator', href: '/admin/workflow/simulator', icon: Play, adminOnly: true },
+    { name: 'Org Structure', href: '/admin/org-structure', icon: Network, adminOnly: true },
     { name: 'Master Data', href: '/admin/master-data', icon: Settings, adminOnly: true },
     { name: 'CC Email Config', href: '/admin/cc-email-config', icon: Mail, adminOnly: true },
     { name: 'System Logs', href: '/admin/system-logs', icon: Terminal, adminOnly: true },

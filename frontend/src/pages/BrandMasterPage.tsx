@@ -20,7 +20,7 @@ export const BrandMasterPage: React.FC = () => {
 
     const { data: users } = useQuery<any>({
         queryKey: ['admin-users'],
-        queryFn: () => api.get('/admin/users?is_approver=true'),
+        queryFn: () => api.get('/admin/users?is_approver=true&page_size=1000'),
     });
 
     const { data: moduleVariables } = useQuery<any>({
