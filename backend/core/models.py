@@ -344,6 +344,7 @@ class WorkflowStepDefinition(models.Model):
         USER = 'USER', 'Specific User'
         REQ_DEPT_HEAD = 'REQ_DEPT_HEAD', 'Requestor Dept Head'
         FINANCE_DEPT_HEAD = 'FINANCE_DEPT_HEAD', 'Finance Dept Head / Team'
+        PURCH_DEPT_HEAD = 'PURCH_DEPT_HEAD', 'Purchasing Approval'
         TARGET_DEPT_ROLE = 'TARGET_DEPT_ROLE', 'Target Dept Role'
 
     workflow = models.ForeignKey(

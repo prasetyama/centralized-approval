@@ -368,6 +368,47 @@ class WorkflowEngine:
         return chain
 
     @staticmethod
+    def get_dept_approval_chain(department, company_code=None, requester=None):
+        """
+        Traverse the master OrganizationStructure table to resolve the approval hierarchy chain
+        for a specific department (e.g. Purchasing).
+        Returns a list of dicts: [{'user': User, 'title': str, 'level_order': int, 'is_dept_head': bool}]
+        """
+        if not department:
+            return []
+
+        company = None
+        if company_code:
+            company = Company.objects.filter(code=company_code).first()
+        if not company and requester:
+            req_org = OrganizationStructure.objects.filter(user=requester).select_related('company').first()
+            if req_org and req_org.company:
+                company = req_org.company
+
+        # Find starting node in target department
+        qs = OrganizationStructure.objects.filter(department=department).select_related('user', 'reports_to', 'company')
+        if company:
+            qs = qs.filter(company=company)
+
+        start_node = qs.order_by('level_order').first()
+        if not start_node:
+            return []
+
+        # If start_node has reports_to, traverse hierarchy up from start_node.user
+        chain = WorkflowEngine.get_org_approval_chain(start_node.user, company_code=company_code)
+
+        # Fallback if start_node is already Dept Head with no reports_to
+        if not chain and start_node.user:
+            chain.append({
+                'user': start_node.user,
+                'title': start_node.position_title or (start_node.user.get_full_name() or start_node.user.username),
+                'level_order': start_node.level_order,
+                'is_dept_head': start_node.is_dept_head,
+            })
+
+        return chain
+
+    @staticmethod
     @transaction.atomic
     def submit_request(module_code, workflow_id, requester, title, payload,
                        description='', priority='MEDIUM', reference_id='', 
@@ -418,10 +459,18 @@ class WorkflowEngine:
 
         # Create approval steps from definitions
         for step_def in step_defs:
-            # Check for REQ_DEPT_HEAD (Department Approval) to expand dynamic organization hierarchy chain
-            if step_def.approver_type == WorkflowStepDefinition.ApproverType.REQ_DEPT_HEAD:
+            # Check for REQ_DEPT_HEAD or PURCH_DEPT_HEAD to expand dynamic organization hierarchy chain
+            if step_def.approver_type in (WorkflowStepDefinition.ApproverType.REQ_DEPT_HEAD, WorkflowStepDefinition.ApproverType.PURCH_DEPT_HEAD):
                 company_code = payload.get('company_code')
-                org_chain = WorkflowEngine.get_org_approval_chain(requester, company_code=company_code)
+                if step_def.approver_type == WorkflowStepDefinition.ApproverType.REQ_DEPT_HEAD:
+                    org_chain = WorkflowEngine.get_org_approval_chain(requester, company_code=company_code)
+                else:
+                    purch_dept = step_def.target_department or Department.objects.filter(
+                        Q(code__in=['DEPT_PURCHASING', 'PURCHASING', 'PROC', 'PURCH']) |
+                        Q(name__icontains='Purchasing') |
+                        Q(name__icontains='Procurement')
+                    ).first()
+                    org_chain = WorkflowEngine.get_dept_approval_chain(purch_dept, company_code=company_code, requester=requester) if purch_dept else []
 
                 if org_chain:
                     for link in org_chain:
@@ -441,14 +490,31 @@ class WorkflowEngine:
                 else:
                     # Fallback to single Dept Head
                     assignee = None
-                    req_org = OrganizationStructure.objects.filter(user=requester).select_related('department', 'department__dept_head').first()
-                    if req_org and req_org.department:
-                        if req_org.department.dept_head:
-                            assignee = req_org.department.dept_head
+                    if step_def.approver_type == WorkflowStepDefinition.ApproverType.REQ_DEPT_HEAD:
+                        req_org = OrganizationStructure.objects.filter(user=requester).select_related('department', 'department__dept_head').first()
+                        if req_org and req_org.department:
+                            if req_org.department.dept_head:
+                                assignee = req_org.department.dept_head
+                            else:
+                                dept_node = OrganizationStructure.objects.filter(department=req_org.department, user__is_active=True, user__is_approver=True).select_related('user').first()
+                                if dept_node:
+                                    assignee = dept_node.user
+                    else:
+                        purch_dept = step_def.target_department or Department.objects.filter(
+                            Q(code__in=['DEPT_PURCHASING', 'PURCHASING', 'PROC', 'PURCH']) |
+                            Q(name__icontains='Purchasing') |
+                            Q(name__icontains='Procurement')
+                        ).first()
+                        if purch_dept and purch_dept.dept_head:
+                            assignee = purch_dept.dept_head
                         else:
-                            dept_node = OrganizationStructure.objects.filter(department=req_org.department, user__is_active=True, user__is_approver=True).select_related('user').first()
-                            if dept_node:
-                                assignee = dept_node.user
+                            assignee = User.objects.filter(
+                                Q(org_positions__department__name__icontains='Purchasing') |
+                                Q(org_positions__department__name__icontains='Procurement') |
+                                Q(user_roles__role__code__icontains='PURCHASING') |
+                                Q(user_roles__role__code__icontains='PROCUREMENT'),
+                                is_active=True, is_approver=True
+                            ).distinct().first()
 
                     step_status = ApprovalStep.StepStatus.WAITING if current_step_order == 1 else ApprovalStep.StepStatus.PENDING
                     ApprovalStep.objects.create(
@@ -632,6 +698,18 @@ class WorkflowEngine:
                 is_authorized = True
         elif current_step.approver_type == WorkflowStepDefinition.ApproverType.FINANCE_DEPT_HEAD:
             if 'finance' in (approver.department or '').lower() or approver.user_roles.filter(role__code__icontains='FINANCE').exists():
+                is_authorized = True
+        elif current_step.approver_type == WorkflowStepDefinition.ApproverType.PURCH_DEPT_HEAD:
+            purch_dept = current_step.target_department or Department.objects.filter(
+                Q(code__in=['DEPT_PURCHASING', 'PURCHASING', 'PROC', 'PURCH']) |
+                Q(name__icontains='Purchasing') |
+                Q(name__icontains='Procurement')
+            ).first()
+            app_org = OrganizationStructure.objects.filter(user=approver).first()
+            app_dept_name = app_org.department.name if app_org and app_org.department else ''
+            if (purch_dept and app_org and app_org.department_id == purch_dept.id) or \
+               'purchasing' in app_dept_name.lower() or 'procurement' in app_dept_name.lower() or \
+               approver.user_roles.filter(Q(role__code__icontains='PURCHASING') | Q(role__code__icontains='PROCUREMENT')).exists():
                 is_authorized = True
         elif current_step.approver_type == WorkflowStepDefinition.ApproverType.TARGET_DEPT_ROLE:
             if current_step.target_department and OrganizationStructure.objects.filter(user=approver, department=current_step.target_department).exists():
