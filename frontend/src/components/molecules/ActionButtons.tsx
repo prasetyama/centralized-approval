@@ -3,6 +3,7 @@ import { CheckCircle2, XCircle, AlertTriangle, Paperclip, UploadCloud, FileText,
 import { Button } from '@/components/atoms/Button';
 import { Card } from '@/components/atoms/Card';
 import { cn } from '@/lib/utils';
+import { useToast } from '@/context/ToastContext';
 
 interface QuotationFile {
     name: string;
@@ -24,6 +25,32 @@ interface ActionButtonsProps {
     isDeptHeadStep?: boolean;
 }
 
+const getCleanErrorMessage = (err: any): string => {
+    let rawMessage =
+        err?.response?.data?.message ||
+        err?.response?.data?.detail ||
+        err?.response?.data?.error ||
+        err?.message ||
+        (typeof err === 'string' ? err : '') ||
+        'Gagal memproses tindakan persetujuan';
+
+    if (typeof rawMessage === 'object') {
+        try {
+            rawMessage = JSON.stringify(rawMessage);
+        } catch {
+            rawMessage = String(rawMessage);
+        }
+    }
+
+    // Extract human-readable string inside ErrorDetail(string='...', code='...') if present
+    const errorDetailMatch = rawMessage.match(/ErrorDetail\(string=['"](.*?)['"]/);
+    if (errorDetailMatch && errorDetailMatch[1]) {
+        return errorDetailMatch[1];
+    }
+
+    return rawMessage;
+};
+
 const formatFileSize = (bytes: number) => {
     if (bytes < 1024) return bytes + ' B';
     if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
@@ -41,6 +68,7 @@ export const ActionButtons = ({
     approverType,
     isDeptHeadStep,
 }: ActionButtonsProps) => {
+    const { addToast } = useToast();
     const [showModal, setShowModal] = useState<'APPROVE' | 'REJECT' | null>(null);
     const [comments, setComments] = useState('');
     const [dlvdate, setDlvdate] = useState('');
@@ -123,19 +151,24 @@ export const ActionButtons = ({
 
             if (showModal === 'APPROVE') {
                 await onApprove(
-                    comments, 
-                    showDlvDateForm ? dlvdate : undefined, 
+                    comments,
+                    showDlvDateForm ? dlvdate : undefined,
                     Object.keys(stepData).length > 0 ? stepData : undefined
                 );
+                addToast('Pengajuan berhasil disetujui (Approved)', 'success');
+            } else if (showModal === 'REJECT') {
+                await onReject(comments);
+                addToast('Pengajuan berhasil ditolak (Rejected)', 'success');
             }
-            if (showModal === 'REJECT') await onReject(comments);
+
             setShowModal(null);
             setComments('');
             setDlvdate('');
             setPoNumber('');
             setQuotationFiles([]);
-        } catch (error) {
-            console.error('Action failed:', error);
+        } catch (err: any) {
+            const errorMessage = getCleanErrorMessage(err);
+            addToast(errorMessage, 'error');
         }
     };
 
