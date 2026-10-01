@@ -1,8 +1,15 @@
 import { useState } from 'react';
-import { CheckCircle2, XCircle, AlertTriangle } from 'lucide-react';
+import { CheckCircle2, XCircle, AlertTriangle, Paperclip, UploadCloud, FileText, Trash2 } from 'lucide-react';
 import { Button } from '@/components/atoms/Button';
 import { Card } from '@/components/atoms/Card';
 import { cn } from '@/lib/utils';
+
+interface QuotationFile {
+    name: string;
+    size: number;
+    type: string;
+    data: string;
+}
 
 interface ActionButtonsProps {
     requestId?: number;
@@ -13,21 +20,73 @@ interface ActionButtonsProps {
     isWatcher?: boolean;
     showDlvDateForm?: boolean;
     requiredInputs?: any[];
+    approverType?: string;
+    isDeptHeadStep?: boolean;
 }
 
-export const ActionButtons = ({ onApprove, onReject, isLoading, canAction, isWatcher, showDlvDateForm, requiredInputs }: ActionButtonsProps) => {
+const formatFileSize = (bytes: number) => {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+};
+
+export const ActionButtons = ({
+    onApprove,
+    onReject,
+    isLoading,
+    canAction,
+    isWatcher,
+    showDlvDateForm,
+    requiredInputs,
+    approverType,
+    isDeptHeadStep,
+}: ActionButtonsProps) => {
     const [showModal, setShowModal] = useState<'APPROVE' | 'REJECT' | null>(null);
     const [comments, setComments] = useState('');
     const [dlvdate, setDlvdate] = useState('');
     const [poNumber, setPoNumber] = useState('');
-    const [quotation, setQuotation] = useState('');
+    const [quotationFiles, setQuotationFiles] = useState<QuotationFile[]>([]);
     const [error, setError] = useState<string | null>(null);
     const [dlvDateError, setDlvDateError] = useState<string | null>(null);
     const [poError, setPoError] = useState<string | null>(null);
     const [quotationError, setQuotationError] = useState<string | null>(null);
 
-    const requiresPo = requiredInputs?.some((i: any) => (typeof i === 'string' ? i : i.key) === 'po_number');
-    const requiresQuotation = requiredInputs?.some((i: any) => (typeof i === 'string' ? i : i.key) === 'quotation');
+    const isPurchasingStep = approverType === 'PURCH_DEPT_HEAD';
+    const isDeptHead = isDeptHeadStep || requiredInputs?.length === 0;
+
+    // 1. Hilangkan requiredinput requiresPo pada step purchasing
+    const requiresPo = !isPurchasingStep && !isDeptHead && requiredInputs?.some((i: any) => (typeof i === 'string' ? i : i.key) === 'po_number');
+
+    // 2. Ketika sampe step purchasing head / dept head, tidak perlu lagi membaca required inputs
+    const requiresQuotation = !isDeptHead && requiredInputs?.some((i: any) => (typeof i === 'string' ? i : i.key) === 'quotation');
+
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (!e.target.files || e.target.files.length === 0) return;
+        const filesArray = Array.from(e.target.files);
+
+        filesArray.forEach((file) => {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const base64Data = event.target?.result as string;
+                setQuotationFiles((prev) => [
+                    ...prev,
+                    {
+                        name: file.name,
+                        size: file.size,
+                        type: file.type,
+                        data: base64Data,
+                    }
+                ]);
+            };
+            reader.readAsDataURL(file);
+        });
+
+        if (quotationError) setQuotationError(null);
+    };
+
+    const handleRemoveFile = (indexToRemove: number) => {
+        setQuotationFiles((prev) => prev.filter((_, idx) => idx !== indexToRemove));
+    };
 
     const handleAction = async () => {
         if (!showModal) return;
@@ -44,8 +103,8 @@ export const ActionButtons = ({ onApprove, onReject, isLoading, canAction, isWat
                 setPoError('PO Number wajib diisi');
                 hasError = true;
             }
-            if (requiresQuotation && !quotation.trim()) {
-                setQuotationError('Quotation wajib diisi');
+            if (requiresQuotation && quotationFiles.length === 0) {
+                setQuotationError('Lampiran file penawaran / quotation wajib diunggah (minimal 1 file)');
                 hasError = true;
             }
         }
@@ -59,8 +118,8 @@ export const ActionButtons = ({ onApprove, onReject, isLoading, canAction, isWat
             setQuotationError(null);
 
             const stepData: Record<string, any> = {};
-            if (poNumber.trim()) stepData.po_number = poNumber.trim();
-            if (quotation.trim()) stepData.quotation = quotation.trim();
+            if (requiresPo && poNumber.trim()) stepData.po_number = poNumber.trim();
+            if (requiresQuotation && quotationFiles.length > 0) stepData.quotation = quotationFiles;
 
             if (showModal === 'APPROVE') {
                 await onApprove(
@@ -74,7 +133,7 @@ export const ActionButtons = ({ onApprove, onReject, isLoading, canAction, isWat
             setComments('');
             setDlvdate('');
             setPoNumber('');
-            setQuotation('');
+            setQuotationFiles([]);
         } catch (error) {
             console.error('Action failed:', error);
         }
@@ -149,26 +208,50 @@ export const ActionButtons = ({ onApprove, onReject, isLoading, canAction, isWat
                             )}
 
                             {showModal === 'APPROVE' && requiresQuotation && (
-                                <div className="space-y-1">
+                                <div className="space-y-2">
                                     <div className="flex justify-between items-center">
-                                        <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                                            Quotation / Ref Penawaran <span className="text-red-500">*</span>
+                                        <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                                            <Paperclip size={14} className="text-indigo-600" />
+                                            Attachment Quotation / Penawaran <span className="text-red-500">*</span>
                                         </label>
                                         {quotationError && <span className="text-[10px] font-bold text-red-500 uppercase">{quotationError}</span>}
                                     </div>
-                                    <input
-                                        type="text"
-                                        placeholder="Contoh: QUO-VENDOR-88912"
-                                        className={cn(
-                                            "w-full rounded-xl border p-3 text-sm transition-all focus:outline-none focus:ring-4",
-                                            quotationError ? "border-red-300 bg-red-50/30" : "border-slate-200 bg-slate-50 focus:bg-white"
-                                        )}
-                                        value={quotation}
-                                        onChange={(e) => {
-                                            setQuotation(e.target.value);
-                                            if (e.target.value.trim()) setQuotationError(null);
-                                        }}
-                                    />
+
+                                    {/* Upload Trigger Area */}
+                                    <label className="border-2 border-dashed border-slate-200 hover:border-indigo-400 bg-slate-50/50 hover:bg-indigo-50/20 rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer transition-all">
+                                        <UploadCloud size={28} className="text-indigo-500 mb-1" />
+                                        <span className="text-xs font-semibold text-slate-700">Klik untuk mengunggah file penawaran</span>
+                                        <span className="text-[11px] text-slate-400 mt-0.5">Bisa milih lebih dari 1 file (PDF, Image, Doc, etc)</span>
+                                        <input
+                                            type="file"
+                                            multiple
+                                            className="hidden"
+                                            onChange={handleFileChange}
+                                        />
+                                    </label>
+
+                                    {/* Attached Files List */}
+                                    {quotationFiles.length > 0 && (
+                                        <div className="space-y-1.5 max-h-40 overflow-y-auto pt-1">
+                                            {quotationFiles.map((file, idx) => (
+                                                <div key={idx} className="flex items-center justify-between p-2 rounded-lg bg-slate-100/70 border border-slate-200 text-xs">
+                                                    <div className="flex items-center gap-2 truncate pr-2">
+                                                        <FileText size={16} className="text-indigo-600 shrink-0" />
+                                                        <span className="font-medium text-slate-800 truncate">{file.name}</span>
+                                                        <span className="text-[10px] text-slate-400 shrink-0">({formatFileSize(file.size)})</span>
+                                                    </div>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleRemoveFile(idx)}
+                                                        className="text-slate-400 hover:text-red-600 transition-colors p-1 rounded hover:bg-slate-200"
+                                                        title="Hapus file"
+                                                    >
+                                                        <Trash2 size={14} />
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
                             )}
 
@@ -227,6 +310,8 @@ export const ActionButtons = ({ onApprove, onReject, isLoading, canAction, isWat
                                         setShowModal(null);
                                         setError(null);
                                         setDlvDateError(null);
+                                        setPoError(null);
+                                        setQuotationError(null);
                                     }}
                                 >
                                     Cancel

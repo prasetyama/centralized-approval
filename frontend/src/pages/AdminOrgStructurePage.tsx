@@ -406,7 +406,7 @@ export const AdminOrgStructurePage = () => {
                                 </div>
                                 <div>
                                     <Input
-                                        label="Level Order *"
+                                        label="Approval Level *"
                                         type="number"
                                         min={1}
                                         value={orgFormData.level_order}

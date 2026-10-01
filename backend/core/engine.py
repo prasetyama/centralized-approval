@@ -249,70 +249,6 @@ class WorkflowEngine:
             )
             print(f"Failed to notify external system (DATABASE): {e}")
 
-    @staticmethod
-    @transaction.atomic
-    def submit_request(module_code, workflow_id, requester, title, payload,
-                       description='', priority='MEDIUM', reference_id='', 
-                       division_id=None, ip_address=None, watcher_ids=None):
-        """
-        Submit a new approval request from any module.
-        Creates the ApprovalRequest and generates all ApprovalStep instances
-        based on the WorkflowDefinition.
-
-        Args:
-            module_code (str): Code identifying the source module.
-            workflow_id (int): ID of the WorkflowDefinition to use.
-            requester (User): The user submitting the request.
-            title (str): Brief title for the request.
-            payload (dict): JSON data from the source module.
-            description (str): Optional longer description.
-            priority (str): Priority level (LOW, MEDIUM, HIGH, URGENT).
-            reference_id (str): External reference ID.
-            division (str): Optional division/brand CODE (e.g., 'BRAND_A').
-            ip_address (str): IP address of the requester.
-
-        Returns:
-            ApprovalRequest: The created approval request.
-
-        Raises:
-            ValidationError: If module/workflow is invalid or inactive.
-        """
-        # Validate module
-        try:
-            module = Module.objects.get(code=module_code, is_active=True)
-        except Module.DoesNotExist:
-            raise ValidationError(f"Module '{module_code}' not found or inactive.")
-
-        # Validate workflow
-        try:
-            workflow = WorkflowDefinition.objects.get(
-                id=workflow_id, module=module, is_active=True
-            )
-        except WorkflowDefinition.DoesNotExist:
-            raise ValidationError(f"Workflow ID {workflow_id} not found or inactive for module '{module_code}'.")
-
-        # Get step definitions
-        step_defs = WorkflowStepDefinition.objects.filter(
-            workflow=workflow
-        ).order_by('step_order')
-
-        if not step_defs.exists():
-            raise ValidationError("Workflow has no step definitions configured.")
-
-        # Create the approval request
-        approval_request = ApprovalRequest.objects.create(
-            reference_id=reference_id or f"{module_code}-{timezone.now().strftime('%Y%m%d%H%M%S')}",
-            module=module,
-            workflow=workflow,
-            requester=requester,
-            title=title,
-            description=description,
-            payload=payload,
-            status=ApprovalRequest.Status.PENDING,
-            current_step=1,
-            priority=priority,
-            division=division_id, # Store the code string
-        )
 
     @staticmethod
     def get_org_approval_chain(requester, company_code=None):
@@ -372,6 +308,7 @@ class WorkflowEngine:
         """
         Traverse the master OrganizationStructure table to resolve the approval hierarchy chain
         for a specific department (e.g. Purchasing).
+        Includes the department starting node (e.g. Staff) up through manager / Dept Head.
         Returns a list of dicts: [{'user': User, 'title': str, 'level_order': int, 'is_dept_head': bool}]
         """
         if not department:
@@ -391,20 +328,42 @@ class WorkflowEngine:
             qs = qs.filter(company=company)
 
         start_node = qs.order_by('level_order').first()
-        if not start_node:
+        if not start_node or not start_node.user:
             return []
 
-        # If start_node has reports_to, traverse hierarchy up from start_node.user
-        chain = WorkflowEngine.get_org_approval_chain(start_node.user, company_code=company_code)
+        chain = []
+        visited = set()
+        current_user = start_node.user
 
-        # Fallback if start_node is already Dept Head with no reports_to
-        if not chain and start_node.user:
+        # If requester is the starting node in department, skip requester to start from their manager
+        if requester and current_user.id == requester.id:
+            if start_node.reports_to:
+                current_user = start_node.reports_to
+            else:
+                return []
+
+        while current_user and current_user.id not in visited:
+            visited.add(current_user.id)
+
+            node_qs = OrganizationStructure.objects.filter(user=current_user).select_related('reports_to', 'department', 'company')
+            if company:
+                node_qs = node_qs.filter(company=company)
+            node = node_qs.first()
+
             chain.append({
-                'user': start_node.user,
-                'title': start_node.position_title or (start_node.user.get_full_name() or start_node.user.username),
-                'level_order': start_node.level_order,
-                'is_dept_head': start_node.is_dept_head,
+                'user': current_user,
+                'title': node.position_title if node else (current_user.get_full_name() or current_user.username),
+                'level_order': node.level_order if node else 1,
+                'is_dept_head': node.is_dept_head if node else False,
             })
+
+            if node and node.is_dept_head:
+                break
+
+            if not node or not node.reports_to:
+                break
+
+            current_user = node.reports_to
 
         return chain
 
@@ -475,6 +434,14 @@ class WorkflowEngine:
                 if org_chain:
                     for link in org_chain:
                         step_status = ApprovalStep.StepStatus.WAITING if current_step_order == 1 else ApprovalStep.StepStatus.PENDING
+                        if step_def.approver_type == WorkflowStepDefinition.ApproverType.PURCH_DEPT_HEAD:
+                            if link.get('is_dept_head'):
+                                req_inputs = []
+                            else:
+                                req_inputs = [i for i in (step_def.required_inputs or []) if i != 'po_number']
+                        else:
+                            req_inputs = step_def.required_inputs
+
                         ApprovalStep.objects.create(
                             request=approval_request,
                             step_order=current_step_order,
@@ -482,7 +449,7 @@ class WorkflowEngine:
                             approver_type=step_def.approver_type,
                             assigned_to=link['user'],
                             user_required=link['user'],
-                            required_inputs=step_def.required_inputs,
+                            required_inputs=req_inputs,
                             status=step_status,
                         )
                         current_step_order += 1
@@ -516,6 +483,7 @@ class WorkflowEngine:
                                 is_active=True, is_approver=True
                             ).distinct().first()
 
+                    req_inputs = [] if step_def.approver_type in (WorkflowStepDefinition.ApproverType.REQ_DEPT_HEAD, WorkflowStepDefinition.ApproverType.PURCH_DEPT_HEAD) else step_def.required_inputs
                     step_status = ApprovalStep.StepStatus.WAITING if current_step_order == 1 else ApprovalStep.StepStatus.PENDING
                     ApprovalStep.objects.create(
                         request=approval_request,
@@ -523,7 +491,7 @@ class WorkflowEngine:
                         name=step_def.name,
                         approver_type=step_def.approver_type,
                         assigned_to=assignee,
-                        required_inputs=step_def.required_inputs,
+                        required_inputs=req_inputs,
                         status=step_status,
                     )
                     current_step_order += 1
