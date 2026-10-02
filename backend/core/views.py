@@ -871,13 +871,13 @@ class CCEmailConfigViewSet(viewsets.ModelViewSet):
     serializer_class = CCEmailConfigSerializer
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend]
-    filterset_fields = ['is_active', 'subject']
+    filterset_fields = ['is_active', 'subject', 'ship_to']
 
     def get_queryset(self):
         qs = super().get_queryset()
         search = self.request.query_params.get('search', None)
         if search:
-            qs = qs.filter(Q(email__icontains=search) | Q(subject__icontains=search))
+            qs = qs.filter(Q(email__icontains=search) | Q(subject__icontains=search) | Q(ship_to__icontains=search))
         return qs
 
     def perform_create(self, serializer):

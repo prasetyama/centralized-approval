@@ -597,7 +597,7 @@ class CCEmailConfigSerializer(serializers.ModelSerializer):
     class Meta:
         model = CCEmailConfig
         fields = [
-            'id', 'email', 'subject', 'is_active',
+            'id', 'email', 'subject', 'ship_to', 'is_active',
             'created_at', 'updated_at', 'created_by',
             'created_by_username', 'created_by_full_name'
         ]

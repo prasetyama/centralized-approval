@@ -9,6 +9,8 @@ email failures never interrupt the core approval workflow.
 """
 import logging
 import threading
+import io
+import csv
 from functools import wraps
 from django.core.mail import EmailMultiAlternatives
 from django.template.loader import render_to_string
@@ -241,14 +243,31 @@ def send_rejected_notification(approval_request, step) -> None:
         )
 
 
-def _get_cc_emails_for_subject(subject_name: str = 'eorder information') -> list[str]:
-    """Fetch list of active CC emails for the specified subject."""
+def _get_cc_emails_for_subject(subject_name: str = 'eorder information', ship_to: str | None = None) -> list[str]:
+    """Fetch list of active CC emails for the specified subject and optional ship_to."""
     try:
         from core.models import CCEmailConfig
-        configs = CCEmailConfig.objects.filter(is_active=True, subject__iexact=subject_name)
-        return list(configs.values_list('email', flat=True))
+        from django.db.models import Q
+
+        qs = CCEmailConfig.objects.filter(is_active=True, subject__iexact=subject_name)
+        if ship_to:
+            ship_to_str = str(ship_to).strip()
+            qs = qs.filter(
+                Q(ship_to__isnull=True) |
+                Q(ship_to='') |
+                Q(ship_to__iexact=ship_to_str) |
+                Q(ship_to__iexact='all')
+            )
+        else:
+            qs = qs.filter(
+                Q(ship_to__isnull=True) |
+                Q(ship_to='') |
+                Q(ship_to__iexact='all')
+            )
+
+        return list(qs.values_list('email', flat=True).distinct())
     except Exception as e:
-        logger.error(f"[EmailService] Failed to fetch CC emails for subject '{subject_name}': {e}")
+        logger.error(f"[EmailService] Failed to fetch CC emails for subject '{subject_name}' and ship_to '{ship_to}': {e}")
         return []
 
 
@@ -256,26 +275,13 @@ def _get_cc_emails_for_subject(subject_name: str = 'eorder information') -> list
 def send_eorder_info_cc_notification(payload) -> None:
     """
     Send CC notification for eOrder Information to configured CC emails.
-    Format specified:
-    Hi, This Data eOrder Information :
-
-    Submitted Order With Filename Order ID <ID>
-
-    Distributor Name: <Distributor>
-    City: <City>
-    PO Date: <PO Date>
-    Delivery Date: <Delivery Date>
-    Type Order: <Type Order>
-    Items Success: <Count> items(s)
-    Items Rejected: <Count> items(s)
-    Inserted On: <Date>
-    Inserted By: <User>
-
-    See Order Click This Link: <URL>
     """
-    cc_emails = _get_cc_emails_for_subject(payload.get('subject'))
+    print("send_eorder_info_cc_notification", payload)
+    ship_to = payload.get('ship_to')
+    subject_name = payload.get('subject', 'eorder information')
+    cc_emails = _get_cc_emails_for_subject(subject_name, ship_to=ship_to)
     if not cc_emails:
-        logger.info(f"[EmailService] No active CC email configs found for subject '{subject}'. Skipping.")
+        logger.info(f"[EmailService] No active CC email configs found for subject '{subject_name}' and ship_to '{ship_to}'. Skipping.")
         return
 
     # Extract fields from payload with fallbacks
@@ -294,12 +300,6 @@ def send_eorder_info_cc_notification(payload) -> None:
     inserted_on = payload.get('inserted_on') 
 
     inserted_by = payload.get('inserted_by')
-    order_id = payload.get('order_id')
-    print('order_id', order_id)
-    if order_id:
-        order_url = f"{settings.FRONTEND_URL_EORDER}/order/{order_id}"
-    else:
-        order_url = ""
 
     context = {
         'filename_order_id': filename_order_id,
@@ -310,9 +310,30 @@ def send_eorder_info_cc_notification(payload) -> None:
         'order_type': order_type,
         'items': items,
         'inserted_on': inserted_on,
-        'inserted_by': inserted_by,
-        'order_url': order_url,
+        'inserted_by': inserted_by
     }
+
+    # Generate CSV attachment for item details if item_details list is present in payload
+    item_details = payload.get('item_details') or payload.get('items_detail') or payload.get('item_list') or payload.get('order_items')
+    csv_file_content = None
+    if item_details and isinstance(item_details, list):
+        output = io.StringIO()
+        output.write('\ufeff')  # UTF-8 BOM for Excel compatibility
+        writer = csv.writer(output)
+        writer.writerow(['PO Number', 'SKU', 'Product Name', 'Order Qty', 'UOM', 'Price', 'PO Date', 'Delivery Date'])
+        for item in item_details:
+            if isinstance(item, dict):
+                writer.writerow([
+                    item.get('po_number', ''),
+                    item.get('sku', ''),
+                    item.get('product_name', item.get('name', '')),
+                    item.get('order_qty', item.get('qty', 0)),
+                    item.get('uom', ''),
+                    item.get('price', 0),
+                    item.get('po_date', ''),
+                    item.get('delivery_date', item.get('dlv_date', ''))
+                ])
+        csv_file_content = output.getvalue()
 
     subject = f"E-Order Information - {filename_order_id}"
 
@@ -327,7 +348,6 @@ def send_eorder_info_cc_notification(payload) -> None:
         f"Items\t:\t{items}\n"
         f"Inserted On\t:\t{inserted_on}\n"
         f"Inserted By\t:\t{inserted_by}\n\n"
-        f"See Order Click This Link: {order_url}\n"
     )
 
     try:
@@ -348,7 +368,6 @@ def send_eorder_info_cc_notification(payload) -> None:
             f"<tr><td style='padding: 4px 12px 4px 0; font-weight: bold;'>Inserted By</td><td>:</td><td style='padding-left: 8px;'>{inserted_by}</td></tr>"
             f"</table>"
             f"<div style='margin-top: 30px; text-align: left;'>"
-            f"<a href='{order_url}' style='display: inline-block; padding: 12px 24px; background-color: #2563eb; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 14px;'>See Order Click This Link</a>"
             f"</div>"
             f"</div>"
         )
@@ -361,6 +380,17 @@ def send_eorder_info_cc_notification(payload) -> None:
             to=cc_emails,
         )
         msg.attach_alternative(html_body, "text/html")
+
+        if csv_file_content:
+            attachment_filename = f"Rincian_Item_Order_{filename_order_id}.csv"
+            msg.attach(attachment_filename, csv_file_content, 'text/csv')
+
+        attachments = payload.get('attachments') or []
+        if isinstance(attachments, list):
+            for att in attachments:
+                if isinstance(att, dict) and att.get('filename') and att.get('content'):
+                    msg.attach(att['filename'], att['content'], att.get('mimetype', 'text/csv'))
+
         msg.send(fail_silently=False)
         logger.info(
             f"[EmailService] eOrder Information CC email sent to {cc_emails} "

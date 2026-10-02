@@ -863,7 +863,7 @@ class APIAuditLog(models.Model):
 
 class CCEmailConfig(models.Model):
     """
-    Configuration management for CC email recipients based on email subject options.
+    Configuration management for CC email recipients based on email subject options and optional ship_to.
     Specifically supports 'eorder information' and customizable subjects.
     """
     SUBJECT_CHOICES = [
@@ -875,6 +875,12 @@ class CCEmailConfig(models.Model):
         max_length=150,
         default='eorder information',
         help_text="Target email subject option (e.g. 'eorder information')"
+    )
+    ship_to = models.CharField(
+        max_length=50,
+        null=True,
+        blank=True,
+        help_text="Target Ship To code for filtering CC recipients"
     )
     is_active = models.BooleanField(default=True, help_text="Active status flag")
     created_at = models.DateTimeField(auto_now_add=True)
@@ -891,9 +897,10 @@ class CCEmailConfig(models.Model):
     class Meta:
         db_table = 'aw_cc_email_config'
         ordering = ['-created_at']
-        unique_together = ['email', 'subject']
+        unique_together = ['email', 'subject', 'ship_to']
 
     def __str__(self):
-        return f"{self.email} [{self.subject}] ({'Active' if self.is_active else 'Inactive'})"
+        ship_to_str = f" [{self.ship_to}]" if self.ship_to else ""
+        return f"{self.email} [{self.subject}]{ship_to_str} ({'Active' if self.is_active else 'Inactive'})"
 
 

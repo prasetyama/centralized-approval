@@ -168,3 +168,41 @@ class WorkflowEngineOrgStructureTest(TestCase):
         self.assertEqual(req.payload.get('po_number'), 'PO/2026/0099')
         self.assertEqual(req.payload.get('quotation'), 'QUOT-8821')
 
+
+class CCEmailConfigTest(TestCase):
+    def setUp(self):
+        from core.models import CCEmailConfig
+        CCEmailConfig.objects.create(email='all_dist@test.com', subject='eorder information', ship_to='all', is_active=True)
+        CCEmailConfig.objects.create(email='dist1@test.com', subject='eorder information', ship_to='10001', is_active=True)
+        CCEmailConfig.objects.create(email='dist2@test.com', subject='eorder information', ship_to='10002', is_active=True)
+        CCEmailConfig.objects.create(email='general@test.com', subject='eorder information', ship_to=None, is_active=True)
+        CCEmailConfig.objects.create(email='inactive@test.com', subject='eorder information', ship_to='10001', is_active=False)
+
+    def test_get_cc_emails_specific_ship_to(self):
+        from core.email_service import _get_cc_emails_for_subject
+        emails = _get_cc_emails_for_subject('eorder information', ship_to='10001')
+        self.assertIn('dist1@test.com', emails)
+        self.assertIn('all_dist@test.com', emails)
+        self.assertIn('general@test.com', emails)
+        self.assertNotIn('dist2@test.com', emails)
+        self.assertNotIn('inactive@test.com', emails)
+
+    def test_get_cc_emails_payload_ship_to_all(self):
+        from core.email_service import _get_cc_emails_for_subject
+        emails = _get_cc_emails_for_subject('eorder information', ship_to='all')
+        self.assertIn('all_dist@test.com', emails)
+        self.assertIn('dist1@test.com', emails)
+        self.assertIn('dist2@test.com', emails)
+        self.assertIn('general@test.com', emails)
+        self.assertNotIn('inactive@test.com', emails)
+
+    def test_get_cc_emails_payload_ship_to_all_uppercase(self):
+        from core.email_service import _get_cc_emails_for_subject
+        emails = _get_cc_emails_for_subject('eorder information', ship_to='ALL')
+        self.assertIn('all_dist@test.com', emails)
+        self.assertIn('dist1@test.com', emails)
+        self.assertIn('dist2@test.com', emails)
+        self.assertIn('general@test.com', emails)
+        self.assertNotIn('inactive@test.com', emails)
+
+
