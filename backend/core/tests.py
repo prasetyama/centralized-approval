@@ -205,4 +205,32 @@ class CCEmailConfigTest(TestCase):
         self.assertIn('general@test.com', emails)
         self.assertNotIn('inactive@test.com', emails)
 
+    def test_import_csv_multiple_emails(self):
+        from rest_framework.test import APIClient
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from core.models import CCEmailConfig
+
+        client = APIClient()
+        user = User.objects.create_user(username='admin_test', password='password', is_staff=True, is_superuser=True)
+        client.force_authenticate(user=user)
+
+        csv_content = (
+            "Ship_To,email\n"
+            "0001001234,\"user1@test.com, user2@test.com\"\n"
+            "0001005678,user3@test.com; user4@test.com\n"
+        ).encode('utf-8')
+
+        file = SimpleUploadedFile("test_import.csv", csv_content, content_type="text/csv")
+        response = client.post('/api/v1/admin/cc-email-configs/import-csv/', {'file': file}, format='multipart')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data.get('success'))
+        self.assertEqual(response.data.get('created_count'), 4)
+
+        self.assertTrue(CCEmailConfig.objects.filter(ship_to='0001001234', email='user1@test.com').exists())
+        self.assertTrue(CCEmailConfig.objects.filter(ship_to='0001001234', email='user2@test.com').exists())
+        self.assertTrue(CCEmailConfig.objects.filter(ship_to='0001005678', email='user3@test.com').exists())
+        self.assertTrue(CCEmailConfig.objects.filter(ship_to='0001005678', email='user4@test.com').exists())
+
+
 

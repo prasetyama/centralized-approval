@@ -10,35 +10,115 @@ import { useQuery } from '@tanstack/react-query';
 import { PayloadRenderer } from '@/components/molecules/PayloadRenderer';
 
 export const WorkflowSimulatorPage = () => {
-    const defaultPayload = {
-        "module_code": "EORDER",
-        "workflow_id": 1,
-        "title": "Order Submission PO Number C/FAD/U003/202604",
-        "description": "Need approval for order PO Number C/FAD/U003/202604",
-        "priority": "URGENT",
-        "payload": {
-            "reference_id": "1050020260330A00703U05",
-            "principle": "A00703",
-            "po_number": "C/FAD/U003/202604",
-            "distributor": "PT. BINTANG SINAR JAYA",
-            "total_quantity": 110,
-            "total_sku": 1,
-            "submitted_at": "2026-03-30T06:52:27.782Z",
-            "order_type": "3",
-            "brand_code": "SQ",
-            "items": [
-                {
-                    "sku": "F0000526",
-                    "name": "DF FUNTIME LONG MILK VAN 12X20X26 G",
-                    "qty": 100,
-                    "price": 30000
+    const PRESET_PAYLOADS = [
+        {
+            id: 10,
+            label: 'Workflow 10: PR Approval (Department Approval)',
+            data: {
+                "module_code": "EORDER",
+                "workflow_id": 10,
+                "title": "PR Approval - Laptops & IT Equipment",
+                "description": "Purchase Requisition for IT Department Workstations",
+                "priority": "HIGH",
+                "payload": {
+                    "reference_id": "PR-2026-0010",
+                    "pr_number": "PR/IT/2026/0042",
+                    "department": "IT",
+                    "department_code": "IT_DEPT",
+                    "requester": "staff_it",
+                    "total_amount": 75000000,
+                    "items": [
+                        {
+                            "sku": "IT-LAPTOP-01",
+                            "name": "Dell XPS 15 Workstation",
+                            "qty": 5,
+                            "price": 15000000
+                        }
+                    ],
+                    "notes": "Urgent procurement for developer workstations"
                 }
-            ],
-            "total_amount": 3000000
+            }
+        },
+        {
+            id: 1,
+            label: 'Workflow 1: Purchase Order Approval (PO Submission)',
+            data: {
+                "module_code": "EORDER",
+                "workflow_id": 1,
+                "title": "Order Submission PO Number C/FAD/U003/202604",
+                "description": "Need approval for order PO Number C/FAD/U003/202604",
+                "priority": "URGENT",
+                "payload": {
+                    "reference_id": "1050020260330A00703U05",
+                    "principle": "A00703",
+                    "po_number": "C/FAD/U003/202604",
+                    "distributor": "PT. BINTANG SINAR JAYA",
+                    "total_quantity": 110,
+                    "total_sku": 1,
+                    "submitted_at": "2026-03-30T06:52:27.782Z",
+                    "order_type": "3",
+                    "brand_code": "SQ",
+                    "items": [
+                        {
+                            "sku": "F0000526",
+                            "name": "DF FUNTIME LONG MILK VAN 12X20X26 G",
+                            "qty": 100,
+                            "price": 30000
+                        }
+                    ],
+                    "total_amount": 3000000
+                }
+            }
+        },
+        {
+            id: 4,
+            label: 'Workflow 4: Urgent Order Approval',
+            data: {
+                "module_code": "EORDER",
+                "workflow_id": 4,
+                "title": "Urgent Stock Replenishment PO #U-9901",
+                "description": "Emergency Order Submission for High Demand SKU",
+                "priority": "URGENT",
+                "payload": {
+                    "reference_id": "URG-2026-0402",
+                    "distributor": "PT. BORWITA CITRA PRIMA",
+                    "order_type": "3",
+                    "brand_code": "SQ",
+                    "items": [
+                        {
+                            "sku": "F0000526",
+                            "name": "DF FUNTIME LONG MILK VAN 12X20X26 G",
+                            "qty": 200,
+                            "price": 30000
+                        }
+                    ],
+                    "total_amount": 6000000
+                }
+            }
+        },
+        {
+            id: 3,
+            label: 'Workflow 3: Leave Request Approval (HR)',
+            data: {
+                "module_code": "HR",
+                "workflow_id": 3,
+                "title": "Annual Leave Request - 5 Days",
+                "description": "Annual Leave Request for John Doe",
+                "priority": "NORMAL",
+                "payload": {
+                    "reference_id": "LR-2026-089",
+                    "leave_type": "annual",
+                    "days": 5,
+                    "start_date": "2026-10-10",
+                    "end_date": "2026-10-15",
+                    "reason": "Family Vacation"
+                }
+            }
         }
-    };
+    ];
 
-    const [payloadInput, setPayloadInput] = useState(JSON.stringify(defaultPayload, null, 4));
+    const [selectedPresetId, setSelectedPresetId] = useState<number>(10);
+    const [payloadInput, setPayloadInput] = useState(JSON.stringify(PRESET_PAYLOADS[0].data, null, 4));
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [simulationResult, setSimulationResult] = useState<any[] | null>(null);
@@ -52,6 +132,77 @@ export const WorkflowSimulatorPage = () => {
 
     const users = usersData?.results || [];
 
+    const handleSelectPreset = (presetId: number) => {
+        setSelectedPresetId(presetId);
+        const found = PRESET_PAYLOADS.find(p => p.id === presetId);
+        if (found) {
+            setPayloadInput(JSON.stringify(found.data, null, 4));
+            setSimulationResult(null);
+            setError(null);
+        }
+    };
+
+    const resolveOrgChain = (requesterUsername?: string, departmentNameOrCode?: string, orgStructures: any[] = []) => {
+        if (!orgStructures || orgStructures.length === 0) return [];
+
+        let startNode = null;
+        if (requesterUsername) {
+            startNode = orgStructures.find((o: any) =>
+                o.user_name?.toLowerCase() === requesterUsername.toLowerCase()
+            );
+        }
+
+        if (!startNode && departmentNameOrCode) {
+            const deptNodes = orgStructures.filter((o: any) =>
+                (o.department_name && o.department_name.toLowerCase() === departmentNameOrCode.toLowerCase()) ||
+                (o.department_code && o.department_code.toLowerCase() === departmentNameOrCode.toLowerCase())
+            );
+            if (deptNodes.length > 0) {
+                deptNodes.sort((a: any, b: any) => (a.level_order || 1) - (b.level_order || 1));
+                startNode = deptNodes[0];
+            }
+        }
+
+        if (!startNode) return [];
+
+        const chain: any[] = [];
+        const visited = new Set<number>();
+        let currentNode = startNode;
+
+        // Traverse reports_to
+        while (currentNode && currentNode.reports_to && !visited.has(currentNode.user)) {
+            visited.add(currentNode.user);
+            const managerNode = orgStructures.find((o: any) => o.user === currentNode.reports_to);
+            if (!managerNode || visited.has(managerNode.user)) break;
+
+            chain.push({
+                userId: managerNode.user,
+                userName: managerNode.user_name,
+                fullName: managerNode.user_full_name || managerNode.reports_to_name || managerNode.user_name,
+                title: managerNode.position_title || 'Manager',
+                department: managerNode.department_name,
+                isDeptHead: managerNode.is_dept_head
+            });
+
+            currentNode = managerNode;
+            if (managerNode.is_dept_head) break;
+        }
+
+        // If chain is empty (e.g. requester is already top node or no reports_to), return the startNode if it has head title or is_dept_head
+        if (chain.length === 0) {
+            chain.push({
+                userId: currentNode.user,
+                userName: currentNode.user_name,
+                fullName: currentNode.user_full_name || currentNode.user_name,
+                title: currentNode.position_title || 'Dept Head',
+                department: currentNode.department_name,
+                isDeptHead: currentNode.is_dept_head
+            });
+        }
+
+        return chain;
+    };
+
     const handleSimulate = async () => {
         setError(null);
         setSimulationResult(null);
@@ -61,19 +212,22 @@ export const WorkflowSimulatorPage = () => {
             const parsedPayload = JSON.parse(payloadInput);
             const workflowId = parsedPayload.workflow_id;
 
-            // Call API to fetch workflow definition and brands
-            const [workflowResponse, brandsResponse]: any[] = await Promise.all([
+            // Call API to fetch workflow definition, brands, and org structures
+            const [workflowResponse, brandsResponse, orgResponse]: any[] = await Promise.all([
                 api.get(`/admin/workflows/${workflowId}/`),
-                api.get('/admin/brands/')
+                api.get('/admin/brands/'),
+                api.get('/admin/org-structures/')
             ]);
 
             const data = workflowResponse.success !== undefined ? workflowResponse.data : workflowResponse;
             const brands = brandsResponse.results || brandsResponse;
+            const orgStructures = orgResponse.results || orgResponse || [];
 
             if (data && data.steps) {
                 let hasWaiting = false;
+                const simulatedSteps: any[] = [];
 
-                const simulatedSteps = data.steps.map((step: any) => {
+                data.steps.forEach((step: any) => {
                     let isSkipped = false;
                     let isOptional = false;
 
@@ -105,15 +259,50 @@ export const WorkflowSimulatorPage = () => {
                         }
                     }
 
+                    const approverType = step.approver_type;
+                    const requesterUser = parsedPayload.payload?.requester || parsedPayload.requester;
+                    const reqDept = parsedPayload.payload?.department || parsedPayload.payload?.department_code;
+
+                    // Dynamic breakdown for REQ_DEPT_HEAD and PURCH_DEPT_HEAD using Org Structures hierarchy!
+                    if ((approverType === 'REQ_DEPT_HEAD' || approverType === 'PURCH_DEPT_HEAD') && orgStructures.length > 0) {
+                        const targetDept = approverType === 'PURCH_DEPT_HEAD' ? 'Purchasing' : reqDept;
+                        const targetReq = approverType === 'PURCH_DEPT_HEAD' ? '' : requesterUser;
+
+                        const chain = resolveOrgChain(targetReq, targetDept, orgStructures);
+
+                        if (chain.length > 0) {
+                            chain.forEach((link: any, idx: number) => {
+                                let status = 'PENDING';
+                                if (isSkipped) {
+                                    status = 'SKIPPED';
+                                } else if (!hasWaiting) {
+                                    status = 'WAITING';
+                                    hasWaiting = true;
+                                } else if (isOptional) {
+                                    status = 'OPTIONAL';
+                                }
+
+                                simulatedSteps.push({
+                                    ...step,
+                                    id: `${step.id}_chain_${idx}`,
+                                    name: `${step.name} - ${link.title}`,
+                                    simulatedAssignee: `${link.fullName} (${link.title} - ${link.department})`,
+                                    status
+                                });
+                            });
+                            return;
+                        }
+                    }
+
+                    // Standard single step processing
+                    let status = 'PENDING';
                     if (isSkipped) {
-                        step.status = 'SKIPPED';
+                        status = 'SKIPPED';
                     } else if (!hasWaiting) {
-                        step.status = 'WAITING';
+                        status = 'WAITING';
                         hasWaiting = true;
                     } else if (isOptional) {
-                        step.status = 'OPTIONAL';
-                    } else {
-                        step.status = 'PENDING';
+                        status = 'OPTIONAL';
                     }
 
                     let simulatedAssignee = null;
@@ -136,7 +325,25 @@ export const WorkflowSimulatorPage = () => {
                         }
                     }
 
-                    return { ...step, simulatedAssignee };
+                    if (!simulatedAssignee) {
+                        if (approverType === 'REQ_DEPT_HEAD') {
+                            simulatedAssignee = reqDept ? `Dept Head (${reqDept})` : "Requestor Dept Head";
+                        } else if (approverType === 'PURCH_DEPT_HEAD') {
+                            simulatedAssignee = "Purchasing Dept Head / Team";
+                        } else if (approverType === 'FINANCE_DEPT_HEAD') {
+                            simulatedAssignee = "Finance Dept Head / Team";
+                        } else if (approverType === 'TARGET_DEPT_ROLE') {
+                            simulatedAssignee = step.target_department_name ? `${step.target_department_name} Role` : "Target Dept Role";
+                        } else {
+                            simulatedAssignee = step.user_name || step.role_name || (step.role_users && step.role_users[0]?.name) || "Unassigned";
+                        }
+                    }
+
+                    simulatedSteps.push({
+                        ...step,
+                        simulatedAssignee,
+                        status
+                    });
                 });
 
                 setSimulationResult(simulatedSteps);
@@ -221,8 +428,22 @@ export const WorkflowSimulatorPage = () => {
                         </p>
                     </CardHeader>
                     <CardContent className="flex-1 flex flex-col space-y-4 overflow-hidden">
+                        <div className="space-y-1.5">
+                            <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">
+                                Preset Payload Template
+                            </label>
+                            <Select
+                                value={selectedPresetId.toString()}
+                                onChange={(e) => handleSelectPreset(Number(e.target.value))}
+                                options={PRESET_PAYLOADS.map(p => ({
+                                    value: p.id.toString(),
+                                    label: p.label
+                                }))}
+                            />
+                        </div>
+
                         <Textarea
-                            className="font-mono text-sm h-full resize-none flex-1 min-h-[60vh]"
+                            className="font-mono text-sm h-full resize-none flex-1 min-h-[55vh]"
                             value={payloadInput}
                             onChange={(e) => setPayloadInput(e.target.value)}
                             spellCheck={false}
@@ -356,6 +577,13 @@ export const WorkflowSimulatorPage = () => {
                                                             <p className="text-xs text-slate-400 mt-0.5">
                                                                 Condition: {step.condition_expression || step.condition}
                                                             </p>
+                                                        )}
+                                                        {step.required_inputs && step.required_inputs.length > 0 && (
+                                                            <div className="mt-1">
+                                                                <span className="text-xs font-semibold text-amber-800 bg-amber-50 px-2.5 py-0.5 rounded-full border border-amber-200 inline-block">
+                                                                    Required Input: {step.required_inputs.join(', ')}
+                                                                </span>
+                                                            </div>
                                                         )}
                                                     </div>
 

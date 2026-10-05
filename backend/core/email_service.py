@@ -252,12 +252,13 @@ def _get_cc_emails_for_subject(subject_name: str = 'eorder information', ship_to
         qs = CCEmailConfig.objects.filter(is_active=True, subject__iexact=subject_name)
         if ship_to:
             ship_to_str = str(ship_to).strip()
-            qs = qs.filter(
-                Q(ship_to__isnull=True) |
-                Q(ship_to='') |
-                Q(ship_to__iexact=ship_to_str) |
-                Q(ship_to__iexact='all')
-            )
+            if ship_to_str.lower() != 'all':
+                qs = qs.filter(
+                    Q(ship_to__isnull=True) |
+                    Q(ship_to='') |
+                    Q(ship_to__iexact=ship_to_str) |
+                    Q(ship_to__iexact='all')
+                )
         else:
             qs = qs.filter(
                 Q(ship_to__isnull=True) |

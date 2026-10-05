@@ -7,6 +7,7 @@ All views use the WorkflowEngine for business logic (DRY principle).
 from rest_framework import viewsets, status, generics
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
+from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.response import Response
 from django.db import transaction
 from django.db.models import Q, Prefetch, Count
@@ -893,5 +894,139 @@ class CCEmailConfigViewSet(viewsets.ModelViewSet):
             'is_active': config.is_active,
             'message': f"Config for {config.email} is now {'active' if config.is_active else 'inactive'}."
         })
+
+    @action(detail=False, methods=['post'], url_path='import-csv', parser_classes=[MultiPartParser, FormParser])
+    def import_csv(self, request):
+        """
+        Import CC email configurations from a CSV file.
+        CSV format must contain header columns: Ship_To, email
+        The 'email' column can contain multiple emails separated by commas or semicolons.
+        """
+        file_obj = request.FILES.get('file')
+        if not file_obj:
+            return Response(
+                {'detail': 'Tidak ada file CSV yang diunggah.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if not file_obj.name.lower().endswith('.csv'):
+            return Response(
+                {'detail': 'File harus berformat .csv'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        subject_val = request.data.get('subject', 'eorder information')
+        if not subject_val:
+            subject_val = 'eorder information'
+        subject_val = str(subject_val).strip()
+
+        try:
+            content = file_obj.read()
+            try:
+                decoded_file = content.decode('utf-8-sig')
+            except UnicodeDecodeError:
+                decoded_file = content.decode('latin-1')
+
+            import csv
+            import io
+            import re
+
+            csv_file = io.StringIO(decoded_file)
+            reader = csv.reader(csv_file)
+            
+            headers = next(reader, None)
+            if not headers:
+                return Response(
+                    {'detail': 'File CSV kosong.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            header_map = {}
+            for idx, h in enumerate(headers):
+                cleaned_h = h.strip().lower().replace(' ', '_')
+                header_map[cleaned_h] = idx
+
+            ship_to_idx = None
+            email_idx = None
+
+            for key, idx in header_map.items():
+                if key in ['ship_to', 'shipto', 'ship_to_code', 'ship_to_id', 'ship_to_no']:
+                    ship_to_idx = idx
+                elif key in ['email', 'emails', 'cc_email', 'cc_emails', 'email_address', 'email_addresses']:
+                    email_idx = idx
+
+            if ship_to_idx is None or email_idx is None:
+                return Response(
+                    {'detail': "Header CSV harus memiliki kolom 'Ship_To' dan 'email'."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            created_count = 0
+            updated_count = 0
+            skipped_count = 0
+            errors = []
+            
+            email_regex = re.compile(r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$')
+
+            with transaction.atomic():
+                row_number = 1
+                for row in reader:
+                    row_number += 1
+                    if not row or max(ship_to_idx, email_idx) >= len(row):
+                        continue
+
+                    ship_to_raw = row[ship_to_idx].strip()
+                    email_raw = row[email_idx].strip()
+
+                    if not email_raw:
+                        continue
+
+                    ship_to_val = ship_to_raw if ship_to_raw else None
+
+                    # Split multiple emails by comma or semicolon
+                    email_list = re.split(r'[,;]', email_raw)
+                    for raw_item in email_list:
+                        clean_email = raw_item.strip().lower()
+                        if not clean_email:
+                            continue
+
+                        if not email_regex.match(clean_email):
+                            errors.append(f"Baris {row_number}: Email '{clean_email}' format tidak valid.")
+                            skipped_count += 1
+                            continue
+
+                        config, created = CCEmailConfig.objects.get_or_create(
+                            email=clean_email,
+                            subject=subject_val,
+                            ship_to=ship_to_val,
+                            defaults={
+                                'is_active': True,
+                                'created_by': request.user if request.user.is_authenticated else None
+                            }
+                        )
+                        if created:
+                            created_count += 1
+                        else:
+                            if not config.is_active:
+                                config.is_active = True
+                                config.save(update_fields=['is_active'])
+                            updated_count += 1
+
+            return Response({
+                'success': True,
+                'message': f'Berhasil mengimpor CSV. {created_count} konfig baru ditambahkan, {updated_count} konfig diperbarui.',
+                'created_count': created_count,
+                'updated_count': updated_count,
+                'skipped_count': skipped_count,
+                'errors': errors
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            logger.exception("Error importing CC email CSV")
+            return Response(
+                {'detail': f'Terjadi kesalahan saat memproses file CSV: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
 
 

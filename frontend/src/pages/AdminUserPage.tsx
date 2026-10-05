@@ -32,7 +32,7 @@ export const AdminUserPage = () => {
 
     const { data: users, isLoading: usersLoading } = useQuery({
         queryKey: ['admin-users', debouncedSearch],
-        queryFn: () => api.get('/admin/users', { params: { search: debouncedSearch } }) as Promise<any>,
+        queryFn: () => api.get('/admin/users', { params: { search: debouncedSearch, page_size: 1000 } }) as Promise<any>,
     });
 
     if (usersLoading) {
