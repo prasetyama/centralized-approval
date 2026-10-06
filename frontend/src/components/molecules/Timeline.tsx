@@ -1,6 +1,7 @@
-import { CheckCircle2, Clock, XCircle, PlusCircle } from 'lucide-react';
+import { CheckCircle2, Clock, XCircle, PlusCircle, FileCheck, Tag } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatDate } from '@/lib/utils';
+import { AttachmentList, AttachmentItem } from '@/components/molecules/AttachmentList';
 
 export interface TimelineStep {
     id: number;
@@ -11,12 +12,52 @@ export interface TimelineStep {
     acted_at?: string;
     step_order: number;
     role_name: string;
+    step_data?: Record<string, any>;
 }
 
 interface TimelineProps {
     steps: TimelineStep[];
     currentStep: number;
 }
+
+const getStepAttachments = (stepData?: Record<string, any>): AttachmentItem[] => {
+    if (!stepData) return [];
+    const files: AttachmentItem[] = [];
+    let counter = 1;
+
+    const extract = (val: any) => {
+        if (!val) return;
+        if (Array.isArray(val)) {
+            val.forEach(extract);
+            return;
+        }
+        if (typeof val === 'object' && val !== null) {
+            if (val.name || val.data || val.url) {
+                files.push({
+                    id: `step-att-${counter++}`,
+                    name: val.name || `Attachment-${counter}`,
+                    size: val.size,
+                    type: val.type,
+                    data: val.data,
+                    url: val.url,
+                });
+            }
+        } else if (typeof val === 'string' && (val.startsWith('data:') || val.startsWith('http') || val.startsWith('/media/'))) {
+            files.push({
+                id: `step-att-${counter++}`,
+                name: `Step File-${counter}`,
+                data: val.startsWith('data:') ? val : undefined,
+                url: !val.startsWith('data:') ? val : undefined,
+            });
+        }
+    };
+
+    if (stepData.quotation) extract(stepData.quotation);
+    if (stepData.attachments) extract(stepData.attachments);
+    if (stepData.files) extract(stepData.files);
+
+    return files;
+};
 
 export const Timeline = ({ steps, currentStep }: TimelineProps) => {
     return (
@@ -28,6 +69,10 @@ export const Timeline = ({ steps, currentStep }: TimelineProps) => {
                 const isSkipped = step.status === 'SKIPPED';
                 const isAdditional = step.status === 'ADDITIONAL';
                 const isPast = step.step_order < currentStep;
+
+                const stepAttachments = getStepAttachments(step.step_data);
+                const poNumber = step.step_data?.po_number;
+                const quotationText = typeof step.step_data?.quotation === 'string' && !step.step_data?.quotation.startsWith('data:') ? step.step_data?.quotation : null;
 
                 return (
                     <div key={step.id} className="relative flex gap-4 pb-8 last:pb-0">
@@ -90,9 +135,34 @@ export const Timeline = ({ steps, currentStep }: TimelineProps) => {
                                 )}
                             </p>
 
+                            {/* Additional Step Metadata (PO Number / Quotation No) */}
+                            {(poNumber || quotationText) && (
+                                <div className="mt-2 flex flex-wrap gap-2">
+                                    {poNumber && (
+                                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-blue-50 text-blue-700 font-medium text-xs border border-blue-100">
+                                            <Tag size={12} />
+                                            PO No: <strong className="font-bold">{poNumber}</strong>
+                                        </span>
+                                    )}
+                                    {quotationText && (
+                                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-emerald-50 text-emerald-700 font-medium text-xs border border-emerald-100">
+                                            <FileCheck size={12} />
+                                            Quotation Ref: <strong className="font-bold">{quotationText}</strong>
+                                        </span>
+                                    )}
+                                </div>
+                            )}
+
                             {step.comments && (
                                 <div className="mt-2 rounded-lg bg-slate-50 p-3 text-xs text-slate-600 border border-slate-100 italic">
                                     "{step.comments}"
+                                </div>
+                            )}
+
+                            {/* Step Attachment Files */}
+                            {stepAttachments.length > 0 && (
+                                <div className="mt-3">
+                                    <AttachmentList attachments={stepAttachments} compact />
                                 </div>
                             )}
 
@@ -108,3 +178,4 @@ export const Timeline = ({ steps, currentStep }: TimelineProps) => {
         </div>
     );
 };
+

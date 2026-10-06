@@ -168,6 +168,42 @@ class WorkflowEngineOrgStructureTest(TestCase):
         self.assertEqual(req.payload.get('po_number'), 'PO/2026/0099')
         self.assertEqual(req.payload.get('quotation'), 'QUOT-8821')
 
+    def test_approve_api_with_quotation_files_array(self):
+        from rest_framework.test import APIClient
+        payload = {"reference_id": "PR-2026-003", "company_code": "PTBSJ"}
+        req = WorkflowEngine.submit_request(
+            module_code='EORDER',
+            workflow_id=self.workflow.id,
+            requester=self.staff,
+            title="Quotation File Array API Test",
+            payload=payload,
+            description="Testing quotation array input on approve API"
+        )
+        # Approve first 2 steps
+        for i in range(2):
+            current_step = req.steps.get(step_order=i+1)
+            WorkflowEngine.approve_step(req.id, current_step.user_required, comments=f"Approved step {i+1}")
+
+        client = APIClient()
+        client.force_authenticate(user=self.finance_user)
+        quotation_files = [
+            {"name": "penawaran.pdf", "size": 1024, "type": "application/pdf", "data": "data:application/pdf;base64,AAA"}
+        ]
+        response = client.post(
+            f"/api/v1/workflow/{req.id}/approve",
+            data={
+                "comments": "Approved with quotation attachment",
+                "po_number": "PO-12345",
+                "quotation": quotation_files,
+                "step_data": {"po_number": "PO-12345", "quotation": quotation_files}
+            },
+            format="json"
+        )
+        self.assertEqual(response.status_code, 200)
+        req.refresh_from_db()
+        self.assertEqual(req.status, 'APPROVED')
+        self.assertEqual(req.payload.get('quotation'), quotation_files)
+
 
 class CCEmailConfigTest(TestCase):
     def setUp(self):

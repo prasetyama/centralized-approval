@@ -19,6 +19,79 @@ import { AddWatcherModal } from '@/components/molecules/AddWatcherModal';
 import { ConfirmationModal } from '@/components/molecules/ConfirmationModal';
 import { WatcherAvatarGroup } from '@/components/molecules/WatcherAvatarGroup';
 import { ActivityTimeline } from '@/components/organisms/ActivityTimeline';
+import { AttachmentList, AttachmentItem } from '@/components/molecules/AttachmentList';
+
+const extractAttachmentsFromDetail = (detail: any): AttachmentItem[] => {
+    if (!detail) return [];
+    const items: AttachmentItem[] = [];
+    let counter = 1;
+
+    const processItem = (rawItem: any, sourceLabel: string) => {
+        if (!rawItem) return;
+
+        if (Array.isArray(rawItem)) {
+            rawItem.forEach((sub, idx) => processItem(sub, `${sourceLabel} #${idx + 1}`));
+            return;
+        }
+
+        if (typeof rawItem === 'object' && rawItem !== null) {
+            if (rawItem.name || rawItem.data || rawItem.url || rawItem.file_path) {
+                items.push({
+                    id: `att-${counter++}`,
+                    name: rawItem.name || rawItem.filename || `Attachment-${counter}`,
+                    size: rawItem.size,
+                    type: rawItem.type || rawItem.content_type,
+                    data: rawItem.data || rawItem.base64,
+                    url: rawItem.url || rawItem.file_path,
+                    source: sourceLabel,
+                });
+            }
+            return;
+        }
+
+        if (typeof rawItem === 'string' && rawItem.trim()) {
+            const str = rawItem.trim();
+            if (str.startsWith('data:') || str.startsWith('http://') || str.startsWith('https://') || str.startsWith('/media/')) {
+                let name = `Attachment-${counter}`;
+                if (str.includes('name=')) {
+                    name = str.split('name=')[1].split(';')[0];
+                }
+                items.push({
+                    id: `att-${counter++}`,
+                    name,
+                    data: str.startsWith('data:') ? str : undefined,
+                    url: !str.startsWith('data:') ? str : undefined,
+                    source: sourceLabel,
+                });
+            }
+        }
+    };
+
+    if (detail.payload) {
+        if (detail.payload.quotation) processItem(detail.payload.quotation, 'Payload Quotation');
+        if (detail.payload.attachments) processItem(detail.payload.attachments, 'Payload Attachment');
+        if (detail.payload.files) processItem(detail.payload.files, 'Payload File');
+    }
+
+    if (Array.isArray(detail.steps)) {
+        detail.steps.forEach((step: any) => {
+            if (step.step_data) {
+                const stepLabel = step.name || `Step ${step.step_order}`;
+                if (step.step_data.quotation) {
+                    processItem(step.step_data.quotation, `${stepLabel}`);
+                }
+                if (step.step_data.attachments) {
+                    processItem(step.step_data.attachments, `${stepLabel}`);
+                }
+                if (step.step_data.files) {
+                    processItem(step.step_data.files, `${stepLabel}`);
+                }
+            }
+        });
+    }
+
+    return items;
+};
 
 export const ApprovalDetailPage = () => {
     const { id } = useParams();
@@ -134,6 +207,8 @@ export const ApprovalDetailPage = () => {
     const detail = request as any;
     if (!detail) return null;
 
+    const allAttachments = extractAttachmentsFromDetail(detail);
+
     const activeStep = detail?.steps?.find((s: any) => s.step_order === detail.current_step);
 
     const isApprover = (() => {
@@ -222,6 +297,15 @@ export const ApprovalDetailPage = () => {
                         moduleCode={detail.module_code}
                         payload={detail.payload}
                     />
+
+                    {allAttachments.length > 0 && (
+                        <Card className="border-slate-100 bg-white shadow-sm overflow-hidden p-6">
+                            <AttachmentList
+                                attachments={allAttachments}
+                                title="Lampiran & File Penawaran"
+                            />
+                        </Card>
+                    )}
 
                     <Card className="border-slate-100 bg-white shadow-sm overflow-hidden">
                         <CardHeader className="bg-slate-50/50 border-b border-slate-100 flex flex-row items-center gap-3">
