@@ -85,7 +85,7 @@ export const viewFile = (file: { name: string; data?: string; url?: string; type
 
 export const AttachmentList: React.FC<AttachmentListProps> = ({
     attachments,
-    title = 'Lampiran & Document',
+    title = 'Lampiran',
     compact = false,
 }) => {
     const [previewFile, setPreviewFile] = useState<AttachmentItem | null>(null);
@@ -143,9 +143,8 @@ export const AttachmentList: React.FC<AttachmentListProps> = ({
                     {attachments.map((file) => (
                         <div
                             key={file.id}
-                            className={`flex items-center justify-between p-3 rounded-xl bg-white border border-slate-200/80 shadow-sm hover:border-indigo-200 transition-all ${
-                                compact ? "py-2 px-3 text-xs" : ""
-                            }`}
+                            className={`flex items-center justify-between p-3 rounded-xl bg-white border border-slate-200/80 shadow-sm hover:border-indigo-200 transition-all ${compact ? "py-2 px-3 text-xs" : ""
+                                }`}
                         >
                             <div className="flex items-center gap-3 truncate pr-2 min-w-0">
                                 {getFileIcon(file)}

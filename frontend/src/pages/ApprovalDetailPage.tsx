@@ -302,7 +302,7 @@ export const ApprovalDetailPage = () => {
                         <Card className="border-slate-100 bg-white shadow-sm overflow-hidden p-6">
                             <AttachmentList
                                 attachments={allAttachments}
-                                title="Lampiran & File Penawaran"
+                                title="Lampiran"
                             />
                         </Card>
                     )}
