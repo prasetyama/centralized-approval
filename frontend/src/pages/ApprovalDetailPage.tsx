@@ -24,25 +24,35 @@ import { AttachmentList, AttachmentItem } from '@/components/molecules/Attachmen
 const extractAttachmentsFromDetail = (detail: any): AttachmentItem[] => {
     if (!detail) return [];
     const items: AttachmentItem[] = [];
+    const seenKeys = new Set<string>();
     let counter = 1;
 
     const processItem = (rawItem: any, sourceLabel: string) => {
         if (!rawItem) return;
 
         if (Array.isArray(rawItem)) {
-            rawItem.forEach((sub, idx) => processItem(sub, `${sourceLabel} #${idx + 1}`));
+            rawItem.forEach((sub) => processItem(sub, sourceLabel));
             return;
         }
 
         if (typeof rawItem === 'object' && rawItem !== null) {
             if (rawItem.name || rawItem.data || rawItem.url || rawItem.file_path) {
+                const fileData = rawItem.data || rawItem.base64 || '';
+                const fileUrl = rawItem.url || rawItem.file_path || '';
+                const fileName = rawItem.name || rawItem.filename || `Attachment-${counter}`;
+                const fileSize = rawItem.size || '';
+
+                const key = fileData ? fileData.slice(0, 300) : fileUrl ? fileUrl : `${fileName}_${fileSize}`;
+                if (seenKeys.has(key)) return;
+                seenKeys.add(key);
+
                 items.push({
                     id: `att-${counter++}`,
-                    name: rawItem.name || rawItem.filename || `Attachment-${counter}`,
+                    name: fileName,
                     size: rawItem.size,
                     type: rawItem.type || rawItem.content_type,
-                    data: rawItem.data || rawItem.base64,
-                    url: rawItem.url || rawItem.file_path,
+                    data: fileData || undefined,
+                    url: fileUrl || undefined,
                     source: sourceLabel,
                 });
             }
@@ -52,6 +62,10 @@ const extractAttachmentsFromDetail = (detail: any): AttachmentItem[] => {
         if (typeof rawItem === 'string' && rawItem.trim()) {
             const str = rawItem.trim();
             if (str.startsWith('data:') || str.startsWith('http://') || str.startsWith('https://') || str.startsWith('/media/')) {
+                const key = str.slice(0, 300);
+                if (seenKeys.has(key)) return;
+                seenKeys.add(key);
+
                 let name = `Attachment-${counter}`;
                 if (str.includes('name=')) {
                     name = str.split('name=')[1].split(';')[0];
@@ -67,12 +81,7 @@ const extractAttachmentsFromDetail = (detail: any): AttachmentItem[] => {
         }
     };
 
-    if (detail.payload) {
-        if (detail.payload.quotation) processItem(detail.payload.quotation, 'Payload Quotation');
-        if (detail.payload.attachments) processItem(detail.payload.attachments, 'Payload Attachment');
-        if (detail.payload.files) processItem(detail.payload.files, 'Payload File');
-    }
-
+    // 1. Process steps first to get specific step source labels
     if (Array.isArray(detail.steps)) {
         detail.steps.forEach((step: any) => {
             if (step.step_data) {
@@ -90,8 +99,16 @@ const extractAttachmentsFromDetail = (detail: any): AttachmentItem[] => {
         });
     }
 
+    // 2. Process payload (if not already added from a step)
+    if (detail.payload) {
+        if (detail.payload.quotation) processItem(detail.payload.quotation, 'Payload Quotation');
+        if (detail.payload.attachments) processItem(detail.payload.attachments, 'Payload Attachment');
+        if (detail.payload.files) processItem(detail.payload.files, 'Payload File');
+    }
+
     return items;
 };
+
 
 export const ApprovalDetailPage = () => {
     const { id } = useParams();
