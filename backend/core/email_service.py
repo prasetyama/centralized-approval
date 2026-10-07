@@ -277,7 +277,6 @@ def send_eorder_info_cc_notification(payload) -> None:
     """
     Send CC notification for eOrder Information to configured CC emails.
     """
-    print("send_eorder_info_cc_notification", payload)
     ship_to = payload.get('ship_to')
     subject_name = payload.get('subject', 'eorder information')
     cc_emails = _get_cc_emails_for_subject(subject_name, ship_to=ship_to)
@@ -377,7 +376,7 @@ def send_eorder_info_cc_notification(payload) -> None:
         msg = EmailMultiAlternatives(
             subject=subject,
             body=text_body,
-            from_email=settings.DEFAULT_FROM_EMAIL,
+            from_email=settings.EORDER_NOTIFICATION_EMAIL,
             to=cc_emails,
         )
         msg.attach_alternative(html_body, "text/html")

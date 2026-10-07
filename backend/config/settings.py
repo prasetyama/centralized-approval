@@ -149,6 +149,7 @@ EMAIL_USE_SSL = os.getenv('EMAIL_USE_SSL', 'False').lower() in ('true', '1', 'ye
 EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER')
 EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL')
+EORDER_NOTIFICATION_EMAIL = os.getenv('EORDER_NOTIFICATION_EMAIL')
 
 # ─── Logging ─────────────────────────────────────────────────────────────────
 LOGGING = {
