@@ -99,6 +99,7 @@ export const Sidebar = ({ isExpanded = false, setIsExpanded, isMobileOpen, setIs
                     {navItems.map((item) => {
                         if (item.adminOnly && user?.role_level !== 'ADMIN') return null;
                         if (item.userOnly && user?.role_level === 'ADMIN') return null;
+                        if (item.name === 'PR Non-Trade' && !user?.modules.includes('pr_non_trade')) return null;
 
                         return (
                             <NavLink

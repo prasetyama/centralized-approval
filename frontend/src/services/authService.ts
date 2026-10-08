@@ -11,6 +11,7 @@ export interface User {
     role_code: string;
     role_level: string;
     department: string;
+    modules: string[];
     title: string;
     is_approver: boolean;
     is_superuser: boolean;

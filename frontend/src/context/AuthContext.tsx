@@ -88,6 +88,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 const approvalRole = payload.module_roles?.['APPROVAL'] || payload.module_roles?.['approval'];
                 const isApprover = !!approvalRole && approvalRole.toLowerCase() !== 'viewer';
 
+                const moduleAccess = payload.module_access || {};
+                const modules = Object.keys(moduleAccess).filter((key) => moduleAccess[key] === 'EQ');
+
                 setUser({
                     id: payload.user_id,
                     username: payload.email,
@@ -105,7 +108,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                     is_staff: false,
                     title: payload.title,
                     role: 1,
-                    is_active: true
+                    is_active: true,
+                    modules: modules
                 } as any);
                 setIsAuthenticated(true);
             } catch (error) {
