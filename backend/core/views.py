@@ -12,6 +12,7 @@ from rest_framework.response import Response
 from django.db import transaction
 from django.db.models import Q, Prefetch, Count
 from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework.filters import SearchFilter
 from rest_framework.exceptions import ValidationError
 import logging
 
@@ -19,7 +20,8 @@ from core.models import (
     Module, Role, User, WorkflowDefinition, WorkflowStepDefinition,
     ApprovalRequest, ApprovalStep, AuditLog, Division, Department, RequestFeedback,
     Company, OrganizationStructure, Brand, UserBrand, MasterWorkflowCriteria, RequestWatcher, ModuleVariable,
-    CCEmailConfig
+    CCEmailConfig, MasterAsset, MasterWBS, MasterEquipment, MasterGoods,
+    PRNonTrade, PRNonTradeItem, PRNonTradeSequence
 )
 from core.serializers import (
     ModuleSerializer, RoleSerializer, UserListSerializer, UserDetailSerializer,
@@ -30,7 +32,9 @@ from core.serializers import (
     DivisionSerializer, DepartmentSerializer, CompanySerializer, OrganizationStructureSerializer,
     DelegateRequestSerializer, RequestFeedbackSerializer,
     BrandSerializer, UserBrandSerializer, MasterWorkflowCriteriaSerializer,
-    RequestWatcherSerializer, ModuleVariableSerializer, CCEmailConfigSerializer
+    RequestWatcherSerializer, ModuleVariableSerializer, CCEmailConfigSerializer,
+    MasterAssetSerializer, MasterWBSSerializer, MasterEquipmentSerializer, MasterGoodsSerializer,
+    PRNonTradeSerializer, PRNonTradeItemSerializer
 )
 from core.engine import WorkflowEngine
 from django.utils import timezone
@@ -1027,6 +1031,290 @@ class CCEmailConfigViewSet(viewsets.ModelViewSet):
                 {'detail': f'Terjadi kesalahan saat memproses file CSV: {str(e)}'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+
+# ─────────────────────────────────────────────
+# PR Non-Trade ViewSet & Master Data ViewSets
+# ─────────────────────────────────────────────
+
+class PRNonTradeViewSet(viewsets.ModelViewSet):
+    """
+    API endpoint for PR Non-Trade form submission & draft management.
+    Integrates with Centralized Approval Workflow ID 10 upon submission.
+    """
+    serializer_class = PRNonTradeSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.is_staff or user.is_superuser:
+            return PRNonTrade.objects.all().prefetch_related('items')
+        return PRNonTrade.objects.filter(requestor=user).prefetch_related('items')
+
+    def perform_create(self, serializer):
+        user = self.request.user
+        dept = ''
+        comp = ''
+        if hasattr(user, 'org_positions'):
+            org = user.org_positions.first()
+            if org:
+                dept = org.department.name if org.department else ''
+                comp = org.company.name if org.company else ''
+
+        serializer.save(
+            requestor=user,
+            requestor_name=user.get_full_name() or user.username,
+            requester_department=serializer.validated_data.get('requester_department') or dept,
+            requester_company=serializer.validated_data.get('requester_company') or comp,
+        )
+
+    @action(detail=False, methods=['post'], url_path='save-draft')
+    def save_draft(self, request):
+        """
+        Save or update form as DRAFT.
+        Generates transaction_id in format PR/{code_name}/NT/{year}/{6_digit_running_number}
+        """
+        pr_id = request.data.get('id')
+        code_name = request.data.get('code_name') or 'HO'
+
+        user = request.user
+        dept = ''
+        comp = ''
+        if hasattr(user, 'org_positions'):
+            org = user.org_positions.first()
+            if org:
+                dept = org.department.name if org.department else ''
+                comp = org.company.name if org.company else ''
+                code_name = org.company.code or code_name
+
+        if pr_id:
+            try:
+                pr = PRNonTrade.objects.get(id=pr_id, requestor=user)
+            except PRNonTrade.DoesNotExist:
+                return Response({'detail': 'PR Non-Trade record not found.'}, status=status.HTTP_404_NOT_FOUND)
+        else:
+            pr = PRNonTrade(requestor=user)
+
+        if not pr.transaction_id:
+            pr.transaction_id = PRNonTrade.generate_transaction_id(code_name=code_name)
+
+        pr.requestor_name = user.get_full_name() or user.username
+        pr.requester_department = request.data.get('requester_department') or dept
+        pr.requester_company = request.data.get('requester_company') or comp
+        pr.purpose = request.data.get('purpose', '')
+        pr.goods_service_type = request.data.get('goods_service_type', 'not_lumpsum')
+        pr.purchase_type = request.data.get('purchase_type', 'non_asset')
+        pr.car_tbr_no = request.data.get('car_tbr_no', '')
+        pr.asset_type = request.data.get('asset_type', 'non_wbs')
+        pr.asset_no = request.data.get('asset_no', '')
+        pr.wbs_no = request.data.get('wbs_no', '')
+        pr.equipment_name = request.data.get('equipment_name', '')
+        pr.submission_remark = request.data.get('submission_remark', '')
+        pr.status = 'DRAFT'
+        pr.save()
+        pr.refresh_from_db()
+
+        # Update items
+        items_data = request.data.get('items', [])
+        pr.items.all().delete()
+        for idx, item in enumerate(items_data, 1):
+            PRNonTradeItem.objects.create(
+                pr_non_trade=pr,
+                item_order=idx,
+                goods_code=item.get('goods_code', ''),
+                goods_name=item.get('goods_name', ''),
+                unit=item.get('unit', 'PCS'),
+                quantity=item.get('quantity', 1.0),
+                remark=item.get('remark', '')
+            )
+
+        return Response({
+            'success': True,
+            'message': f'Draft saved successfully with Transaction ID: {pr.transaction_id}',
+            'data': PRNonTradeSerializer(pr).data
+        }, status=status.HTTP_200_OK if pr_id else status.HTTP_201_CREATED)
+
+    @action(detail=False, methods=['post'], url_path='submit')
+    def submit_pr(self, request):
+        """
+        Submit PR Non-Trade form to Centralized Approval Workflow with workflow_id = 10.
+        """
+        pr_id = request.data.get('id')
+        code_name = request.data.get('code_name') or 'HO'
+
+        user = request.user
+        dept = ''
+        comp = ''
+        if hasattr(user, 'org_positions'):
+            org = user.org_positions.first()
+            if org:
+                dept = org.department.name if org.department else ''
+                comp = org.company.name if org.company else ''
+                code_name = org.company.code or code_name
+
+        if pr_id:
+            try:
+                pr = PRNonTrade.objects.get(id=pr_id, requestor=user)
+            except PRNonTrade.DoesNotExist:
+                return Response({'detail': 'PR Non-Trade record not found.'}, status=status.HTTP_404_NOT_FOUND)
+        else:
+            pr = PRNonTrade(requestor=user)
+
+        if not pr.transaction_id:
+            pr.transaction_id = PRNonTrade.generate_transaction_id(code_name=code_name)
+
+        pr.requestor_name = user.get_full_name() or user.username
+        pr.requester_department = request.data.get('requester_department') or dept
+        pr.requester_company = request.data.get('requester_company') or comp
+        pr.purpose = request.data.get('purpose', '')
+        pr.goods_service_type = request.data.get('goods_service_type', 'not_lumpsum')
+        pr.purchase_type = request.data.get('purchase_type', 'non_asset')
+        pr.car_tbr_no = request.data.get('car_tbr_no', '')
+        pr.asset_type = request.data.get('asset_type', 'non_wbs')
+        pr.asset_no = request.data.get('asset_no', '')
+        pr.wbs_no = request.data.get('wbs_no', '')
+        pr.equipment_name = request.data.get('equipment_name', '')
+        pr.submission_remark = request.data.get('submission_remark', '')
+        pr.status = 'SUBMITTED'
+        pr.save()
+        pr.refresh_from_db()
+
+        # Update items
+        items_data = request.data.get('items', [])
+        pr.items.all().delete()
+        items_list = []
+        for idx, item in enumerate(items_data, 1):
+            item_obj = PRNonTradeItem.objects.create(
+                pr_non_trade=pr,
+                item_order=idx,
+                goods_code=item.get('goods_code', ''),
+                goods_name=item.get('goods_name', ''),
+                unit=item.get('unit', 'PCS'),
+                quantity=item.get('quantity', 1.0),
+                remark=item.get('remark', '')
+            )
+            items_list.append({
+                'goods_code': item_obj.goods_code,
+                'goods_name': item_obj.goods_name,
+                'unit': item_obj.unit,
+                'quantity': float(item_obj.quantity),
+                'remark': item_obj.remark
+            })
+
+        # Ensure Module PR_NON_TRADE exists
+        module, _ = Module.objects.get_or_create(
+            code='PR_NON_TRADE',
+            defaults={
+                'name': 'PR Non-Trade',
+                'description': 'Purchase Request Non-Trade Module',
+                'is_active': True,
+                'icon': 'file-text',
+                'color': '#6366F1'
+            }
+        )
+
+        # Ensure WorkflowDefinition with ID 10 exists
+        wf_def = WorkflowDefinition.objects.filter(id=10).first()
+        if not wf_def:
+            wf_def = WorkflowDefinition.objects.create(
+                id=10,
+                module=module,
+                name='PR Non Trade Approval Workflow',
+                description='Approval workflow for Non-Trade Purchase Requests',
+                total_steps=2,
+                is_active=True
+            )
+            if not wf_def.steps.exists():
+                spv_role = Role.objects.filter(code='SPV').first() or Role.objects.first()
+                mgr_role = Role.objects.filter(code='MGR').first() or Role.objects.first()
+                WorkflowStepDefinition.objects.create(
+                    workflow=wf_def,
+                    step_order=1,
+                    name='Department Head Review',
+                    approver_type=WorkflowStepDefinition.ApproverType.REQ_DEPT_HEAD,
+                    role_required=spv_role
+                )
+                WorkflowStepDefinition.objects.create(
+                    workflow=wf_def,
+                    step_order=2,
+                    name='Finance / Manager Approval',
+                    approver_type=WorkflowStepDefinition.ApproverType.ROLE,
+                    role_required=mgr_role
+                )
+
+        # Submit request into Centralized Approval Workflow Engine
+        payload = {
+            'transaction_id': pr.transaction_id,
+            'transaction_date': str(pr.transaction_date),
+            'requestor_name': pr.requestor_name,
+            'requester_department': pr.requester_department,
+            'requester_company': pr.requester_company,
+            'purpose': pr.purpose,
+            'goods_service_type': pr.goods_service_type,
+            'purchase_type': pr.purchase_type,
+            'car_tbr_no': pr.car_tbr_no,
+            'asset_type': pr.asset_type,
+            'asset_no': pr.asset_no,
+            'wbs_no': pr.wbs_no,
+            'equipment_name': pr.equipment_name,
+            'submission_remark': pr.submission_remark,
+            'items': items_list
+        }
+
+        approval_request = WorkflowEngine.submit_request(
+            module_code='PR_NON_TRADE',
+            workflow_id=10,
+            requester=user,
+            title=f"PR Non Trade - {pr.transaction_id}",
+            payload=payload,
+            description=pr.purpose,
+            priority='MEDIUM',
+            reference_id=pr.transaction_id,
+            ip_address=_get_client_ip(request),
+        )
+
+        pr.approval_request = approval_request
+        pr.save(update_fields=['approval_request'])
+
+        return Response({
+            'success': True,
+            'message': f'PR Non-Trade submitted successfully with Reference ID: {pr.transaction_id}',
+            'data': PRNonTradeSerializer(pr).data,
+            'approval_request_id': approval_request.id
+        }, status=status.HTTP_200_OK)
+
+
+class MasterAssetViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = MasterAsset.objects.filter(is_active=True)
+    serializer_class = MasterAssetSerializer
+    permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend, SearchFilter]
+    search_fields = ['code', 'name', 'category', 'description']
+
+
+class MasterWBSViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = MasterWBS.objects.filter(is_active=True)
+    serializer_class = MasterWBSSerializer
+    permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend, SearchFilter]
+    search_fields = ['code', 'description', 'project_name']
+
+
+class MasterEquipmentViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = MasterEquipment.objects.filter(is_active=True)
+    serializer_class = MasterEquipmentSerializer
+    permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend, SearchFilter]
+    search_fields = ['code', 'name', 'category']
+
+
+class MasterGoodsViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = MasterGoods.objects.filter(is_active=True)
+    serializer_class = MasterGoodsSerializer
+    permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend, SearchFilter]
+    search_fields = ['code', 'name', 'category', 'unit']
+
 
 
 

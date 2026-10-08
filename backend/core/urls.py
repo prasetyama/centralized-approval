@@ -15,7 +15,9 @@ from core.views import (
     CompanyViewSet, OrganizationStructureViewSet,
     WorkflowDefinitionViewSet, ApprovalRequestViewSet, RequestFeedbackViewSet,
     BrandViewSet, UserBrandViewSet, MasterWorkflowCriteriaViewSet,
-    ModuleVariableViewSet, CCEmailConfigViewSet, system_logs
+    ModuleVariableViewSet, CCEmailConfigViewSet, system_logs,
+    PRNonTradeViewSet, MasterAssetViewSet, MasterWBSViewSet,
+    MasterEquipmentViewSet, MasterGoodsViewSet
 )
 
 router = DefaultRouter()
@@ -34,6 +36,11 @@ router.register(r'admin/user-brands', UserBrandViewSet, basename='user-brand')
 router.register(r'admin/master-workflow-conditions', MasterWorkflowCriteriaViewSet, basename='master-condition')
 router.register(r'admin/module-variables', ModuleVariableViewSet, basename='module-variable')
 router.register(r'admin/cc-email-configs', CCEmailConfigViewSet, basename='cc-email-config')
+router.register(r'pr-non-trade', PRNonTradeViewSet, basename='pr-non-trade')
+router.register(r'master/assets', MasterAssetViewSet, basename='master-asset')
+router.register(r'master/wbs', MasterWBSViewSet, basename='master-wbs')
+router.register(r'master/equipments', MasterEquipmentViewSet, basename='master-equipment')
+router.register(r'master/goods', MasterGoodsViewSet, basename='master-goods')
 
 urlpatterns = [
     # Module Variables (Direct access as per spec)

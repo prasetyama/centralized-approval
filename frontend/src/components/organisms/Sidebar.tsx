@@ -13,7 +13,8 @@ import {
     Settings,
     Terminal,
     Mail,
-    Network
+    Network,
+    FileText
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
@@ -21,6 +22,7 @@ import { useAuth } from '@/context/AuthContext';
 const navItems = [
     { name: 'Dashboard', href: '/', icon: LayoutDashboard },
     { name: 'Approval Inbox', href: '/approval', icon: Inbox },
+    { name: 'PR Non-Trade', href: '/pr-non-trade', icon: FileText },
     { name: 'History', href: '/history', icon: History, userOnly: true },
     { name: 'Workflows', href: '/admin/workflows', icon: GitBranch, adminOnly: true },
     { name: 'User Management', href: '/admin/users', icon: Users, adminOnly: true },

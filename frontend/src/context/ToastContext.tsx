@@ -13,6 +13,9 @@ export interface Toast {
 
 interface ToastContextType {
     addToast: (message: string, type?: ToastType) => void;
+    success: (message: string) => void;
+    error: (message: string) => void;
+    info: (message: string) => void;
 }
 
 const ToastContext = createContext<ToastContextType | undefined>(undefined);
@@ -38,12 +41,16 @@ export const ToastProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         }, 5000);
     }, []);
 
+    const success = useCallback((message: string) => addToast(message, 'success'), [addToast]);
+    const error = useCallback((message: string) => addToast(message, 'error'), [addToast]);
+    const info = useCallback((message: string) => addToast(message, 'info'), [addToast]);
+
     const removeToast = (id: string) => {
         setToasts((prev) => prev.filter((toast) => toast.id !== id));
     };
 
     return (
-        <ToastContext.Provider value={{ addToast }}>
+        <ToastContext.Provider value={{ addToast, success, error, info }}>
             {children}
             <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 flex flex-col gap-2">
                 <AnimatePresence>

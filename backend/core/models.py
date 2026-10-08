@@ -5,8 +5,9 @@ Unified database schema for the Centralized Approval Workflow engine.
 Includes all models: Module, Role, User, WorkflowDefinition, WorkflowStepDefinition,
 ApprovalRequest, ApprovalStep, and AuditLog.
 """
-from django.db import models
+from django.db import models, transaction
 from django.contrib.auth.models import AbstractUser
+from django.utils import timezone
 
 
 class Division(models.Model):
@@ -902,5 +903,224 @@ class CCEmailConfig(models.Model):
     def __str__(self):
         ship_to_str = f" [{self.ship_to}]" if self.ship_to else ""
         return f"{self.email} [{self.subject}]{ship_to_str} ({'Active' if self.is_active else 'Inactive'})"
+
+
+# ─────────────────────────────────────────────
+# Master Data Models for PR Non-Trade
+# ─────────────────────────────────────────────
+
+class MasterAsset(models.Model):
+    """Master Asset data table for Asset No lookup."""
+    code = models.CharField(max_length=50, unique=True, help_text="Asset Code / Tag Number")
+    name = models.CharField(max_length=255, help_text="Asset Name / Description")
+    category = models.CharField(max_length=100, blank=True, default='')
+    description = models.TextField(blank=True, default='')
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'aw_master_asset'
+        ordering = ['code']
+
+    def __str__(self):
+        return f"{self.code} - {self.name}"
+
+
+class MasterWBS(models.Model):
+    """Master WBS data table for WBS No lookup."""
+    code = models.CharField(max_length=50, unique=True, help_text="WBS Element Code")
+    description = models.CharField(max_length=255, help_text="WBS Description")
+    project_name = models.CharField(max_length=255, blank=True, default='')
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'aw_master_wbs'
+        ordering = ['code']
+
+    def __str__(self):
+        return f"{self.code} - {self.description}"
+
+
+class MasterEquipment(models.Model):
+    """Master Equipment data table for Equipment Name lookup."""
+    code = models.CharField(max_length=50, unique=True, help_text="Equipment Code")
+    name = models.CharField(max_length=255, help_text="Equipment Name")
+    category = models.CharField(max_length=100, blank=True, default='')
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'aw_master_equipment'
+        ordering = ['name']
+
+    def __str__(self):
+        return f"{self.code} - {self.name}"
+
+
+class MasterGoods(models.Model):
+    """Master Goods data table for Goods Code lookup."""
+    code = models.CharField(max_length=50, unique=True, help_text="Goods Code")
+    name = models.CharField(max_length=255, help_text="Goods Name")
+    unit = models.CharField(max_length=50, default='PCS')
+    category = models.CharField(max_length=100, blank=True, default='')
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'aw_master_goods'
+        ordering = ['name']
+
+    def __str__(self):
+        return f"{self.code} - {self.name} ({self.unit})"
+
+
+# ─────────────────────────────────────────────
+# PR Non-Trade Models & Running Number Sequence
+# ─────────────────────────────────────────────
+
+class PRNonTradeSequence(models.Model):
+    """Sequence counter for generating PR Non-Trade running numbers per year and company/code_name."""
+    code_name = models.CharField(max_length=50)
+    year = models.IntegerField()
+    last_number = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        db_table = 'aw_pr_non_trade_sequence'
+        unique_together = ['code_name', 'year']
+
+    def __str__(self):
+        return f"{self.code_name}/{self.year}: {self.last_number}"
+
+
+class PRNonTrade(models.Model):
+    """
+    PR Non-Trade Header Model to save form data (Draft and Submitted).
+    Format: PR/{code_name}/NT/{year}/{6_digit_running_number}
+    """
+    STATUS_CHOICES = [
+        ('DRAFT', 'Draft'),
+        ('SUBMITTED', 'Submitted'),
+        ('CANCELLED', 'Cancelled'),
+    ]
+
+    GOODS_SERVICE_CHOICES = [
+        ('lumpsum', 'Lumpsum'),
+        ('not_lumpsum', 'Not Lumpsum'),
+    ]
+
+    PURCHASE_TYPE_CHOICES = [
+        ('asset', 'Asset'),
+        ('non_asset', 'Non Asset'),
+    ]
+
+    ASSET_TYPE_CHOICES = [
+        ('non_wbs', 'Non WBS'),
+        ('wbs', 'WBS'),
+    ]
+
+    transaction_id = models.CharField(
+        max_length=100,
+        unique=True,
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="Format: PR/{code_name}/NT/{year}/{6_digit_running_number}"
+    )
+    transaction_date = models.DateField(default=timezone.localdate)
+    requestor = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='pr_non_trade_requests'
+    )
+    requestor_name = models.CharField(max_length=255)
+    requester_department = models.CharField(max_length=255, blank=True, default='')
+    requester_company = models.CharField(max_length=255, blank=True, default='')
+
+    # General Data
+    purpose = models.TextField(blank=True, default='')
+    goods_service_type = models.CharField(
+        max_length=20,
+        choices=GOODS_SERVICE_CHOICES,
+        default='not_lumpsum'
+    )
+    purchase_type = models.CharField(
+        max_length=20,
+        choices=PURCHASE_TYPE_CHOICES,
+        default='non_asset'
+    )
+    car_tbr_no = models.CharField(max_length=100, blank=True, default='')
+    asset_type = models.CharField(
+        max_length=20,
+        choices=ASSET_TYPE_CHOICES,
+        default='non_wbs'
+    )
+    asset_no = models.CharField(max_length=100, blank=True, default='')
+    wbs_no = models.CharField(max_length=100, blank=True, default='')
+    equipment_name = models.CharField(max_length=255, blank=True, default='')
+
+    submission_remark = models.TextField(blank=True, default='')
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='DRAFT'
+    )
+    approval_request = models.ForeignKey(
+        ApprovalRequest,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='pr_non_trade_headers'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'aw_pr_non_trade'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.transaction_id or 'Draft'} - {self.requestor_name} ({self.status})"
+
+    @classmethod
+    def generate_transaction_id(cls, code_name='HO', date_obj=None):
+        if not date_obj:
+            date_obj = timezone.localdate()
+        year = date_obj.year
+        code_clean = (code_name or 'HO').upper().replace(' ', '_')
+        
+        with transaction.atomic():
+            seq, _ = PRNonTradeSequence.objects.select_for_update().get_or_create(
+                code_name=code_clean,
+                year=year,
+                defaults={'last_number': 0}
+            )
+            seq.last_number += 1
+            seq.save()
+            running_num = f"{seq.last_number:06d}"
+            return f"PR/{code_clean}/NT/{year}/{running_num}"
+
+
+class PRNonTradeItem(models.Model):
+    """Detail items for PR Non-Trade form."""
+    pr_non_trade = models.ForeignKey(
+        PRNonTrade,
+        on_delete=models.CASCADE,
+        related_name='items'
+    )
+    item_order = models.PositiveIntegerField(default=1)
+    goods_code = models.CharField(max_length=100)
+    goods_name = models.CharField(max_length=255)
+    unit = models.CharField(max_length=50, default='PCS')
+    quantity = models.DecimalField(max_digits=12, decimal_places=2, default=1.0)
+    remark = models.TextField(blank=True, default='')
+
+    class Meta:
+        db_table = 'aw_pr_non_trade_item'
+        ordering = ['item_order', 'id']
+
+    def __str__(self):
+        return f"[{self.goods_code}] {self.goods_name} x {self.quantity} {self.unit}"
+
 
 

@@ -129,6 +129,42 @@ export const PayloadRenderer = ({ moduleCode, payload }: PayloadRendererProps) =
         </div>
     );
 
+    const renderPRNonTrade = () => (
+        <div className="space-y-6">
+            <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                    <p className="text-xs font-semibold text-slate-500 uppercase">Purpose</p>
+                    <p className="text-lg font-bold text-slate-900">{payload.purpose}</p>
+                </div>
+                <div className="space-y-1">
+                    <p className="text-xs font-semibold text-slate-500 uppercase">Requestor</p>
+                    <p className="font-medium text-slate-900">{payload.requestor_name + " - " + payload.requester_department + " - " + payload.requester_company || '-'}</p>
+                </div>
+            </div>
+
+            <div className="rounded-xl border border-slate-100 overflow-hidden">
+                <table className="w-full text-sm">
+                    <thead className="bg-slate-50 border-b border-slate-100">
+                        <tr>
+                            <th className="px-4 py-2 text-left font-semibold text-slate-600">Item</th>
+                            <th className="px-4 py-2 text-right font-semibold text-slate-600">Qty</th>
+                            <th className="px-4 py-2 text-right font-semibold text-slate-600">Remark</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                        {(payload.items || []).map((item: any, i: number) => (
+                            <tr key={i} className="hover:bg-slate-50/50">
+                                <td className="px-4 py-3 font-medium text-slate-800">{item.goods_name}</td>
+                                <td className="px-4 py-3 text-right text-slate-600">{item.quantity} {item.unit}</td>
+                                <td className="px-4 py-3 text-right text-slate-600">{item.remark}</td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    );
+
     const renderGeneric = () => (
         <pre className="p-4 bg-slate-900 text-slate-50 rounded-xl overflow-auto text-xs font-mono max-h-[400px]">
             {JSON.stringify(payload, null, 2)}
@@ -140,6 +176,7 @@ export const PayloadRenderer = ({ moduleCode, payload }: PayloadRendererProps) =
             case 'EORDER': return { title: 'Purchase Order Details', icon: ShoppingCart, color: 'text-blue-600', bg: 'bg-blue-50' };
             case 'FINANCE': return { title: 'Expense Claim Details', icon: Wallet, color: 'text-emerald-600', bg: 'bg-emerald-50' };
             case 'HR': return { title: 'Leave Request Details', icon: Users, color: 'text-purple-600', bg: 'bg-purple-50' };
+            case 'PR_NON_TRADE': return { title: 'PR Non-Trade Details', icon: Wallet, color: 'text-emerald-600', bg: 'bg-emerald-50' };
             default: return { title: 'Request Payload', icon: FileText, color: 'text-slate-600', bg: 'bg-slate-50' };
         }
     };
@@ -154,14 +191,15 @@ export const PayloadRenderer = ({ moduleCode, payload }: PayloadRendererProps) =
                 </div>
                 <div>
                     <CardTitle className="text-lg">{config.title}</CardTitle>
-                    <p className="text-xs text-slate-500 font-medium mt-0.5">Reference: {payload.reference_id || 'N/A'}</p>
+                    <p className="text-xs text-slate-500 font-medium mt-0.5">Reference: {payload.reference_id || payload.transaction_id || 'N/A'}</p>
                 </div>
             </CardHeader>
             <CardContent className="pt-6">
                 {moduleCode === 'EORDER' ? renderEOrder() :
                     moduleCode === 'FINANCE' ? renderFinance() :
                         moduleCode === 'HR' ? renderHR() :
-                            renderGeneric()}
+                            moduleCode === 'PR_NON_TRADE' ? renderPRNonTrade() :
+                                renderGeneric()}
             </CardContent>
         </Card>
     );

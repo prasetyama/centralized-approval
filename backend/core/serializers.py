@@ -8,7 +8,8 @@ from core.models import (
     Module, Role, User, WorkflowDefinition, WorkflowStepDefinition,
     ApprovalRequest, ApprovalStep, AuditLog, Division, Department, RequestFeedback,
     Company, OrganizationStructure, Brand, UserBrand, MasterWorkflowCriteria, RequestWatcher, ModuleVariable,
-    UserRole, CCEmailConfig
+    UserRole, CCEmailConfig, MasterAsset, MasterWBS, MasterEquipment, MasterGoods,
+    PRNonTrade, PRNonTradeItem, PRNonTradeSequence
 )
 
 
@@ -607,4 +608,77 @@ class CCEmailConfigSerializer(serializers.ModelSerializer):
         if obj.created_by:
             return obj.created_by.get_full_name() or obj.created_by.username
         return None
+
+
+class MasterAssetSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MasterAsset
+        fields = ['id', 'code', 'name', 'category', 'description', 'is_active', 'created_at']
+
+
+class MasterWBSSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MasterWBS
+        fields = ['id', 'code', 'description', 'project_name', 'is_active', 'created_at']
+
+
+class MasterEquipmentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MasterEquipment
+        fields = ['id', 'code', 'name', 'category', 'is_active', 'created_at']
+
+
+class MasterGoodsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MasterGoods
+        fields = ['id', 'code', 'name', 'unit', 'category', 'is_active', 'created_at']
+
+
+class PRNonTradeItemSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PRNonTradeItem
+        fields = ['id', 'item_order', 'goods_code', 'goods_name', 'unit', 'quantity', 'remark']
+
+
+class PRNonTradeSerializer(serializers.ModelSerializer):
+    items = PRNonTradeItemSerializer(many=True, required=False)
+    transaction_date = serializers.SerializerMethodField()
+
+    class Meta:
+        model = PRNonTrade
+        fields = [
+            'id', 'transaction_id', 'transaction_date', 'requestor', 'requestor_name',
+            'requester_department', 'requester_company', 'purpose', 'goods_service_type',
+            'purchase_type', 'car_tbr_no', 'asset_type', 'asset_no', 'wbs_no',
+            'equipment_name', 'submission_remark', 'status', 'approval_request',
+            'created_at', 'updated_at', 'items'
+        ]
+        read_only_fields = ['id', 'requestor', 'approval_request', 'created_at', 'updated_at']
+
+    def get_transaction_date(self, obj):
+        if not obj.transaction_date:
+            return None
+        if hasattr(obj.transaction_date, 'strftime'):
+            return obj.transaction_date.strftime('%Y-%m-%d')
+        return str(obj.transaction_date).split('T')[0]
+
+    def create(self, validated_data):
+        items_data = validated_data.pop('items', [])
+        pr = PRNonTrade.objects.create(**validated_data)
+        for order, item_data in enumerate(items_data, 1):
+            PRNonTradeItem.objects.create(pr_non_trade=pr, item_order=order, **item_data)
+        return pr
+
+    def update(self, instance, validated_data):
+        items_data = validated_data.pop('items', None)
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+
+        if items_data is not None:
+            instance.items.all().delete()
+            for order, item_data in enumerate(items_data, 1):
+                PRNonTradeItem.objects.create(pr_non_trade=instance, item_order=order, **item_data)
+        return instance
+
 
