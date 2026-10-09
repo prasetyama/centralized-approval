@@ -53,24 +53,24 @@ export const PRNonTradeListPage: React.FC = () => {
     });
 
     return (
-        <div className="max-w-7xl mx-auto py-6 px-4 space-y-6">
+        <div className="max-w-7xl mx-auto py-6 px-4 space-y-6 font-poppins">
             {/* Header */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
                 <div>
-                    <h1 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-                        <FileText className="text-blue-600" size={24} />
+                    <h1 className="text-xl md:text-2xl font-bold text-slate-900 flex items-center gap-2.5">
+                        <FileText className="text-blue-600" size={26} />
                         Daftar PR Non-Trade
                     </h1>
-                    <p className="text-slate-500 text-xs mt-1">
+                    <p className="text-slate-500 text-sm mt-1">
                         Kelola dan ajukan Purchase Request Non-Trade dengan integrasi Centralized Approval Engine (Workflow ID: 10).
                     </p>
                 </div>
 
                 <button
                     onClick={() => navigate('/pr-non-trade/create')}
-                    className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl text-xs font-bold shadow-md hover:shadow-lg transition-all cursor-pointer shrink-0"
+                    className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold shadow-sm transition-all cursor-pointer shrink-0"
                 >
-                    <Plus size={16} />
+                    <Plus size={18} />
                     <span>Buat Pengajuan Baru</span>
                 </button>
             </div>
@@ -78,40 +78,40 @@ export const PRNonTradeListPage: React.FC = () => {
             {/* Filter Bar */}
             <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
                 <div className="relative w-full sm:w-80">
-                    <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                    <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                     <input
                         type="text"
                         placeholder="Cari No Transaksi, Purpose, Requestor..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 transition-colors shadow-sm"
                     />
                 </div>
 
-                <div className="text-xs text-slate-500 font-medium">
-                    Total: <span className="font-bold text-slate-800">{filteredItems.length}</span> pengajuan
+                <div className="text-sm text-slate-600 font-medium">
+                    Total: <span className="font-bold text-slate-900">{filteredItems.length}</span> pengajuan
                 </div>
             </div>
 
             {/* List Table */}
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
                 {loading ? (
-                    <div className="flex flex-col items-center justify-center py-16 gap-2 text-slate-400">
-                        <Loader2 size={32} className="animate-spin text-blue-600" />
-                        <span className="text-xs font-medium">Memuat daftar pengajuan...</span>
+                    <div className="flex flex-col items-center justify-center py-16 gap-3 text-slate-400">
+                        <Loader2 size={36} className="animate-spin text-blue-600" />
+                        <span className="text-sm font-medium">Memuat daftar pengajuan...</span>
                     </div>
                 ) : filteredItems.length === 0 ? (
                     <div className="text-center py-16 px-4">
-                        <FileText size={40} className="mx-auto text-slate-300 mb-2" />
-                        <p className="text-sm font-semibold text-slate-700">Belum ada pengajuan PR Non-Trade</p>
-                        <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
+                        <FileText size={44} className="mx-auto text-slate-300 mb-3" />
+                        <p className="text-base font-semibold text-slate-700">Belum ada pengajuan PR Non-Trade</p>
+                        <p className="text-sm text-slate-500 mt-1 max-w-sm mx-auto">
                             Klik tombol "Buat Pengajuan Baru" di atas untuk mengisi form PR Non-Trade.
                         </p>
                     </div>
                 ) : (
                     <div className="overflow-x-auto">
-                        <table className="w-full text-left text-xs text-slate-700">
-                            <thead className="bg-slate-50 font-bold text-slate-700 border-b border-slate-200">
+                        <table className="w-full text-left text-sm text-slate-700">
+                            <thead className="bg-slate-100 text-slate-700 font-semibold border-b border-slate-200 uppercase text-xs tracking-wider">
                                 <tr>
                                     <th className="py-3.5 px-4">Transaction ID</th>
                                     <th className="py-3.5 px-4">Tanggal</th>
@@ -122,42 +122,42 @@ export const PRNonTradeListPage: React.FC = () => {
                                     <th className="py-3.5 px-4 text-center w-28">Aksi</th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-slate-100">
+                            <tbody className="divide-y divide-slate-200">
                                 {filteredItems.map((item) => (
-                                    <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
-                                        <td className="py-3.5 px-4 font-mono font-bold text-blue-700">
-                                            {item.transaction_id || <span className="text-slate-400 italic">Draft (Belum diset)</span>}
+                                    <tr key={item.id} className="hover:bg-slate-50 transition-colors">
+                                        <td className="py-3.5 px-4 font-mono font-bold text-blue-700 text-sm">
+                                            {item.transaction_id || <span className="text-slate-400 italic font-normal">Draft (Belum diset)</span>}
                                         </td>
-                                        <td className="py-3.5 px-4 text-slate-600 font-medium">
+                                        <td className="py-3.5 px-4 text-slate-600 font-medium text-sm">
                                             {item.transaction_date || '-'}
                                         </td>
-                                        <td className="py-3.5 px-4 font-semibold text-slate-800">
+                                        <td className="py-3.5 px-4 font-semibold text-slate-800 text-sm">
                                             {item.requestor_name}
-                                            <div className="text-[10px] font-normal text-slate-400">
+                                            <div className="text-xs font-normal text-slate-500 mt-0.5">
                                                 {item.requester_department}
                                             </div>
                                         </td>
-                                        <td className="py-3.5 px-4 max-w-xs truncate text-slate-600 font-medium">
+                                        <td className="py-3.5 px-4 max-w-xs truncate text-slate-600 font-medium text-sm">
                                             {item.purpose || '-'}
                                         </td>
                                         <td className="py-3.5 px-4 text-center">
                                             {item.status === 'DRAFT' && (
-                                                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800">
+                                                <span className="px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-900 border border-amber-200">
                                                     DRAFT
                                                 </span>
                                             )}
                                             {item.status === 'SUBMITTED' && (
-                                                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800">
+                                                <span className="px-3 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-900 border border-blue-200">
                                                     SUBMITTED
                                                 </span>
                                             )}
                                             {item.status === 'CANCELLED' && (
-                                                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600">
+                                                <span className="px-3 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200">
                                                     CANCELLED
                                                 </span>
                                             )}
                                         </td>
-                                        <td className="py-3.5 px-4 text-center font-bold text-slate-700">
+                                        <td className="py-3.5 px-4 text-center font-bold text-slate-800 text-sm">
                                             {item.items?.length || 0}
                                         </td>
                                         <td className="py-3.5 px-4 text-center">
@@ -166,26 +166,26 @@ export const PRNonTradeListPage: React.FC = () => {
                                                     <>
                                                         <button
                                                             onClick={() => navigate(`/pr-non-trade/${item.id}/edit`)}
-                                                            className="p-1.5 text-amber-600 hover:bg-amber-50 rounded-lg transition-colors cursor-pointer"
+                                                            className="p-2 text-amber-700 hover:bg-amber-50 rounded-lg transition-colors cursor-pointer"
                                                             title="Edit Draft"
                                                         >
-                                                            <Edit3 size={15} />
+                                                            <Edit3 size={17} />
                                                         </button>
                                                         <button
                                                             onClick={() => item.id && handleDeleteDraft(item.id)}
-                                                            className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                                                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
                                                             title="Hapus Draft"
                                                         >
-                                                            <Trash2 size={15} />
+                                                            <Trash2 size={17} />
                                                         </button>
                                                     </>
                                                 ) : (
                                                     <button
                                                         onClick={() => item.approval_request && navigate(`/workflow/${item.approval_request}`)}
-                                                        className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+                                                        className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
                                                         title="Lihat Detail Approval"
                                                     >
-                                                        <Eye size={15} />
+                                                        <Eye size={17} />
                                                     </button>
                                                 )}
                                             </div>

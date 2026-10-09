@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { ExternalLink, LayoutGrid } from 'lucide-react';
 import { cn } from '@/components/ui/UI';
 import type { SSOModule } from '@/context/AuthContext';
-import { ssoApi } from '@/services/api';
+import { ssoApi, getCookie } from '@/services/api';
 
 interface AppDrawerProps {
     modules?: SSOModule[];
@@ -57,12 +57,11 @@ const AppDrawer = ({ modules: initialModules = [], currentModuleCode = 'APPROVAL
     }, []);
 
     const handleModuleClick = (mod: SSOModule) => {
-        console.log(mod);
         if (mod.code === currentModuleCode) {
             setIsOpen(false);
             return;
         }
-        const token = localStorage.getItem('sso_token');
+        const token = getCookie('sso_token') || localStorage.getItem('sso_token');
         if (mod.redirect_url && token) {
             const separator = mod.redirect_url.includes('?') ? '&' : '?';
             window.location.href = `${mod.redirect_url}${separator}token=${token}`;
@@ -76,7 +75,7 @@ const AppDrawer = ({ modules: initialModules = [], currentModuleCode = 'APPROVAL
             {/* Trigger — 3×3 dot grid icon */}
             <button
                 onClick={() => setIsOpen((o) => !o)}
-                className="p-2 rounded-full hover:bg-white/15 transition-colors cursor-pointer"
+                className="p-2 rounded-full text-slate-500 hover:bg-slate-100 hover:text-slate-900 transition-colors cursor-pointer"
                 title="Applications"
             >
                 <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -118,31 +117,37 @@ const AppDrawer = ({ modules: initialModules = [], currentModuleCode = 'APPROVAL
                         </div>
 
                         {/* Module grid */}
-                        <div className="px-3 pb-3 grid grid-cols-3 gap-1">
-                            {fetchedModules.map((mod) => {
-                                const isCurrent = mod.code === currentModuleCode;
-                                return (
-                                    <button
-                                        key={mod.code}
-                                        onClick={() => handleModuleClick(mod)}
-                                        className={cn(
-                                            "flex flex-col items-center gap-2 p-3 rounded-xl transition-all duration-200 cursor-pointer group",
-                                            isCurrent
-                                                ? "bg-neutral-100 ring-1 ring-neutral-300"
-                                                : "hover:bg-neutral-50"
-                                        )}
-                                        title={mod.name || mod.code}
-                                    >
-                                        {/* App icon circle */}
-                                        <LayoutGrid size={42} color='#000' />
-                                        {/* App name */}
-                                        <span className="text-[11px] font-medium text-neutral-600 text-center leading-tight line-clamp-2 w-full">
-                                            {mod.name || mod.code}
-                                        </span>
-                                    </button>
-                                );
-                            })}
-                        </div>
+                        {fetchedModules.length === 0 ? (
+                            <div className="px-4 py-6 text-center text-xs text-neutral-400">
+                                Tidak ada modul aplikasi lain.
+                            </div>
+                        ) : (
+                            <div className="px-3 pb-3 grid grid-cols-3 gap-1">
+                                {fetchedModules.map((mod) => {
+                                    const isCurrent = mod.code === currentModuleCode;
+                                    return (
+                                        <button
+                                            key={mod.code}
+                                            onClick={() => handleModuleClick(mod)}
+                                            className={cn(
+                                                "flex flex-col items-center gap-2 p-3 rounded-xl transition-all duration-200 cursor-pointer group",
+                                                isCurrent
+                                                    ? "bg-neutral-100 ring-1 ring-neutral-300"
+                                                    : "hover:bg-neutral-50"
+                                            )}
+                                            title={mod.name || mod.code}
+                                        >
+                                            {/* App icon circle */}
+                                            <LayoutGrid size={42} color='#000' />
+                                            {/* App name */}
+                                            <span className="text-[11px] font-medium text-neutral-600 text-center leading-tight line-clamp-2 w-full">
+                                                {mod.name || mod.code}
+                                            </span>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        )}
 
                         {/* Footer — link to SSO Dashboard */}
                         {ssoUrl && (

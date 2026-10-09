@@ -54,14 +54,14 @@ export const MasterSearchModal: React.FC<MasterSearchModalProps> = ({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-fade-in">
             <div className="bg-white rounded-2xl shadow-2xl border border-slate-100 w-full max-w-2xl overflow-hidden flex flex-col max-h-[85vh]">
                 {/* Modal Header */}
-                <div className="px-6 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 flex items-center justify-between">
+                <div className="px-6 py-4 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800">
                     <div>
                         <h3 className="text-lg font-bold text-white">{title}</h3>
-                        <p className="text-xs text-blue-100">Cari & pilih master data dari tabel</p>
+                        <p className="text-xs text-slate-300">Cari & pilih master data dari tabel</p>
                     </div>
                     <button
                         onClick={onClose}
-                        className="text-white/80 hover:text-white hover:bg-white/10 p-1.5 rounded-lg transition-colors"
+                        className="text-slate-300 hover:text-white hover:bg-slate-800 p-1.5 rounded-lg transition-colors cursor-pointer"
                     >
                         <X size={20} />
                     </button>
