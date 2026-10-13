@@ -826,41 +826,44 @@ export const PRNonTradeFormPage: React.FC = () => {
                         <span>Form ini dapat disimpan sebagai Draft terlebih dahulu sebelum disubmit ke workflow approval.</span>
                     </div>
 
-                    <div className="flex items-center gap-3 w-full sm:w-auto justify-end shrink-0">
-                        {/* Cancel Button */}
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto shrink-0">
+                        {/* Submit & Save as Draft group */}
+                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                            {/* Save as Draft Button */}
+                            <button
+                                type="button"
+                                onClick={handleSaveDraft}
+                                disabled={savingDraft || submitting}
+                                className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-900 text-sm font-bold shadow-sm disabled:opacity-50 transition-colors cursor-pointer"
+                            >
+                                {savingDraft ? (
+                                    <><Loader2 size={18} className="animate-spin" /> Saving Draft...</>
+                                ) : (
+                                    <><Save size={18} /> Save as Draft</>
+                                )}
+                            </button>
+
+                            {/* Submit Button */}
+                            <button
+                                type="submit"
+                                disabled={submitting || savingDraft}
+                                className="flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold shadow-md hover:shadow-lg disabled:opacity-50 transition-all cursor-pointer"
+                            >
+                                {submitting ? (
+                                    <><Loader2 size={18} className="animate-spin" /> Submitting...</>
+                                ) : (
+                                    <><Send size={18} /> Submit</>
+                                )}
+                            </button>
+                        </div>
+
+                        {/* Cancel Button - full width on mobile, auto on desktop */}
                         <button
                             type="button"
                             onClick={() => navigate(-1)}
-                            className="px-5 py-2.5 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-sm font-semibold text-slate-700 transition-colors cursor-pointer"
+                            className="w-full sm:w-auto px-5 py-2.5 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-sm font-semibold text-slate-700 transition-colors cursor-pointer text-center"
                         >
                             Cancel
-                        </button>
-
-                        {/* Save as Draft Button */}
-                        <button
-                            type="button"
-                            onClick={handleSaveDraft}
-                            disabled={savingDraft || submitting}
-                            className="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-900 text-sm font-bold shadow-sm disabled:opacity-50 transition-colors cursor-pointer"
-                        >
-                            {savingDraft ? (
-                                <><Loader2 size={18} className="animate-spin" /> Saving Draft...</>
-                            ) : (
-                                <><Save size={18} /> Save as Draft</>
-                            )}
-                        </button>
-
-                        {/* Submit Button */}
-                        <button
-                            type="submit"
-                            disabled={submitting || savingDraft}
-                            className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold shadow-md hover:shadow-lg disabled:opacity-50 transition-all cursor-pointer"
-                        >
-                            {submitting ? (
-                                <><Loader2 size={18} className="animate-spin" /> Submitting...</>
-                            ) : (
-                                <><Send size={18} /> Submit</>
-                            )}
                         </button>
                     </div>
                 </div>

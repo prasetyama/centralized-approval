@@ -264,10 +264,10 @@ export const ApprovalDetailPage = () => {
                     <Button variant="ghost" size="icon" onClick={() => backToApprovalList()} className="rounded-full">
                         <ArrowLeft size={20} />
                     </Button>
-                    <div>
-                        <div className="flex items-center gap-2">
+                    <div className="flex flex-col w-full gap-2">
+                        <div className="flex flex-col md:flex-row gap-2">
                             <h1 className="text-2xl font-bold text-slate-900">{detail.title}</h1>
-                            <Badge variant={getStatusVariant(detail.status)}>{detail.status}</Badge>
+                            <Badge variant={getStatusVariant(detail.status)} className="w-fit justify-center">{detail.status}</Badge>
                         </div>
                         <p className="text-sm text-slate-500 font-medium">
                             Reference: <span className="text-slate-900 font-bold">{detail.reference_id}</span> •

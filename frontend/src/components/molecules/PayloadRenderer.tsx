@@ -10,7 +10,7 @@ interface PayloadRendererProps {
 
 export const PayloadRenderer = ({ moduleCode, payload }: PayloadRendererProps) => {
     const renderEOrder = () => (
-        <div className="space-y-6">
+        <div className="space-y-6 overflow-x-auto">
             <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
                     <p className="text-xs font-semibold text-slate-500 uppercase">Distributor</p>
@@ -26,7 +26,7 @@ export const PayloadRenderer = ({ moduleCode, payload }: PayloadRendererProps) =
                 </div>
             </div>
 
-            <div className="rounded-xl border border-slate-100 overflow-hidden">
+            <div className="rounded-xl border border-slate-100">
                 <table className="w-full text-sm">
                     <thead className="bg-slate-50 border-b border-slate-100">
                         <tr>
@@ -142,7 +142,7 @@ export const PayloadRenderer = ({ moduleCode, payload }: PayloadRendererProps) =
                 </div>
             </div>
 
-            <div className="rounded-xl border border-slate-100 overflow-hidden">
+            <div className="rounded-xl border border-slate-100">
                 <table className="w-full text-sm">
                     <thead className="bg-slate-50 border-b border-slate-100">
                         <tr>
@@ -194,7 +194,7 @@ export const PayloadRenderer = ({ moduleCode, payload }: PayloadRendererProps) =
                     <p className="text-xs text-slate-500 font-medium mt-0.5">Reference: {payload.reference_id || payload.transaction_id || 'N/A'}</p>
                 </div>
             </CardHeader>
-            <CardContent className="pt-6">
+            <CardContent className="pt-6 w-full overflow-x-auto">
                 {moduleCode === 'EORDER' ? renderEOrder() :
                     moduleCode === 'FINANCE' ? renderFinance() :
                         moduleCode === 'HR' ? renderHR() :

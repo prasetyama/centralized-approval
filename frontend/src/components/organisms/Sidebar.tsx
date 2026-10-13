@@ -57,7 +57,15 @@ export const Sidebar = ({ isExpanded = false, setIsExpanded, isMobileOpen, setIs
                 isMobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
             )}
         >
-            <div className="flex flex-col flex-1 h-0 px-3 py-4">
+            <div className="flex flex-col flex-1 h-0 px-3 py-4 relative">
+
+                <button
+                    className="absolute top-8 -right-12 lg:hidden p-2 text-white rounded-lg"
+                    onClick={() => setIsMobileOpen(false)}
+                >
+                    <X size={30} />
+                </button>
+
                 <div className={cn("mb-4 flex items-center py-4", isExpanded ? "px-2" : "justify-center")}>
                     <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-600 text-white">
                         <GitBranch size={24} />
@@ -67,13 +75,6 @@ export const Sidebar = ({ isExpanded = false, setIsExpanded, isMobileOpen, setIs
                             Approval <span className="text-blue-600">HUB</span>
                         </span>
                     )}
-
-                    <button
-                        className="ml-auto lg:hidden p-2 text-slate-500 hover:bg-slate-100 rounded-lg"
-                        onClick={() => setIsMobileOpen(false)}
-                    >
-                        <X size={20} />
-                    </button>
                 </div>
 
                 <div className={cn(
