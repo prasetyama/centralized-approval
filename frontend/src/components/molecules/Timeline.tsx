@@ -73,6 +73,11 @@ export const Timeline = ({ steps, currentStep }: TimelineProps) => {
                 const stepAttachments = getStepAttachments(step.step_data);
                 const poNumber = step.step_data?.po_number;
                 const quotationText = typeof step.step_data?.quotation === 'string' && !step.step_data?.quotation.startsWith('data:') ? step.step_data?.quotation : null;
+                const approvedQuotation = step.step_data?.approval_quotation ? (
+                    typeof step.step_data.approval_quotation === 'string'
+                        ? step.step_data.approval_quotation
+                        : step.step_data.approval_quotation.name || 'Quotation Terpilih'
+                ) : null;
 
                 return (
                     <div key={step.id} className="relative flex gap-4 pb-8 last:pb-0">
@@ -135,8 +140,8 @@ export const Timeline = ({ steps, currentStep }: TimelineProps) => {
                                 )}
                             </p>
 
-                            {/* Additional Step Metadata (PO Number / Quotation No) */}
-                            {(poNumber || quotationText) && (
+                            {/* Additional Step Metadata (PO Number / Quotation No / Approved Quotation) */}
+                            {(poNumber || quotationText || approvedQuotation) && (
                                 <div className="mt-2 flex flex-wrap gap-2">
                                     {poNumber && (
                                         <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-blue-50 text-blue-700 font-medium text-xs border border-blue-100">
@@ -145,9 +150,15 @@ export const Timeline = ({ steps, currentStep }: TimelineProps) => {
                                         </span>
                                     )}
                                     {quotationText && (
-                                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-emerald-50 text-emerald-700 font-medium text-xs border border-emerald-100">
+                                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-indigo-50 text-indigo-700 font-medium text-xs border border-indigo-100">
                                             <FileCheck size={12} />
                                             Quotation Ref: <strong className="font-bold">{quotationText}</strong>
+                                        </span>
+                                    )}
+                                    {approvedQuotation && (
+                                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-emerald-50 text-emerald-700 font-medium text-xs border border-emerald-100">
+                                            <CheckCircle2 size={12} className="text-emerald-600" />
+                                            Quotation Disetujui: <strong className="font-bold">{approvedQuotation}</strong>
                                         </span>
                                     )}
                                 </div>
@@ -162,7 +173,11 @@ export const Timeline = ({ steps, currentStep }: TimelineProps) => {
                             {/* Step Attachment Files */}
                             {stepAttachments.length > 0 && (
                                 <div className="mt-3">
-                                    <AttachmentList attachments={stepAttachments} compact />
+                                    <AttachmentList
+                                        attachments={stepAttachments}
+                                        compact
+                                        selectedQuotation={step.step_data?.approval_quotation}
+                                    />
                                 </div>
                             )}
 

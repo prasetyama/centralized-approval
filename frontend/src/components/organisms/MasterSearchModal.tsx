@@ -54,7 +54,7 @@ export const MasterSearchModal: React.FC<MasterSearchModalProps> = ({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-fade-in">
             <div className="bg-white rounded-2xl shadow-2xl border border-slate-100 w-full max-w-2xl overflow-hidden flex flex-col max-h-[85vh]">
                 {/* Modal Header */}
-                <div className="px-6 py-4 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800">
+                <div className="px-6 py-4 bg-blue-600 text-white flex items-center justify-between">
                     <div>
                         <h3 className="text-lg font-bold text-white">{title}</h3>
                         <p className="text-xs text-slate-300">Cari & pilih master data dari tabel</p>

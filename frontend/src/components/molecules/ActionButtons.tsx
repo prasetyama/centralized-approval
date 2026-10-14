@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { CheckCircle2, XCircle, AlertTriangle, Paperclip, UploadCloud, FileText, Trash2 } from 'lucide-react';
+import { CheckCircle2, XCircle, AlertTriangle, Paperclip, UploadCloud, FileText, Trash2, Eye } from 'lucide-react';
 import { Button } from '@/components/atoms/Button';
 import { Card } from '@/components/atoms/Card';
 import { cn } from '@/lib/utils';
@@ -23,6 +23,8 @@ interface ActionButtonsProps {
     requiredInputs?: any[];
     approverType?: string;
     isDeptHeadStep?: boolean;
+    availableQuotations?: any[];
+    selectedQuotation?: any;
 }
 
 const getCleanErrorMessage = (err: any): string => {
@@ -67,6 +69,8 @@ export const ActionButtons = ({
     requiredInputs,
     approverType,
     isDeptHeadStep,
+    availableQuotations,
+    selectedQuotation,
 }: ActionButtonsProps) => {
     const { addToast } = useToast();
     const [showModal, setShowModal] = useState<'APPROVE' | 'REJECT' | null>(null);
@@ -74,10 +78,12 @@ export const ActionButtons = ({
     const [dlvdate, setDlvdate] = useState('');
     const [poNumber, setPoNumber] = useState('');
     const [quotationFiles, setQuotationFiles] = useState<QuotationFile[]>([]);
+    const [selectedQuotId, setSelectedQuotId] = useState<string>('');
     const [error, setError] = useState<string | null>(null);
     const [dlvDateError, setDlvDateError] = useState<string | null>(null);
     const [poError, setPoError] = useState<string | null>(null);
     const [quotationError, setQuotationError] = useState<string | null>(null);
+    const [quotationSelectionError, setQuotationSelectionError] = useState<string | null>(null);
 
     const isPurchasingStep = approverType === 'PURCH_DEPT_HEAD';
     const isDeptHead = isDeptHeadStep || requiredInputs?.length === 0;
@@ -87,6 +93,27 @@ export const ActionButtons = ({
 
     // 2. Ketika sampe step purchasing head / dept head, tidak perlu lagi membaca required inputs
     const requiresQuotation = !isDeptHead && requiredInputs?.some((i: any) => (typeof i === 'string' ? i : i.key) === 'quotation');
+
+    // 3. Approval quotation (pemilihan quotation dari yang diunggah purchasing)
+    const requiresApprovalQuotation = requiredInputs?.some((i: any) => {
+        const key = typeof i === 'string' ? i : i?.key;
+        return key === 'approval_quotation' || key === 'selected_quotation';
+    });
+
+    const handlePreviewQuotation = (quot: any) => {
+        const target = quot.url || quot.data;
+        if (!target) return;
+        if (typeof target === 'string') {
+            if (target.startsWith('data:')) {
+                const win = window.open();
+                if (win) {
+                    win.document.write(`<iframe src="${target}" frameborder="0" style="border:0; top:0px; left:0px; bottom:0px; right:0px; width:100%; height:100%;" allowfullscreen></iframe>`);
+                }
+            } else {
+                window.open(target, '_blank', 'noopener,noreferrer');
+            }
+        }
+    };
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (!e.target.files || e.target.files.length === 0) return;
@@ -135,6 +162,13 @@ export const ActionButtons = ({
                 setQuotationError('Lampiran file penawaran / quotation wajib diunggah (minimal 1 file)');
                 hasError = true;
             }
+            if (requiresApprovalQuotation) {
+                const effectiveId = selectedQuotId || (availableQuotations?.length === 1 ? availableQuotations[0].id : '');
+                if (!effectiveId) {
+                    setQuotationSelectionError('Silakan pilih salah satu quotation yang disetujui');
+                    hasError = true;
+                }
+            }
         }
 
         if (hasError) return;
@@ -144,10 +178,24 @@ export const ActionButtons = ({
             setDlvDateError(null);
             setPoError(null);
             setQuotationError(null);
+            setQuotationSelectionError(null);
 
             const stepData: Record<string, any> = {};
             if (requiresPo && poNumber.trim()) stepData.po_number = poNumber.trim();
             if (requiresQuotation && quotationFiles.length > 0) stepData.quotation = quotationFiles;
+            if (requiresApprovalQuotation) {
+                const effectiveId = selectedQuotId || (availableQuotations?.length === 1 ? availableQuotations[0].id : '');
+                const chosen = availableQuotations?.find((q: any) => String(q.id) === String(effectiveId)) || (availableQuotations?.length === 1 ? availableQuotations[0] : null);
+                if (chosen) {
+                    stepData.approval_quotation = chosen.raw || {
+                        name: chosen.name,
+                        size: chosen.size,
+                        type: chosen.type,
+                        url: chosen.url,
+                        data: chosen.data,
+                    };
+                }
+            }
 
             if (showModal === 'APPROVE') {
                 await onApprove(
@@ -166,6 +214,7 @@ export const ActionButtons = ({
             setDlvdate('');
             setPoNumber('');
             setQuotationFiles([]);
+            setSelectedQuotId('');
         } catch (err: any) {
             const errorMessage = getCleanErrorMessage(err);
             addToast(errorMessage, 'error');
@@ -285,6 +334,102 @@ export const ActionButtons = ({
                                             ))}
                                         </div>
                                     )}
+                                </div>
+                            )}
+
+                            {/* Selection of quotation by 1st approval in org structure */}
+                            {showModal === 'APPROVE' && requiresApprovalQuotation && (
+                                <div className="space-y-3">
+                                    <div className="flex justify-between items-center">
+                                        {quotationSelectionError && (
+                                            <span className="text-[10px] font-bold text-red-500 uppercase animate-pulse">{quotationSelectionError}</span>
+                                        )}
+                                    </div>
+
+                                    {availableQuotations && availableQuotations.length > 0 ? (
+                                        <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                                            {availableQuotations.map((quot: any, idx: number) => {
+                                                const isSelected = String(selectedQuotId || (availableQuotations.length === 1 ? quot.id : '')) === String(quot.id);
+                                                return (
+                                                    <div
+                                                        key={quot.id || idx}
+                                                        onClick={() => {
+                                                            setSelectedQuotId(String(quot.id));
+                                                            if (quotationSelectionError) setQuotationSelectionError(null);
+                                                        }}
+                                                        className={cn(
+                                                            "flex items-center justify-between p-3 rounded-xl border-2 cursor-pointer transition-all",
+                                                            isSelected
+                                                                ? "border-emerald-500 bg-emerald-50/50 shadow-sm ring-1 ring-emerald-400"
+                                                                : "border-slate-200 hover:border-slate-300 bg-slate-50/50 hover:bg-slate-50"
+                                                        )}
+                                                    >
+                                                        <div className="flex items-center gap-3 truncate pr-2">
+                                                            <div className={cn(
+                                                                "w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors",
+                                                                isSelected ? "border-emerald-600 bg-emerald-600" : "border-slate-300 bg-white"
+                                                            )}
+                                                            >
+                                                                {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                                                            </div>
+                                                            <div className="truncate">
+                                                                <p className="text-xs font-bold text-slate-800 truncate">{quot.name}</p>
+                                                                <p className="text-[11px] text-slate-400">
+                                                                    {quot.size ? formatFileSize(quot.size) : 'Berkas Penawaran'} {quot.source ? `• ${quot.source}` : ''}
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                        {(quot.url || quot.data) && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handlePreviewQuotation(quot);
+                                                                }}
+                                                                className="text-xs font-semibold text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-2.5 py-1 rounded-lg shrink-0 transition-colors flex items-center gap-1"
+                                                            >
+                                                                <Eye size={12} /> Buka
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    ) : (
+                                        <div className="p-3.5 rounded-xl border border-amber-200 bg-amber-50 text-amber-800 text-xs space-y-1">
+                                            <p className="font-bold flex items-center gap-1.5">
+                                                <AlertTriangle size={14} className="text-amber-600" />
+                                                Belum Ada Berkas Quotation
+                                            </p>
+                                            <p className="text-amber-700">
+                                                Tidak ditemukan berkas penawaran yang diunggah oleh purchasing di step sebelumnya.
+                                            </p>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Summary note for subsequent approvers when quotation is already chosen */}
+                            {showModal === 'APPROVE' && !requiresApprovalQuotation && selectedQuotation && (
+                                <div className="p-3 bg-emerald-50/60 border border-emerald-200 rounded-xl text-xs space-y-1.5">
+                                    <div className="flex items-center justify-between">
+                                        <span className="font-bold text-emerald-800 flex items-center gap-1.5 uppercase tracking-wide text-[10px]">
+                                            <CheckCircle2 size={13} className="text-emerald-600" />
+                                            Quotation Terpilih (Disetujui Approver Sebelumnya)
+                                        </span>
+                                        {(selectedQuotation.url || selectedQuotation.data) && (
+                                            <button
+                                                type="button"
+                                                onClick={() => handlePreviewQuotation(selectedQuotation)}
+                                                className="text-[11px] text-blue-600 hover:text-blue-800 font-semibold flex items-center gap-1"
+                                            >
+                                                <Eye size={11} /> Buka Berkas
+                                            </button>
+                                        )}
+                                    </div>
+                                    <p className="font-semibold text-slate-800 truncate">
+                                        {typeof selectedQuotation === 'string' ? selectedQuotation : selectedQuotation.name || 'Quotation Disetujui'}
+                                    </p>
                                 </div>
                             )}
 

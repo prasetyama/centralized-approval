@@ -432,15 +432,25 @@ class WorkflowEngine:
                     org_chain = WorkflowEngine.get_dept_approval_chain(purch_dept, company_code=company_code, requester=requester) if purch_dept else []
 
                 if org_chain:
-                    for link in org_chain:
+                    for idx, link in enumerate(org_chain):
                         step_status = ApprovalStep.StepStatus.WAITING if current_step_order == 1 else ApprovalStep.StepStatus.PENDING
                         if step_def.approver_type == WorkflowStepDefinition.ApproverType.PURCH_DEPT_HEAD:
                             if link.get('is_dept_head'):
                                 req_inputs = []
                             else:
-                                req_inputs = [i for i in (step_def.required_inputs or []) if i != 'po_number']
+                                req_inputs = [i for i in (step_def.required_inputs or []) if (i.get('key') if isinstance(i, dict) else i) != 'po_number']
+                        elif step_def.approver_type == WorkflowStepDefinition.ApproverType.REQ_DEPT_HEAD:
+                            if idx == 0:
+                                # Approver pertama dalam struktur organisasi yang memilih quotation
+                                req_inputs = step_def.required_inputs or []
+                            else:
+                                # Approver berikutnya (Dept Head, GM, dll.) tidak perlu memilih quotation lagi
+                                req_inputs = [
+                                    i for i in (step_def.required_inputs or [])
+                                    if (i.get('key') if isinstance(i, dict) else i) not in ('approval_quotation', 'quotation_selection', 'selected_quotation')
+                                ]
                         else:
-                            req_inputs = step_def.required_inputs
+                            req_inputs = step_def.required_inputs or []
 
                         ApprovalStep.objects.create(
                             request=approval_request,
@@ -483,7 +493,11 @@ class WorkflowEngine:
                                 is_active=True, is_approver=True
                             ).distinct().first()
 
-                    req_inputs = [] if step_def.approver_type in (WorkflowStepDefinition.ApproverType.REQ_DEPT_HEAD, WorkflowStepDefinition.ApproverType.PURCH_DEPT_HEAD) else step_def.required_inputs
+                    if step_def.approver_type == WorkflowStepDefinition.ApproverType.PURCH_DEPT_HEAD:
+                        req_inputs = []
+                    else:
+                        req_inputs = step_def.required_inputs or []
+
                     step_status = ApprovalStep.StepStatus.WAITING if current_step_order == 1 else ApprovalStep.StepStatus.PENDING
                     ApprovalStep.objects.create(
                         request=approval_request,

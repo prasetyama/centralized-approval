@@ -204,6 +204,86 @@ class WorkflowEngineOrgStructureTest(TestCase):
         self.assertEqual(req.status, 'APPROVED')
         self.assertEqual(req.payload.get('quotation'), quotation_files)
 
+    def test_req_dept_head_approval_quotation_only_on_first_step(self):
+        """
+        Verify that when REQ_DEPT_HEAD has required_inputs=['approval_quotation'],
+        only the 1st step in the org chain (Manager) gets required_inputs=['approval_quotation'].
+        Subsequent steps (Dept Head) have required_inputs without 'approval_quotation'.
+        """
+        from rest_framework.exceptions import ValidationError
+
+        wf = WorkflowDefinition.objects.create(
+            name='Quotation Selection Workflow',
+            module=self.module,
+            is_active=True
+        )
+        WorkflowStepDefinition.objects.create(
+            workflow=wf,
+            step_order=1,
+            name='Org Review & Quotation Choice',
+            approver_type='REQ_DEPT_HEAD',
+            required_inputs=['approval_quotation']
+        )
+
+        req = WorkflowEngine.submit_request(
+            module_code='EORDER',
+            workflow_id=wf.id,
+            requester=self.staff,
+            title="Quotation Selection Test",
+            payload={"company_code": "PTBSJ"}
+        )
+
+        steps = list(req.steps.all().order_by('step_order'))
+        self.assertEqual(len(steps), 2)
+
+        # Step 1: Manager (First approver in org structure)
+        self.assertEqual(steps[0].user_required, self.manager)
+        self.assertEqual(steps[0].required_inputs, ['approval_quotation'])
+
+        # Step 2: Dept Head (Second approver in org structure) -> MUST NOT have approval_quotation
+        self.assertEqual(steps[1].user_required, self.dept_head)
+        self.assertEqual(steps[1].required_inputs, [])
+
+        # Attempt to approve step 1 without approval_quotation -> must raise ValidationError
+        with self.assertRaises(ValidationError) as ctx:
+            WorkflowEngine.approve_step(req.id, self.manager, comments="Approving without quotation")
+        self.assertIn("approval_quotation", str(ctx.exception))
+
+        # Approve step 1 with approval_quotation
+        selected_quot = {
+            "name": "Vendor_A_Quotation.pdf",
+            "size": 2048,
+            "type": "application/pdf"
+        }
+        WorkflowEngine.approve_step(
+            req.id,
+            self.manager,
+            comments="Approved Vendor A",
+            step_data={"approval_quotation": selected_quot}
+        )
+
+        steps[0].refresh_from_db()
+        self.assertEqual(steps[0].status, 'APPROVED')
+        self.assertEqual(steps[0].step_data.get('approval_quotation'), selected_quot)
+
+        req.refresh_from_db()
+        self.assertEqual(req.payload.get('approval_quotation'), selected_quot)
+
+        # Step 2: Dept Head approves WITHOUT supplying approval_quotation -> should succeed!
+        steps[1].refresh_from_db()
+        self.assertEqual(steps[1].status, 'WAITING')
+        WorkflowEngine.approve_step(
+            req.id,
+            self.dept_head,
+            comments="Dept Head approves Vendor A choice"
+        )
+
+        steps[1].refresh_from_db()
+        self.assertEqual(steps[1].status, 'APPROVED')
+
+        req.refresh_from_db()
+        self.assertEqual(req.status, 'APPROVED')
+
 
 class CCEmailConfigTest(TestCase):
     def setUp(self):

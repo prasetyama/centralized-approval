@@ -204,6 +204,8 @@ class WorkflowApproveView(generics.GenericAPIView):
             step_data['po_number'] = serializer.validated_data['po_number']
         if serializer.validated_data.get('quotation'):
             step_data['quotation'] = serializer.validated_data['quotation']
+        if serializer.validated_data.get('approval_quotation'):
+            step_data['approval_quotation'] = serializer.validated_data['approval_quotation']
 
         try:
             approval_request = WorkflowEngine.approve_step(

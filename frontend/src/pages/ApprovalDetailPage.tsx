@@ -109,6 +109,93 @@ const extractAttachmentsFromDetail = (detail: any): AttachmentItem[] => {
     return items;
 };
 
+const extractAvailableQuotations = (detail: any): any[] => {
+    if (!detail) return [];
+    const list: any[] = [];
+    const seen = new Set<string>();
+
+    const addQuotation = (item: any, sourceLabel?: string) => {
+        if (!item) return;
+        if (Array.isArray(item)) {
+            item.forEach((sub) => addQuotation(sub, sourceLabel));
+            return;
+        }
+        if (typeof item === 'object') {
+            const key = item.name || item.url || item.data || JSON.stringify(item);
+            if (!seen.has(key)) {
+                seen.add(key);
+                list.push({
+                    id: key,
+                    name: item.name || 'Quotation File',
+                    size: item.size || 0,
+                    type: item.type || item.content_type || 'application/octet-stream',
+                    data: item.data,
+                    url: item.url,
+                    source: sourceLabel || 'Purchasing',
+                    raw: item,
+                });
+            }
+        } else if (typeof item === 'string' && item.trim()) {
+            const str = item.trim();
+            if (!seen.has(str)) {
+                seen.add(str);
+                list.push({
+                    id: str,
+                    name: str.includes('/') ? str.split('/').pop() : str,
+                    size: 0,
+                    type: 'application/octet-stream',
+                    url: str.startsWith('http') || str.startsWith('/media') ? str : undefined,
+                    data: str.startsWith('data:') ? str : undefined,
+                    source: sourceLabel || 'Purchasing',
+                    raw: str,
+                });
+            }
+        }
+    };
+
+    // 1. Look in steps step_data (purchasing or earlier steps)
+    if (Array.isArray(detail.steps)) {
+        detail.steps.forEach((step: any) => {
+            if (step.step_data?.quotation) {
+                addQuotation(step.step_data.quotation, step.name || `Step ${step.step_order}`);
+            }
+        });
+    }
+
+    // 2. Look in payload.quotation
+    if (detail.payload?.quotation) {
+        addQuotation(detail.payload.quotation, 'Payload Quotation');
+    }
+
+    return list;
+};
+
+const extractSelectedQuotation = (detail: any): any => {
+    if (!detail) return null;
+    console.log("detail", detail);
+    if (detail.payload?.approval_quotation) {
+        return {
+            quotation: detail.payload.approval_quotation,
+            approvedBy: detail.payload.approved_by || 'Pemohon',
+            stepName: 'Payload Data',
+        };
+    }
+    if (Array.isArray(detail.steps)) {
+        for (const step of detail.steps) {
+            if (step.step_data?.approval_quotation) {
+                return {
+                    quotation: step.step_data.approval_quotation,
+                    approvedBy: step.assigned_to_name || step.assignee_name || step.action_by_name || 'Approver',
+                    stepName: step.name || `Step ${step.step_order}`,
+                    actionDate: step.acted_at || step.action_date,
+                    comments: step.comments,
+                };
+            }
+        }
+    }
+    return null;
+};
+
 
 export const ApprovalDetailPage = () => {
     const { id } = useParams();
@@ -226,6 +313,8 @@ export const ApprovalDetailPage = () => {
     if (!detail) return null;
 
     const allAttachments = extractAttachmentsFromDetail(detail);
+    const availableQuotations = extractAvailableQuotations(detail);
+    const selectedQuotation = extractSelectedQuotation(detail);
 
     const activeStep = detail?.steps?.find((s: any) => s.step_order === detail.current_step);
 
@@ -311,16 +400,18 @@ export const ApprovalDetailPage = () => {
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 <div className="lg:col-span-2 space-y-8">
+
                     <PayloadRenderer
                         moduleCode={detail.module_code}
                         payload={detail.payload}
                     />
 
-                    {allAttachments.length > 0 && (
+                    {(allAttachments.length > 0 || !!selectedQuotation) && (
                         <Card className="border-slate-100 bg-white shadow-sm overflow-hidden p-6">
                             <AttachmentList
                                 attachments={allAttachments}
                                 title="Lampiran"
+                                selectedQuotation={selectedQuotation}
                             />
                         </Card>
                     )}
@@ -452,6 +543,8 @@ export const ApprovalDetailPage = () => {
                         requiredInputs={activeStep?.required_inputs || []}
                         approverType={activeStep?.approver_type}
                         isDeptHeadStep={Boolean(activeStep?.name?.toLowerCase().includes('head') || activeStep?.name?.toLowerCase().includes('dept head'))}
+                        availableQuotations={availableQuotations}
+                        selectedQuotation={selectedQuotation}
                     />
 
                     {isWatcher && (
