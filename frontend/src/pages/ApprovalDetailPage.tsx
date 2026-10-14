@@ -309,7 +309,6 @@ export const ApprovalDetailPage = () => {
     }
 
     const detail = request as any;
-    console.log("detail :", detail)
     if (!detail) return null;
 
     const allAttachments = extractAttachmentsFromDetail(detail);

@@ -4,6 +4,7 @@ import { Button } from '@/components/atoms/Button';
 import { Card } from '@/components/atoms/Card';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/context/ToastContext';
+import { useAuth } from '@/context/AuthContext';
 
 interface QuotationFile {
     name: string;
@@ -84,6 +85,8 @@ export const ActionButtons = ({
     const [poError, setPoError] = useState<string | null>(null);
     const [quotationError, setQuotationError] = useState<string | null>(null);
     const [quotationSelectionError, setQuotationSelectionError] = useState<string | null>(null);
+
+    const { user } = useAuth();
 
     const isPurchasingStep = approverType === 'PURCH_DEPT_HEAD';
     const isDeptHead = isDeptHeadStep || requiredInputs?.length === 0;
@@ -187,12 +190,15 @@ export const ActionButtons = ({
                 const effectiveId = selectedQuotId || (availableQuotations?.length === 1 ? availableQuotations[0].id : '');
                 const chosen = availableQuotations?.find((q: any) => String(q.id) === String(effectiveId)) || (availableQuotations?.length === 1 ? availableQuotations[0] : null);
                 if (chosen) {
-                    stepData.approval_quotation = chosen.raw || {
-                        name: chosen.name,
-                        size: chosen.size,
-                        type: chosen.type,
-                        url: chosen.url,
-                        data: chosen.data,
+                    stepData.approval_quotation = {
+                        ...(chosen.raw || {
+                            name: chosen.name,
+                            size: chosen.size,
+                            type: chosen.type,
+                            url: chosen.url,
+                            data: chosen.data,
+                        }),
+                        approved_by: user?.name || user?.username || user?.email,
                     };
                 }
             }

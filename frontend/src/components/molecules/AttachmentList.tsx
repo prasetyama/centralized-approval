@@ -139,8 +139,6 @@ export const AttachmentList: React.FC<AttachmentListProps> = ({
         ? selectedQuotation
         : null;
 
-    console.log("selectedMeta", selectedMeta);
-
     const quotationTarget = selectedMeta ? selectedMeta.quotation : selectedQuotation;
 
     // Check if target is in attachments or if we need to synthesize an item
@@ -258,9 +256,9 @@ export const AttachmentList: React.FC<AttachmentListProps> = ({
                                                         {file.source}
                                                     </span>
                                                 ) : null}
-                                                {selectedMeta?.approvedBy && (
+                                                {selectedMeta?.quotation?.approved_by && (
                                                     <span className="text-emerald-700 font-medium">
-                                                        • Disetujui oleh {selectedMeta.approvedBy}
+                                                        • Disetujui oleh {selectedMeta.quotation.approved_by}
                                                     </span>
                                                 )}
                                             </div>
