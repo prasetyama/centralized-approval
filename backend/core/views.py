@@ -359,7 +359,7 @@ class InboxView(generics.ListAPIView):
                 waiting_ids = ApprovalStep.objects.filter(
                     status=ApprovalStep.StepStatus.WAITING
                 ).filter(
-                    Q(assigned_to=user)
+                    Q(assigned_to=user) | Q(approver_type='REQUESTOR', request__requester=user)
                 ).values_list('request_id', flat=True)
 
                 # 2. Requests where user has participated in the discussion
@@ -611,7 +611,7 @@ def dashboard_summary(request):
             waiting_ids = ApprovalStep.objects.filter(
                 status=ApprovalStep.StepStatus.WAITING
             ).filter(
-                Q(assigned_to=user)
+                Q(assigned_to=user) | Q(approver_type='REQUESTOR', request__requester=user)
             ).values_list('request_id', flat=True)
 
             discussion_ids = RequestFeedback.objects.filter(

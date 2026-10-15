@@ -129,7 +129,7 @@ interface Step {
     id?: number;
     name: string;
     step_order: number;
-    approver_type: 'ROLE' | 'USER' | 'REQ_DEPT_HEAD' | 'FINANCE_DEPT_HEAD' | 'TARGET_DEPT_ROLE';
+    approver_type: 'ROLE' | 'USER' | 'REQ_DEPT_HEAD' | 'FINANCE_DEPT_HEAD' | 'PURCH_DEPT_HEAD' | 'TARGET_DEPT_ROLE' | 'REQUESTOR';
     role_required?: number | null;
     user_required?: number | null;
     target_department?: number | null;
@@ -388,7 +388,8 @@ export const WorkflowForm: React.FC<WorkflowFormProps> = ({ initialData, onClose
                                                     { value: 'PURCH_DEPT_HEAD', label: 'Purchasing Approval' },
                                                     { value: 'TARGET_DEPT_ROLE', label: 'Target Dept Role' },
                                                     { value: 'ROLE', label: 'Role-based (Global)' },
-                                                    { value: 'USER', label: 'Specific User' }
+                                                    { value: 'USER', label: 'Specific User' },
+                                                    { value: 'REQUESTOR', label: 'Requestor (Assign Back)' }
                                                 ]}
                                                 value={step.approver_type}
                                                 onChange={(e) => {
@@ -397,9 +398,15 @@ export const WorkflowForm: React.FC<WorkflowFormProps> = ({ initialData, onClose
                                                     if (type === 'ROLE') {
                                                         updates.role_required = (roles as any)?.results?.[0]?.id || null;
                                                         updates.user_required = null;
+                                                        updates.target_department = null;
                                                     } else if (type === 'USER') {
                                                         updates.user_required = (users as any)?.results?.[0]?.id || null;
                                                         updates.role_required = null;
+                                                        updates.target_department = null;
+                                                    } else if (type === 'REQUESTOR') {
+                                                        updates.role_required = null;
+                                                        updates.user_required = null;
+                                                        updates.target_department = null;
                                                     } else if (type === 'FINANCE_DEPT_HEAD') {
                                                         updates.required_inputs = ['po_number', 'quotation'];
                                                     }
@@ -434,6 +441,10 @@ export const WorkflowForm: React.FC<WorkflowFormProps> = ({ initialData, onClose
                                                         onChange={(e) => handleStepChange(index, { target_department: parseInt(e.target.value) })}
                                                         required
                                                     />
+                                                </div>
+                                            ) : step.approver_type === 'REQUESTOR' ? (
+                                                <div className="w-full text-xs text-slate-500 italic pb-2 flex items-center h-10">
+                                                    Assigned back to requestor
                                                 </div>
                                             ) :
                                                 ''

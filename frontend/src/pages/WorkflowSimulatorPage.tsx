@@ -354,6 +354,8 @@ export const WorkflowSimulatorPage = () => {
                             simulatedAssignee = "Finance Dept Head / Team";
                         } else if (approverType === 'TARGET_DEPT_ROLE') {
                             simulatedAssignee = step.target_department_name ? `${step.target_department_name} Role` : "Target Dept Role";
+                        } else if (approverType === 'REQUESTOR') {
+                            simulatedAssignee = requesterUser ? `${requesterUser} (Requestor)` : "Requestor";
                         } else {
                             simulatedAssignee = step.user_name || step.role_name || (step.role_users && step.role_users[0]?.name) || "Unassigned";
                         }

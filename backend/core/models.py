@@ -347,6 +347,7 @@ class WorkflowStepDefinition(models.Model):
         FINANCE_DEPT_HEAD = 'FINANCE_DEPT_HEAD', 'Finance Dept Head / Team'
         PURCH_DEPT_HEAD = 'PURCH_DEPT_HEAD', 'Purchasing Approval'
         TARGET_DEPT_ROLE = 'TARGET_DEPT_ROLE', 'Target Dept Role'
+        REQUESTOR = 'REQUESTOR', 'Requestor'
 
     workflow = models.ForeignKey(
         WorkflowDefinition,
@@ -420,6 +421,8 @@ class WorkflowStepDefinition(models.Model):
 
     def clean(self):
         from django.core.exceptions import ValidationError
+        if self.approver_type:
+            self.approver_type = str(self.approver_type).upper()
         if self.approver_type == self.ApproverType.ROLE and not self.role_required:
             raise ValidationError("role_required was not provided for ROLE-based step.")
         if self.approver_type == self.ApproverType.USER and not self.user_required:
@@ -436,6 +439,8 @@ class WorkflowStepDefinition(models.Model):
             approver = self.role_required.code if self.role_required else "No Role"
         elif self.approver_type == self.ApproverType.USER:
             approver = self.user_required.username if self.user_required else "No User"
+        elif self.approver_type == self.ApproverType.REQUESTOR:
+            approver = "Requestor"
         else:
             approver = self.approver_type
         return f"Step {self.step_order}: {self.name} ({approver})"
@@ -652,6 +657,8 @@ class ApprovalStep(models.Model):
             approver = f"Role: {self.role_required.code}"
         elif self.approver_type == WorkflowStepDefinition.ApproverType.USER and self.user_required:
             approver = f"User: {self.user_required.username}"
+        elif self.approver_type == WorkflowStepDefinition.ApproverType.REQUESTOR:
+            approver = "Requestor"
             
         return f"Step {self.step_order}: {self.name} ({approver}) - {self.status}"
 

@@ -91,7 +91,12 @@ export const AdminWorkflowPage = () => {
                                             <div className="bg-white border border-slate-200 rounded-lg px-3 py-2 flex flex-col items-center min-w-[100px] shadow-sm group-hover:border-blue-200 transition-all">
                                                 <span className="text-[10px] font-black text-slate-400 uppercase leading-none mb-1">Step {idx + 1}</span>
                                                 <span className="text-xs font-bold text-slate-700">
-                                                    {step.approver_type === 'USER' ? step.user_name : step.role_name}
+                                                    {step.approver_type === 'USER' ? step.user_name :
+                                                     step.approver_type === 'REQUESTOR' ? 'Requestor' :
+                                                     step.approver_type === 'REQ_DEPT_HEAD' ? 'Dept Head' :
+                                                     step.approver_type === 'PURCH_DEPT_HEAD' ? 'Purchasing' :
+                                                     step.approver_type === 'TARGET_DEPT_ROLE' ? (step.target_department_name || 'Target Dept') :
+                                                     step.role_name || step.approver_type}
                                                 </span>
                                             </div>
                                             {idx < wf.steps.length - 1 && <ChevronRight size={14} className="text-slate-300" />}

@@ -327,6 +327,7 @@ export const ApprovalDetailPage = () => {
         if (activeStep.assigned_to_email === user?.email) return true;
         if (activeStep.approver_type === 'USER' && activeStep.user_required_email === user?.email) return true;
         if (activeStep.approver_type === 'ROLE' && activeStep.role_required == user?.role) return true;
+        if (activeStep.approver_type === 'REQUESTOR' && (detail?.requester_email === user?.email || activeStep.assigned_to_email === user?.email || detail?.requester === user?.id)) return true;
 
         return false;
     })();

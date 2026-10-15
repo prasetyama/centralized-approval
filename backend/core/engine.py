@@ -103,7 +103,7 @@ class WorkflowEngine:
             approval_request.save(update_fields=['current_step', 'updated_at'])
             # Notify next approver via email after commit
             _captured_step = next_step
-            transaction.on_commit(lambda: email_service.send_step_notification(_captured_step))
+            # transaction.on_commit(lambda: email_service.send_step_notification(_captured_step))
             return False  # Not finished
         else:
             # Final step reached
@@ -113,7 +113,7 @@ class WorkflowEngine:
             approval_request.save(update_fields=['status', 'updated_at'])
             # Notify requester that request is fully approved
             _captured_req = approval_request
-            transaction.on_commit(lambda: email_service.send_final_approved_notification(_captured_req))
+            # transaction.on_commit(lambda: email_service.send_final_approved_notification(_captured_req))
             return True  # Finished
 
     @staticmethod
@@ -524,7 +524,9 @@ class WorkflowEngine:
                         pass
 
             if assignee is None:
-                if step_def.approver_type == WorkflowStepDefinition.ApproverType.USER:
+                if step_def.approver_type == WorkflowStepDefinition.ApproverType.REQUESTOR:
+                    assignee = requester
+                elif step_def.approver_type == WorkflowStepDefinition.ApproverType.USER:
                     assignee = step_def.user_required
                 elif step_def.approver_type == WorkflowStepDefinition.ApproverType.FINANCE_DEPT_HEAD:
                     fin_dept = Department.objects.filter(Q(code='DEPT_FIN') | Q(name__icontains='Finance')).first()
@@ -556,7 +558,7 @@ class WorkflowEngine:
                     approver_type=step_def.approver_type,
                     assigned_to=assignee,
                     role_required=step_def.role_required,
-                    user_required=step_def.user_required,
+                    user_required=assignee if step_def.approver_type == WorkflowStepDefinition.ApproverType.REQUESTOR else step_def.user_required,
                     target_department=step_def.target_department,
                     required_inputs=step_def.required_inputs,
                     status=step_status,
@@ -672,6 +674,9 @@ class WorkflowEngine:
             is_authorized = True
         elif current_step.user_required and current_step.user_required == approver:
             is_authorized = True
+        elif current_step.approver_type == WorkflowStepDefinition.ApproverType.REQUESTOR:
+            if approval_request.requester == approver:
+                is_authorized = True
         elif current_step.approver_type == WorkflowStepDefinition.ApproverType.REQ_DEPT_HEAD:
             req_dept = approval_request.requester.department
             if approver.department == req_dept and (approver.is_approver or approver.user_roles.filter(role__code__in=['MGR', 'DEPT_HEAD']).exists()):
@@ -810,6 +815,9 @@ class WorkflowEngine:
         elif current_step.assigned_to:
             if current_step.assigned_to == approver:
                 is_authorized = True
+        elif current_step.approver_type == WorkflowStepDefinition.ApproverType.REQUESTOR:
+            if approval_request.requester == approver:
+                is_authorized = True
         
         if not is_authorized and current_step.role_required:
             if approver.user_roles.filter(role=current_step.role_required).exists():
@@ -904,6 +912,8 @@ class WorkflowEngine:
                 is_authorized = (current_step.user_required == current_user)
             elif current_step.assigned_to:
                 is_authorized = (current_step.assigned_to == current_user)
+            elif current_step.approver_type == WorkflowStepDefinition.ApproverType.REQUESTOR:
+                is_authorized = (approval_request.requester == current_user)
             
             if not is_authorized and current_step.role_required:
                 is_authorized = current_user.user_roles.filter(role=current_step.role_required).exists()

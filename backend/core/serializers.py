@@ -333,6 +333,12 @@ class WorkflowStepDefinitionSerializer(serializers.ModelSerializer):
             'is_optional', 'conditions', 'role_users'
         ]
 
+    def to_internal_value(self, data):
+        if 'approver_type' in data and isinstance(data['approver_type'], str):
+            data = data.copy() if hasattr(data, 'copy') else dict(data)
+            data['approver_type'] = data['approver_type'].upper()
+        return super().to_internal_value(data)
+
     def get_user_name(self, obj):
         if obj.user_required:
             return obj.user_required.get_full_name() or obj.user_required.username
@@ -486,6 +492,7 @@ class ApprovalRequestListSerializer(serializers.ModelSerializer):
     module_color = serializers.CharField(source='module.color', read_only=True)
     module_icon = serializers.CharField(source='module.icon', read_only=True)
     requester_name = serializers.SerializerMethodField()
+    requester_email = serializers.CharField(source='requester.email', read_only=True)
     division_name = serializers.CharField(source='division.name', read_only=True)
     current_step_name = serializers.SerializerMethodField()
 
@@ -494,7 +501,7 @@ class ApprovalRequestListSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'reference_id', 'module', 'module_name', 'module_code',
             'module_color', 'module_icon', 'title', 'status', 'priority',
-            'current_step', 'current_step_name', 'requester', 'requester_name',
+            'current_step', 'current_step_name', 'requester', 'requester_name', 'requester_email',
             'division', 'division_name', 'created_at', 'updated_at',
         ]
 
@@ -523,6 +530,7 @@ class ApprovalRequestDetailSerializer(serializers.ModelSerializer):
     module_icon = serializers.CharField(source='module.icon', read_only=True)
     workflow_name = serializers.CharField(source='workflow.name', read_only=True)
     requester_name = serializers.SerializerMethodField()
+    requester_email = serializers.CharField(source='requester.email', read_only=True)
     steps = ApprovalStepSerializer(many=True, read_only=True)
     division_details = serializers.SerializerMethodField()
     audit_logs = AuditLogSerializer(many=True, read_only=True)
@@ -534,7 +542,7 @@ class ApprovalRequestDetailSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'reference_id', 'module', 'module_name', 'module_code',
             'module_color', 'module_icon', 'workflow', 'workflow_name',
-            'requester', 'requester_name', 'title', 'description',
+            'requester', 'requester_name', 'requester_email', 'title', 'description',
             'payload', 'status', 'current_step', 'priority', 'division', 'division_details',
             'steps', 'audit_logs', 'feedbacks', 'watchers', 'created_at', 'updated_at',
         ]
