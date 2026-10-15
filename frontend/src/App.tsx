@@ -44,6 +44,8 @@ const AppRoutes = () => {
                 <Route path="pr-non-trade" element={<PRNonTradeListPage />} />
                 <Route path="pr-non-trade/create" element={<PRNonTradeFormPage />} />
                 <Route path="pr-non-trade/:id/edit" element={<PRNonTradeFormPage />} />
+                <Route path="pr/create" element={<PRNonTradeFormPage />} />
+                <Route path="pr/:id/edit" element={<PRNonTradeFormPage />} />
                 <Route path="workflow/:id" element={<ApprovalDetailPage />} />
                 <Route path="admin/users" element={<AdminUserPage />} />
                 <Route path="admin/workflows" element={<AdminWorkflowPage />} />
