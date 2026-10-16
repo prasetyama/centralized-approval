@@ -11,7 +11,7 @@ import { CriteriaRuleBuilder } from '@/components/molecules/CriteriaRuleBuilder'
 
 /** Preset pilihan required_inputs yang umum digunakan */
 const PRESET_REQUIRED_INPUTS: { key: string; label: string }[] = [
-    { key: 'po_number', label: 'PO Number' },
+    { key: 'pr_number', label: 'PR Number' },
     { key: 'quotation', label: 'Quotation (Upload File)' },
     { key: 'approval_quotation', label: 'Approval Quotation (Pilih Penawaran)' },
     { key: 'delivery_date', label: 'Delivery Date' },
@@ -66,11 +66,10 @@ const RequiredInputsEditor: React.FC<{
                             key={preset.key}
                             type="button"
                             onClick={() => toggle(preset.key)}
-                            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border transition-colors ${
-                                checked
+                            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border transition-colors ${checked
                                     ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
                                     : 'bg-white text-slate-600 border-slate-300 hover:border-blue-400 hover:text-blue-600'
-                            }`}
+                                }`}
                         >
                             {checked ? <XCircle size={12} /> : <Plus size={12} />}
                             {preset.label}

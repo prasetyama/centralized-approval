@@ -55,7 +55,6 @@ export const PRNonTradeFormPage: React.FC = () => {
     const [wbsNo, setWbsNo] = useState('');
     const [equipmentName, setEquipmentName] = useState('');
     const [submissionRemark, setSubmissionRemark] = useState('');
-    const [status, setStatus] = useState<'DRAFT' | 'SUBMITTED' | 'CANCELLED'>('DRAFT');
 
     // Items list
     const [items, setItems] = useState<PRNonTradeItem[]>([]);
@@ -103,7 +102,6 @@ export const PRNonTradeFormPage: React.FC = () => {
                 setWbsNo(data.wbs_no || '');
                 setEquipmentName(data.equipment_name || '');
                 setSubmissionRemark(data.submission_remark || '');
-                setStatus(data.status || 'DRAFT');
                 setItems(data.items || []);
             } catch (err: any) {
                 toast.error('Gagal memuat data draft PR Non-Trade.');
