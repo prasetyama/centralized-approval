@@ -26,6 +26,8 @@ interface ActionButtonsProps {
     isDeptHeadStep?: boolean;
     availableQuotations?: any[];
     selectedQuotation?: any;
+    initialPrNumber?: string;
+    initialPoNumber?: string;
 }
 
 const getCleanErrorMessage = (err: any): string => {
@@ -72,17 +74,21 @@ export const ActionButtons = ({
     isDeptHeadStep,
     availableQuotations,
     selectedQuotation,
+    initialPrNumber = '',
+    initialPoNumber = '',
 }: ActionButtonsProps) => {
     const { addToast } = useToast();
     const [showModal, setShowModal] = useState<'APPROVE' | 'REJECT' | null>(null);
     const [comments, setComments] = useState('');
     const [dlvdate, setDlvdate] = useState('');
-    const [poNumber, setPoNumber] = useState('');
+    const [poNumber, setPoNumber] = useState(initialPoNumber);
+    const [prNumber, setPrNumber] = useState(initialPrNumber);
     const [quotationFiles, setQuotationFiles] = useState<QuotationFile[]>([]);
     const [selectedQuotId, setSelectedQuotId] = useState<string>('');
     const [error, setError] = useState<string | null>(null);
     const [dlvDateError, setDlvDateError] = useState<string | null>(null);
     const [poError, setPoError] = useState<string | null>(null);
+    const [prError, setPrError] = useState<string | null>(null);
     const [quotationError, setQuotationError] = useState<string | null>(null);
     const [quotationSelectionError, setQuotationSelectionError] = useState<string | null>(null);
 
@@ -90,6 +96,11 @@ export const ActionButtons = ({
 
     const isPurchasingStep = approverType === 'PURCH_DEPT_HEAD';
     const isDeptHead = isDeptHeadStep || requiredInputs?.length === 0;
+
+    const requiresPr = requiredInputs?.some((i: any) => {
+        const key = typeof i === 'string' ? i : i?.key;
+        return key === 'pr_number';
+    });
 
     // 1. Hilangkan requiredinput requiresPo pada step purchasing
     const requiresPo = !isPurchasingStep && !isDeptHead && requiredInputs?.some((i: any) => (typeof i === 'string' ? i : i.key) === 'po_number');
@@ -157,6 +168,10 @@ export const ActionButtons = ({
         }
 
         if (showModal === 'APPROVE') {
+            if (requiresPr && !prNumber.trim()) {
+                setPrError('PR Number wajib diisi');
+                hasError = true;
+            }
             if (requiresPo && !poNumber.trim()) {
                 setPoError('PO Number wajib diisi');
                 hasError = true;
@@ -180,10 +195,12 @@ export const ActionButtons = ({
             setError(null);
             setDlvDateError(null);
             setPoError(null);
+            setPrError(null);
             setQuotationError(null);
             setQuotationSelectionError(null);
 
             const stepData: Record<string, any> = {};
+            if (requiresPr && prNumber.trim()) stepData.pr_number = prNumber.trim();
             if (requiresPo && poNumber.trim()) stepData.po_number = poNumber.trim();
             if (requiresQuotation && quotationFiles.length > 0) stepData.quotation = quotationFiles;
             if (requiresApprovalQuotation) {
@@ -219,6 +236,7 @@ export const ActionButtons = ({
             setComments('');
             setDlvdate('');
             setPoNumber('');
+            setPrNumber('');
             setQuotationFiles([]);
             setSelectedQuotId('');
         } catch (err: any) {
@@ -234,7 +252,11 @@ export const ActionButtons = ({
             <Button
                 variant="primary"
                 className="flex-1 bg-emerald-600 hover:bg-emerald-700 shadow-emerald-100"
-                onClick={() => setShowModal('APPROVE')}
+                onClick={() => {
+                    if (initialPrNumber && !prNumber) setPrNumber(initialPrNumber);
+                    if (initialPoNumber && !poNumber) setPoNumber(initialPoNumber);
+                    setShowModal('APPROVE');
+                }}
                 loading={isLoading}
             >
                 <CheckCircle2 size={18} className="mr-2" /> Approve
@@ -270,6 +292,30 @@ export const ActionButtons = ({
                             <p className="text-sm text-slate-500 font-medium leading-relaxed">
                                 You are about to {showModal.toLowerCase()} this request. Please provide any required information or comments.
                             </p>
+
+                            {showModal === 'APPROVE' && requiresPr && (
+                                <div className="space-y-1">
+                                    <div className="flex justify-between items-center">
+                                        <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                                            PR Number <span className="text-red-500">*</span>
+                                        </label>
+                                        {prError && <span className="text-[10px] font-bold text-red-500 uppercase">{prError}</span>}
+                                    </div>
+                                    <input
+                                        type="text"
+                                        placeholder="Contoh: PR-2026/09/00042 atau PR/IT/2026/001"
+                                        className={cn(
+                                            "w-full rounded-xl border p-3 text-sm transition-all focus:outline-none focus:ring-4",
+                                            prError ? "border-red-300 bg-red-50/30" : "border-slate-200 bg-slate-50 focus:bg-white"
+                                        )}
+                                        value={prNumber}
+                                        onChange={(e) => {
+                                            setPrNumber(e.target.value);
+                                            if (e.target.value.trim()) setPrError(null);
+                                        }}
+                                    />
+                                </div>
+                            )}
 
                             {showModal === 'APPROVE' && requiresPo && (
                                 <div className="space-y-1">
@@ -495,7 +541,9 @@ export const ActionButtons = ({
                                         setError(null);
                                         setDlvDateError(null);
                                         setPoError(null);
+                                        setPrError(null);
                                         setQuotationError(null);
+                                        setQuotationSelectionError(null);
                                     }}
                                 >
                                     Cancel

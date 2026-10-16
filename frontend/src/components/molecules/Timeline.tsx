@@ -71,6 +71,7 @@ export const Timeline = ({ steps, currentStep }: TimelineProps) => {
                 const isPast = step.step_order < currentStep;
 
                 const stepAttachments = getStepAttachments(step.step_data);
+                const prNumber = step.step_data?.pr_number;
                 const poNumber = step.step_data?.po_number;
                 const quotationText = typeof step.step_data?.quotation === 'string' && !step.step_data?.quotation.startsWith('data:') ? step.step_data?.quotation : null;
                 const approvedQuotation = step.step_data?.approval_quotation ? (
@@ -140,9 +141,15 @@ export const Timeline = ({ steps, currentStep }: TimelineProps) => {
                                 )}
                             </p>
 
-                            {/* Additional Step Metadata (PO Number / Quotation No / Approved Quotation) */}
-                            {(poNumber || quotationText || approvedQuotation) && (
+                            {/* Additional Step Metadata (PR Number / PO Number / Quotation No / Approved Quotation) */}
+                            {(prNumber || poNumber || quotationText || approvedQuotation) && (
                                 <div className="mt-2 flex flex-wrap gap-2">
+                                    {prNumber && (
+                                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-purple-50 text-purple-700 font-medium text-xs border border-purple-100">
+                                            <Tag size={12} />
+                                            PR No: <strong className="font-bold">{prNumber}</strong>
+                                        </span>
+                                    )}
                                     {poNumber && (
                                         <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-blue-50 text-blue-700 font-medium text-xs border border-blue-100">
                                             <Tag size={12} />

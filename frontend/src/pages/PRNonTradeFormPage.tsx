@@ -492,6 +492,18 @@ export const PRNonTradeFormPage: React.FC = () => {
                                     className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-xl text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 transition-colors placeholder:text-slate-400 shadow-sm"
                                 />
                             </div>
+                            <div>
+                                <label className="block text-sm font-semibold text-slate-700 mb-2">
+                                    CAR / TBR No
+                                </label>
+                                <input
+                                    type="text"
+                                    placeholder="Masukkan CAR/TBR No..."
+                                    value={carTbrNo}
+                                    onChange={(e) => setCarTbrNo(e.target.value)}
+                                    className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 shadow-sm"
+                                />
+                            </div>
 
                             {/* Radio Selection Group Row */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -543,7 +555,6 @@ export const PRNonTradeFormPage: React.FC = () => {
                                             />
                                             <div>
                                                 <span className="font-semibold block">Non Asset</span>
-                                                <span className="text-xs text-slate-500">Biaya operasional / perlengkapan (OPEX)</span>
                                             </div>
                                         </label>
                                         <label className="flex items-center gap-3 text-sm font-medium text-slate-700 cursor-pointer">
@@ -557,7 +568,6 @@ export const PRNonTradeFormPage: React.FC = () => {
                                             />
                                             <div>
                                                 <span className="font-semibold block">Asset</span>
-                                                <span className="text-xs text-slate-500">Pengadaan aset & kapitalisasi (CAPEX)</span>
                                             </div>
                                         </label>
                                     </div>
@@ -567,15 +577,6 @@ export const PRNonTradeFormPage: React.FC = () => {
                             {/* DYNAMIC ASSET SECTION: HIDE INSTEAD OF DISABLED */}
                             {purchaseType === 'asset' && (
                                 <div className="p-5 bg-blue-50/60 border border-blue-200 rounded-2xl space-y-4 animate-fade-in">
-                                    <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-2 text-blue-900 font-bold text-sm">
-                                            <Layers size={18} className="text-blue-600" />
-                                            <span>Spesifikasi Aset (CAPEX)</span>
-                                        </div>
-                                        <span className="text-xs text-blue-700 bg-white px-2.5 py-1 rounded-full border border-blue-200 font-medium">
-                                            Muncul karena Purchase Type: Asset
-                                        </span>
-                                    </div>
 
                                     {/* Asset Type Selector */}
                                     <div>
@@ -600,7 +601,6 @@ export const PRNonTradeFormPage: React.FC = () => {
                                                 />
                                                 <div>
                                                     <span className="font-semibold text-sm text-slate-900 block">Non WBS</span>
-                                                    <span className="text-[11px] text-slate-500">Aset langsung / Master Asset</span>
                                                 </div>
                                             </label>
 
@@ -621,7 +621,6 @@ export const PRNonTradeFormPage: React.FC = () => {
                                                 />
                                                 <div>
                                                     <span className="font-semibold text-sm text-slate-900 block">WBS (Project)</span>
-                                                    <span className="text-[11px] text-slate-500">Work Breakdown Structure</span>
                                                 </div>
                                             </label>
                                         </div>
@@ -710,21 +709,8 @@ export const PRNonTradeFormPage: React.FC = () => {
                                 </div>
                             )}
 
-                            {/* CAR / TBR No & Operational Equipment */}
+                            {/* Operational Equipment */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pt-1">
-                                <div>
-                                    <label className="block text-sm font-semibold text-slate-700 mb-2">
-                                        CAR / TBR No
-                                    </label>
-                                    <input
-                                        type="text"
-                                        placeholder="Masukkan CAR/TBR No..."
-                                        value={carTbrNo}
-                                        onChange={(e) => setCarTbrNo(e.target.value)}
-                                        className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 shadow-sm"
-                                    />
-                                    <p className="text-xs text-slate-400 mt-1">Opsional untuk pengadaan armada atau kendaraan operasional</p>
-                                </div>
 
                                 {purchaseType === 'non_asset' && (
                                     <div>
@@ -748,7 +734,6 @@ export const PRNonTradeFormPage: React.FC = () => {
                                                 <Search size={16} />
                                             </button>
                                         </div>
-                                        <p className="text-xs text-slate-400 mt-1">Contoh: AC Kantor, Genset Gudang, Printer</p>
                                     </div>
                                 )}
                             </div>

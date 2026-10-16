@@ -545,6 +545,8 @@ export const ApprovalDetailPage = () => {
                         isDeptHeadStep={Boolean(activeStep?.name?.toLowerCase().includes('head') || activeStep?.name?.toLowerCase().includes('dept head'))}
                         availableQuotations={availableQuotations}
                         selectedQuotation={selectedQuotation}
+                        initialPrNumber={activeStep?.step_data?.pr_number || detail?.payload?.pr_number || ''}
+                        initialPoNumber={activeStep?.step_data?.po_number || detail?.payload?.po_number || ''}
                     />
 
                     {isWatcher && (

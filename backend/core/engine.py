@@ -103,7 +103,7 @@ class WorkflowEngine:
             approval_request.save(update_fields=['current_step', 'updated_at'])
             # Notify next approver via email after commit
             _captured_step = next_step
-            # transaction.on_commit(lambda: email_service.send_step_notification(_captured_step))
+            transaction.on_commit(lambda: email_service.send_step_notification(_captured_step))
             return False  # Not finished
         else:
             # Final step reached
@@ -113,7 +113,7 @@ class WorkflowEngine:
             approval_request.save(update_fields=['status', 'updated_at'])
             # Notify requester that request is fully approved
             _captured_req = approval_request
-            # transaction.on_commit(lambda: email_service.send_final_approved_notification(_captured_req))
+            transaction.on_commit(lambda: email_service.send_final_approved_notification(_captured_req))
             return True  # Finished
 
     @staticmethod

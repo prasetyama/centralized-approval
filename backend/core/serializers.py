@@ -589,6 +589,7 @@ class ActionSerializer(serializers.Serializer):
     dlv_date = serializers.CharField(required=False, default='', allow_blank=True, allow_null=True)
     step_data = serializers.JSONField(required=False, default=dict)
     po_number = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    pr_number = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     quotation = serializers.JSONField(required=False, allow_null=True)
     approval_quotation = serializers.JSONField(required=False, allow_null=True)
 

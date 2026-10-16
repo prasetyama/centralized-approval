@@ -202,6 +202,8 @@ class WorkflowApproveView(generics.GenericAPIView):
         # Merge individual fields if present
         if serializer.validated_data.get('po_number'):
             step_data['po_number'] = serializer.validated_data['po_number']
+        if serializer.validated_data.get('pr_number'):
+            step_data['pr_number'] = serializer.validated_data['pr_number']
         if serializer.validated_data.get('quotation'):
             step_data['quotation'] = serializer.validated_data['quotation']
         if serializer.validated_data.get('approval_quotation'):
