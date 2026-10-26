@@ -494,10 +494,11 @@ export const PRNonTradeFormPage: React.FC = () => {
                             </div>
                             <div>
                                 <label className="block text-sm font-semibold text-slate-700 mb-2">
-                                    CAR / TBR No
+                                    CAR / TBR No <span className="text-red-500">*</span>
                                 </label>
                                 <input
                                     type="text"
+                                    required
                                     placeholder="Masukkan CAR/TBR No..."
                                     value={carTbrNo}
                                     onChange={(e) => setCarTbrNo(e.target.value)}
