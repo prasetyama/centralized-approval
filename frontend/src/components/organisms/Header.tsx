@@ -1,6 +1,7 @@
-import { Bell, Search, Menu } from 'lucide-react';
+import { Bell, Menu } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import AppDrawer from '@/components/atoms/AppDrawer';
+import { GlobalSearch } from '@/components/molecules/GlobalSearch';
 
 export const Header = ({ onMenuClick }: { onMenuClick?: () => void }) => {
     const { user } = useAuth();
@@ -11,19 +12,13 @@ export const Header = ({ onMenuClick }: { onMenuClick?: () => void }) => {
                 {onMenuClick && (
                     <button
                         onClick={onMenuClick}
-                        className="mr-4 p-2 text-slate-500 hover:bg-slate-100 rounded-lg lg:hidden"
+                        className="mr-3 p-2 text-slate-500 hover:bg-slate-100 rounded-lg lg:hidden"
+                        title="Open Menu"
                     >
                         <Menu size={20} />
                     </button>
                 )}
-                <div className="relative w-full hidden sm:block">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                    <input
-                        type="text"
-                        placeholder="Search approvals, reference IDs..."
-                        className="w-full rounded-full border border-slate-200 bg-slate-50/50 py-2 pl-10 pr-4 text-sm outline-none transition-all focus:border-blue-300 focus:bg-white focus:ring-4 focus:ring-blue-100/50"
-                    />
-                </div>
+                <GlobalSearch />
             </div>
 
             <div className="flex items-center space-x-4">

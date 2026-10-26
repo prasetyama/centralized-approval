@@ -806,22 +806,42 @@ class WorkflowDefinitionViewSet(viewsets.ModelViewSet):
 
 
 class ApprovalRequestViewSet(viewsets.ReadOnlyModelViewSet):
-    """Read-only ViewSet for listing/retrieving all approval requests (Admin view)."""
+    """Read-only ViewSet for listing/retrieving approval requests with search and filter support."""
     queryset = ApprovalRequest.objects.select_related(
         'module', 'workflow', 'requester'
     ).prefetch_related('steps', 'audit_logs').all()
     permission_classes = [IsAuthenticated]
     filterset_fields = {
+        'reference_id': ['exact', 'icontains'],
         'module__code': ['exact'],
         'status': ['exact'],
         'updated_at': ['gt', 'gte'],
     }
-    search_fields = ['title', 'reference_id']
+    search_fields = [
+        'title',
+        'reference_id',
+        'requester__first_name',
+        'requester__last_name',
+        'requester__username',
+    ]
 
     def get_serializer_class(self):
         if self.action == 'retrieve':
             return ApprovalRequestDetailSerializer
         return ApprovalRequestListSerializer
+
+    def get_queryset(self):
+        user = self.request.user
+        qs = super().get_queryset()
+        if user.is_superuser:
+            return qs
+        return qs.filter(
+            Q(requester=user) |
+            Q(steps__assigned_to=user) |
+            Q(watchers__user=user, watchers__deleted_at=None) |
+            Q(audit_logs__actor=user)
+        ).distinct()
+
 
 
 class RequestFeedbackViewSet(viewsets.ModelViewSet):
