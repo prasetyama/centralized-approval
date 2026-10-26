@@ -141,7 +141,26 @@ export const PayloadRenderer = ({ moduleCode, payload }: PayloadRendererProps) =
                     <p className="font-medium text-slate-900">{payload.requestor_name + " - " + payload.requester_department + " - " + payload.requester_company || '-'}</p>
                 </div>
             </div>
-
+            <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                    <p className="text-xs font-semibold text-slate-500 uppercase">Asset Number</p>
+                    <p className="text-lg font-bold text-slate-900">{payload.asset_no}</p>
+                </div>
+                <div className="space-y-1">
+                    <p className="text-xs font-semibold text-slate-500 uppercase">Asset Type</p>
+                    <p className="font-medium text-slate-900">{payload.asset_type == 'wbs' ? 'WBS' : 'Non WBS'}</p>
+                </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                    <p className="text-xs font-semibold text-slate-500 uppercase">Purchase Type</p>
+                    <p className="text-lg font-bold text-slate-900">{payload.purchase_type == 'asset' ? 'Assets' : 'Non Assets'}</p>
+                </div>
+                <div className="space-y-1">
+                    <p className="text-xs font-semibold text-slate-500 uppercase">Goods/Service Type</p>
+                    <p className="font-medium text-slate-900">{payload.goods_service_type == 'not_lumpsum' ? 'Non Lumpsum' : 'Lumpsum'}</p>
+                </div>
+            </div>
             <div className="rounded-xl border border-slate-100">
                 <table className="w-full text-sm">
                     <thead className="bg-slate-50 border-b border-slate-100">

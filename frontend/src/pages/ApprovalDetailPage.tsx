@@ -316,6 +316,8 @@ export const ApprovalDetailPage = () => {
     const selectedQuotation = extractSelectedQuotation(detail);
 
     const activeStep = detail?.steps?.find((s: any) => s.step_order === detail.current_step);
+    console.log("active step: ", activeStep)
+    console.log("user: ", user)
 
     const isApprover = (() => {
         if (!activeStep) return false;
@@ -323,11 +325,18 @@ export const ApprovalDetailPage = () => {
         if (detail.status !== 'IN_PROGRESS' && detail.status !== 'WAITING') return false;
         if (activeStep.status !== 'WAITING') return false;
 
+        if (user?.is_superuser) return true;
+
         // Use email for matching since user.id is from SSO and activeStep.assigned_to is from local DB
         if (activeStep.assigned_to_email === user?.email) return true;
         if (activeStep.approver_type === 'USER' && activeStep.user_required_email === user?.email) return true;
         if (activeStep.approver_type === 'ROLE' && activeStep.role_required == user?.role) return true;
         if (activeStep.approver_type === 'REQUESTOR' && (detail?.requester_email === user?.email || activeStep.assigned_to_email === user?.email || detail?.requester === user?.id)) return true;
+        if (activeStep.approver_type === 'TARGET_DEPT_ROLE') {
+            const stepDept = (activeStep.target_department_name || '').trim().toLowerCase();
+            const userDept = (user?.department || '').trim().toLowerCase();
+            if (stepDept && userDept && (stepDept === userDept || stepDept.includes(userDept) || userDept.includes(stepDept))) return true;
+        }
 
         return false;
     })();
@@ -365,7 +374,7 @@ export const ApprovalDetailPage = () => {
                     </div>
                 </div>
                 <div className="flex items-center gap-6 flex-row">
-                    {user?.is_superuser || activeStep.assigned_to_email === user?.email && detail.status === 'IN_PROGRESS' && (
+                    {(user?.is_superuser || activeStep.assigned_to_email === user?.email || (activeStep.approver_type === 'TARGET_DEPT_ROLE' && isApprover)) && detail.status === 'IN_PROGRESS' && (
                         <Button
                             variant="outline"
                             className="bg-purple-50 text-purple-600 border-purple-200 hover:bg-purple-100 hover:text-purple-700 font-bold"
@@ -572,7 +581,6 @@ export const ApprovalDetailPage = () => {
                     onSubmit={async (new_assignee_id, comments) => {
                         await delegateMutation.mutateAsync({ new_assignee_id, comments });
                     }}
-                    roleRequiredId={activeStep.role_required}
                     roleName={activeStep.role_name}
                     isLoading={delegateMutation.isPending}
                 />

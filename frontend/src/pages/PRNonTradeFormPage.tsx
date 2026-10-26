@@ -561,13 +561,14 @@ export const PRNonTradeFormPage: React.FC = () => {
                                             <input
                                                 type="radio"
                                                 name="purchaseType"
+                                                required
                                                 value="asset"
                                                 checked={purchaseType === 'asset'}
                                                 onChange={() => setPurchaseType('asset')}
                                                 className="w-4 h-4 text-blue-600 focus:ring-blue-600 border-slate-300"
                                             />
                                             <div>
-                                                <span className="font-semibold block">Asset</span>
+                                                <span className="font-semibold block">Asset <span className="text-red-500">*</span></span>
                                             </div>
                                         </label>
                                     </div>
@@ -620,7 +621,7 @@ export const PRNonTradeFormPage: React.FC = () => {
                                                     className="w-4 h-4 text-blue-600 focus:ring-blue-600"
                                                 />
                                                 <div>
-                                                    <span className="font-semibold text-sm text-slate-900 block">WBS (Project)</span>
+                                                    <span className="font-semibold text-sm text-slate-900 block">WBS</span>
                                                 </div>
                                             </label>
                                         </div>
@@ -637,6 +638,7 @@ export const PRNonTradeFormPage: React.FC = () => {
                                                 <div className="flex gap-2">
                                                     <input
                                                         type="text"
+                                                        required
                                                         placeholder="Cari / masukkan Asset No..."
                                                         value={assetNo}
                                                         onChange={(e) => setAssetNo(e.target.value)}
@@ -664,6 +666,7 @@ export const PRNonTradeFormPage: React.FC = () => {
                                                 <div className="flex gap-2">
                                                     <input
                                                         type="text"
+                                                        required
                                                         placeholder="Cari / masukkan WBS No..."
                                                         value={wbsNo}
                                                         onChange={(e) => setWbsNo(e.target.value)}
@@ -685,12 +688,13 @@ export const PRNonTradeFormPage: React.FC = () => {
                                         {/* Equipment Name for Asset */}
                                         <div>
                                             <label className="block text-sm font-semibold text-slate-700 mb-2">
-                                                Equipment Name
+                                                Equipment Name <span className="text-red-500">*</span>
                                             </label>
                                             <div className="flex gap-2">
                                                 <input
                                                     type="text"
                                                     placeholder="Cari / nama peralatan aset..."
+                                                    required
                                                     value={equipmentName}
                                                     onChange={(e) => setEquipmentName(e.target.value)}
                                                     className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 shadow-sm"

@@ -163,13 +163,15 @@ class WorkflowDetailView(generics.RetrieveAPIView):
         if user.is_superuser:
             return self.queryset
 
+        dept_ids = user.get_department_ids() if hasattr(user, 'get_department_ids') else []
         try:
             request_obj = self.queryset.filter(
                 Q(requester=user) |
                 Q(steps__assigned_to=user) |
-                Q(watchers__user=user) & Q(watchers__deleted_at=None)
+                Q(steps__approver_type='TARGET_DEPT_ROLE', steps__target_department_id__in=dept_ids) |
+                (Q(watchers__user=user) & Q(watchers__deleted_at=None))
             ).distinct()
-            if not request_obj:
+            if not request_obj.exists():
                 logging.getLogger(__name__).error(
                     "[Core.Views] User %s not authorized to view workflow %s", 
                     self.request.user.username, self.kwargs.get('pk')
@@ -177,6 +179,8 @@ class WorkflowDetailView(generics.RetrieveAPIView):
                 raise ValidationError("You are not authorized to view this request.")
             return request_obj
         except Exception as e:
+            if isinstance(e, ValidationError):
+                raise
             logging.getLogger(__name__).error(
                 "[Core.Views] Error in get_queryset for user %s and request %s", 
                 self.request.user.username, self.kwargs.get('pk')
@@ -357,11 +361,15 @@ class InboxView(generics.ListAPIView):
                 ).values_list('request_id', flat=True)
                 queryset = ApprovalRequest.objects.filter(id__in=watched_ids)
             else:
-                # 1. Requests where user is the active approver
+                dept_ids = user.get_department_ids() if hasattr(user, 'get_department_ids') else []
+
+                # 1. Requests where user is the active approver or member of target department
                 waiting_ids = ApprovalStep.objects.filter(
                     status=ApprovalStep.StepStatus.WAITING
                 ).filter(
-                    Q(assigned_to=user) | Q(approver_type='REQUESTOR', request__requester=user)
+                    Q(assigned_to=user) |
+                    Q(approver_type='REQUESTOR', request__requester=user) |
+                    Q(approver_type='TARGET_DEPT_ROLE', target_department_id__in=dept_ids)
                 ).values_list('request_id', flat=True)
 
                 # 2. Requests where user has participated in the discussion
@@ -587,6 +595,8 @@ def dashboard_summary(request):
     user = request.user
 
     try:
+        dept_ids = user.get_department_ids() if hasattr(user, 'get_department_ids') else []
+
         # Count requests by status, filtered by user involvement
         if user.is_superuser:
             relevant_requests = ApprovalRequest.objects.all()
@@ -594,10 +604,18 @@ def dashboard_summary(request):
             # 1. Tasks I have handled in the past (Approved/Rejected)
             acted_request_ids = AuditLog.objects.filter(actor=user).values_list('request_id', flat=True)
             
-            # 2. Combined relevance filter:
+            # 2. Requests currently waiting for my department
+            dept_waiting_request_ids = ApprovalStep.objects.filter(
+                status=ApprovalStep.StepStatus.WAITING,
+                approver_type='TARGET_DEPT_ROLE',
+                target_department_id__in=dept_ids
+            ).values_list('request_id', flat=True)
+
+            # 3. Combined relevance filter:
             relevant_requests = ApprovalRequest.objects.filter(
                 Q(requester=user) |                          # I am the requester
-                Q(id__in=acted_request_ids) 
+                Q(id__in=acted_request_ids) |
+                Q(id__in=dept_waiting_request_ids)
             ).distinct()
 
         status_counts = dict(
@@ -613,7 +631,9 @@ def dashboard_summary(request):
             waiting_ids = ApprovalStep.objects.filter(
                 status=ApprovalStep.StepStatus.WAITING
             ).filter(
-                Q(assigned_to=user) | Q(approver_type='REQUESTOR', request__requester=user)
+                Q(assigned_to=user) |
+                Q(approver_type='REQUESTOR', request__requester=user) |
+                Q(approver_type='TARGET_DEPT_ROLE', target_department_id__in=dept_ids)
             ).values_list('request_id', flat=True)
 
             discussion_ids = RequestFeedback.objects.filter(
@@ -632,9 +652,10 @@ def dashboard_summary(request):
         if user.is_superuser:
             recent_logs = AuditLog.objects.all()
         else:
-            # Modules where the user's role is an approver
+            # Modules where the user's role is an approver or user's department is targeted
             relevant_module_ids = WorkflowStepDefinition.objects.filter(
-                role_required__in=user.user_roles.values_list('role__id', flat=True)
+                Q(role_required__in=user.user_roles.values_list('role__id', flat=True)) |
+                Q(approver_type='TARGET_DEPT_ROLE', target_department_id__in=dept_ids)
             ).values_list('workflow__module_id', flat=True).distinct()
             
             recent_logs = AuditLog.objects.filter(

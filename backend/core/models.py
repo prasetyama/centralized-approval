@@ -124,9 +124,28 @@ class User(AbstractUser):
         return org.department.name if org and org.department else ''
 
     @property
+    def department_id(self):
+        org = self.org_positions.select_related('department').first()
+        return org.department.id if org and org.department else None
+
+    @property
     def department_ref(self):
         org = self.org_positions.select_related('department').first()
         return org.department if org else None
+
+    def get_department_ids(self):
+        """Returns a list of department IDs associated with this user."""
+        dept_ids = set(self.org_positions.filter(department__isnull=False).values_list('department_id', flat=True))
+        dept_names = set(self.user_roles.exclude(dept='').values_list('dept', flat=True))
+        dept_prop = self.department
+        if dept_prop:
+            dept_names.add(dept_prop)
+        if dept_names:
+            extra_ids = Department.objects.filter(
+                models.Q(name__in=dept_names) | models.Q(code__in=dept_names)
+            ).values_list('id', flat=True)
+            dept_ids.update(extra_ids)
+        return list(dept_ids)
 
 
 class OrganizationStructure(models.Model):
@@ -144,7 +163,7 @@ class OrganizationStructure(models.Model):
         'User',
         on_delete=models.CASCADE,
         related_name='org_positions',
-        help_text="Employee user"
+        help_text="Employee user"   
     )
     department = models.ForeignKey(
         Department,

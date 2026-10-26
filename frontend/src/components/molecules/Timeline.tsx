@@ -13,6 +13,8 @@ export interface TimelineStep {
     step_order: number;
     role_name: string;
     step_data?: Record<string, any>;
+    approver_type?: string;
+    target_department_name?: string;
 }
 
 interface TimelineProps {
@@ -133,6 +135,10 @@ export const Timeline = ({ steps, currentStep }: TimelineProps) => {
                                 ) : step.assigned_to_name ? (
                                     <>
                                         {step.status === 'APPROVED' ? 'Approved by' : step.status === 'REJECTED' ? 'Rejected by' : step.status === 'PENDING' ? 'Pending' : step.status === 'ADDITIONAL' ? 'Additional Action' : 'Waiting for'}: <span className={isSkipped ? "text-slate-400" : "text-slate-700"}>{step.assigned_to_name}</span>
+                                    </>
+                                ) : step.approver_type === 'TARGET_DEPT_ROLE' ? (
+                                    <>
+                                        Waiting for: <span className={isSkipped ? "text-slate-400" : "text-slate-700"}>{step.target_department_name || 'Target Dept'} Team</span>
                                     </>
                                 ) : (
                                     <>

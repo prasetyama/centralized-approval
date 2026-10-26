@@ -699,8 +699,21 @@ class WorkflowEngine:
                approver.user_roles.filter(Q(role__code__icontains='PURCHASING') | Q(role__code__icontains='PROCUREMENT')).exists():
                 is_authorized = True
         elif current_step.approver_type == WorkflowStepDefinition.ApproverType.TARGET_DEPT_ROLE:
-            if current_step.target_department and OrganizationStructure.objects.filter(user=approver, department=current_step.target_department).exists():
-                if not current_step.role_required or approver.user_roles.filter(role=current_step.role_required).exists():
+            target_dept = current_step.target_department
+            if target_dept:
+                approver_dept_ids = approver.get_department_ids() if hasattr(approver, 'get_department_ids') else []
+                if (
+                    target_dept.id in approver_dept_ids or
+                    OrganizationStructure.objects.filter(user=approver, department=target_dept).exists() or
+                    approver.department_ref == target_dept or
+                    (approver.department and (
+                        approver.department.strip().lower() == target_dept.name.strip().lower() or
+                        approver.department.strip().lower() == (target_dept.code or '').strip().lower()
+                    )) or
+                    approver.user_roles.filter(
+                        Q(dept__iexact=target_dept.name) | Q(dept__iexact=target_dept.code)
+                    ).exists()
+                ):
                     is_authorized = True
         elif current_step.role_required:
             if approver.user_roles.filter(role=current_step.role_required).exists():
@@ -809,7 +822,9 @@ class WorkflowEngine:
         # Verify the approver is authorized
         is_authorized = False
         
-        if current_step.user_required:
+        if approver.is_superuser:
+            is_authorized = True
+        elif current_step.user_required:
             if current_step.user_required == approver:
                 is_authorized = True
         elif current_step.assigned_to:
@@ -818,6 +833,23 @@ class WorkflowEngine:
         elif current_step.approver_type == WorkflowStepDefinition.ApproverType.REQUESTOR:
             if approval_request.requester == approver:
                 is_authorized = True
+        elif current_step.approver_type == WorkflowStepDefinition.ApproverType.TARGET_DEPT_ROLE:
+            target_dept = current_step.target_department
+            if target_dept:
+                approver_dept_ids = approver.get_department_ids() if hasattr(approver, 'get_department_ids') else []
+                if (
+                    target_dept.id in approver_dept_ids or
+                    OrganizationStructure.objects.filter(user=approver, department=target_dept).exists() or
+                    approver.department_ref == target_dept or
+                    (approver.department and (
+                        approver.department.strip().lower() == target_dept.name.strip().lower() or
+                        approver.department.strip().lower() == (target_dept.code or '').strip().lower()
+                    )) or
+                    approver.user_roles.filter(
+                        Q(dept__iexact=target_dept.name) | Q(dept__iexact=target_dept.code)
+                    ).exists()
+                ):
+                    is_authorized = True
         
         if not is_authorized and current_step.role_required:
             if approver.user_roles.filter(role=current_step.role_required).exists():
@@ -914,6 +946,23 @@ class WorkflowEngine:
                 is_authorized = (current_step.assigned_to == current_user)
             elif current_step.approver_type == WorkflowStepDefinition.ApproverType.REQUESTOR:
                 is_authorized = (approval_request.requester == current_user)
+            elif current_step.approver_type == WorkflowStepDefinition.ApproverType.TARGET_DEPT_ROLE:
+                target_dept = current_step.target_department
+                if target_dept:
+                    curr_dept_ids = current_user.get_department_ids() if hasattr(current_user, 'get_department_ids') else []
+                    if (
+                        target_dept.id in curr_dept_ids or
+                        OrganizationStructure.objects.filter(user=current_user, department=target_dept).exists() or
+                        current_user.department_ref == target_dept or
+                        (current_user.department and (
+                            current_user.department.strip().lower() == target_dept.name.strip().lower() or
+                            current_user.department.strip().lower() == (target_dept.code or '').strip().lower()
+                        )) or
+                        current_user.user_roles.filter(
+                            Q(dept__iexact=target_dept.name) | Q(dept__iexact=target_dept.code)
+                        ).exists()
+                    ):
+                        is_authorized = True
             
             if not is_authorized and current_step.role_required:
                 is_authorized = current_user.user_roles.filter(role=current_step.role_required).exists()

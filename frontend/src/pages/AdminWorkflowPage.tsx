@@ -95,7 +95,7 @@ export const AdminWorkflowPage = () => {
                                                      step.approver_type === 'REQUESTOR' ? 'Requestor' :
                                                      step.approver_type === 'REQ_DEPT_HEAD' ? 'Dept Head' :
                                                      step.approver_type === 'PURCH_DEPT_HEAD' ? 'Purchasing' :
-                                                     step.approver_type === 'TARGET_DEPT_ROLE' ? (step.target_department_name || 'Target Dept') :
+                                                     step.approver_type === 'TARGET_DEPT_ROLE' ? (step.target_department_name ? `${step.target_department_name} Team` : 'Target Dept') :
                                                      step.role_name || step.approver_type}
                                                 </span>
                                             </div>

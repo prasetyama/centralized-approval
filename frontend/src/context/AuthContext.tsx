@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User } from '../services/authService';
+import api from '../services/api';
 
 interface AuthContextType {
     user: User | null;
@@ -51,76 +52,90 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     };
 
     useEffect(() => {
-        // Check URL for token (redirected from SSO)
-        const urlParams = new URLSearchParams(window.location.search);
-        const tokenFromUrl = urlParams.get('token');
+        const initAuth = async () => {
+            // Check URL for token (redirected from SSO)
+            const urlParams = new URLSearchParams(window.location.search);
+            const tokenFromUrl = urlParams.get('token');
 
-        if (tokenFromUrl) {
-            // In a shared cookie setup, SSO already set the cookie.
-            // Clean up URL
-            window.history.replaceState({}, document.title, window.location.pathname);
-        }
+            if (tokenFromUrl) {
+                // In a shared cookie setup, SSO already set the cookie.
+                // Clean up URL
+                window.history.replaceState({}, document.title, window.location.pathname);
+            }
 
-        const token = getCookie('sso_token');
+            const token = getCookie('sso_token');
 
-        if (token) {
-            try {
-                // Decode JWT payload (base64)
-                const payloadBase64 = token.split('.')[1];
-                const payload = JSON.parse(atob(payloadBase64));
+            if (token) {
+                try {
+                    // Decode JWT payload (base64)
+                    const payloadBase64 = token.split('.')[1];
+                    const payload = JSON.parse(atob(payloadBase64));
 
-                // Check expiration
-                const currentTime = Math.floor(Date.now() / 1000);
-                if (payload.exp && payload.exp < currentTime) {
-                    throw new Error('Token expired');
+                    // Check expiration
+                    const currentTime = Math.floor(Date.now() / 1000);
+                    if (payload.exp && payload.exp < currentTime) {
+                        throw new Error('Token expired');
+                    }
+
+                    // Check approval module access
+                    if (!payload.module_access || (!payload.module_access['approval'] && !payload.module_access['APPROVAL'])) {
+                        throw new Error('Unauthorized: no approval module access');
+                    }
+
+                    // Extract user info
+                    const nameParts = (payload.name || '').split(' ');
+                    const firstName = nameParts[0] || '';
+                    const lastName = nameParts.slice(1).join(' ') || '';
+
+                    const approvalRole = payload.module_roles?.['APPROVAL'] || payload.module_roles?.['approval'];
+                    const isApprover = !!approvalRole && approvalRole.toLowerCase() !== 'viewer';
+
+                    const moduleAccess = payload.module_access || {};
+                    const modules = Object.keys(moduleAccess).filter((key) => moduleAccess[key] === 'EQ');
+
+                    // Ambil detail user dari backend (table aw_organization_structure & aw_department sesuai aw_user id)
+                    let dbUser: any = null;
+                    try {
+                        const meRes: any = await api.get('/auth/me');
+                        dbUser = meRes?.data || meRes;
+                    } catch (err) {
+                        console.warn('Could not fetch user details from /auth/me:', err);
+                    }
+
+                    setUser({
+                        id: dbUser?.id || payload.user_id,
+                        username: dbUser?.username || payload.email,
+                        email: payload.email,
+                        first_name: dbUser?.first_name || firstName,
+                        last_name: dbUser?.last_name || lastName,
+                        name: payload.name || dbUser?.first_name || '',
+                        role_name: dbUser?.role_name || approvalRole || 'User',
+                        role_code: dbUser?.role_code || approvalRole || 'USER',
+                        role_level: payload.role,
+                        department: dbUser?.department || payload.department || '',
+                        department_id: dbUser?.department_id || null,
+                        image: payload.image,
+                        is_approver: dbUser?.is_approver ?? isApprover,
+                        is_superuser: dbUser?.is_superuser || false,
+                        is_staff: dbUser?.is_staff || false,
+                        title: payload.title,
+                        role: dbUser?.role || 1,
+                        is_active: true,
+                        modules: modules
+                    } as any);
+                    setIsAuthenticated(true);
+                } catch (error) {
+                    console.error('SSO Error:', error);
+                    removeCookie('sso_token');
+                    redirectToSSO();
                 }
-
-                // Check approval module access
-                if (!payload.module_access || (!payload.module_access['approval'] && !payload.module_access['APPROVAL'])) {
-                    throw new Error('Unauthorized: no approval module access');
-                }
-
-                // Extract user info
-                const nameParts = (payload.name || '').split(' ');
-                const firstName = nameParts[0] || '';
-                const lastName = nameParts.slice(1).join(' ') || '';
-
-                const approvalRole = payload.module_roles?.['APPROVAL'] || payload.module_roles?.['approval'];
-                const isApprover = !!approvalRole && approvalRole.toLowerCase() !== 'viewer';
-
-                const moduleAccess = payload.module_access || {};
-                const modules = Object.keys(moduleAccess).filter((key) => moduleAccess[key] === 'EQ');
-
-                setUser({
-                    id: payload.user_id,
-                    username: payload.email,
-                    email: payload.email,
-                    first_name: firstName,
-                    last_name: lastName,
-                    name: payload.name,
-                    role_name: approvalRole || 'User',
-                    role_code: approvalRole || 'USER',
-                    role_level: payload.role,
-                    department: payload.department,
-                    image: payload.image,
-                    is_approver: isApprover,
-                    is_superuser: false,
-                    is_staff: false,
-                    title: payload.title,
-                    role: 1,
-                    is_active: true,
-                    modules: modules
-                } as any);
-                setIsAuthenticated(true);
-            } catch (error) {
-                console.error('SSO Error:', error);
-                removeCookie('sso_token');
+            } else {
                 redirectToSSO();
             }
-        } else {
-            redirectToSSO();
-        }
-        setLoading(false);
+            setLoading(false);
+        };
+
+        initAuth();
     }, []);
 
     // Listen for logout from other tabs via BroadcastChannel (same-origin)
