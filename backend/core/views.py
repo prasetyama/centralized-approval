@@ -13,7 +13,14 @@ from django.db import transaction
 from django.db.models import Q, Prefetch, Count
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.exceptions import ValidationError
+from rest_framework.pagination import PageNumberPagination
 import logging
+
+
+class StandardResultsSetPagination(PageNumberPagination):
+    page_size = 20
+    page_size_query_param = 'page_size'
+    max_page_size = 1000
 
 from core.models import (
     Module, Role, User, WorkflowDefinition, WorkflowStepDefinition,
@@ -330,6 +337,7 @@ class InboxView(generics.ListAPIView):
     """
     serializer_class = ApprovalRequestListSerializer
     permission_classes = [IsAuthenticated]
+    pagination_class = StandardResultsSetPagination
 
     def get_queryset(self):
         """
@@ -409,6 +417,7 @@ class HistoryView(generics.ListAPIView):
     """
     serializer_class = ApprovalRequestListSerializer
     permission_classes = [IsAuthenticated]
+    pagination_class = StandardResultsSetPagination
 
     def get_queryset(self):
         user = self.request.user
@@ -769,13 +778,7 @@ class RoleViewSet(viewsets.ModelViewSet):
     search_fields = ['name', 'code']
 
 
-from rest_framework.pagination import PageNumberPagination
 
-
-class StandardResultsSetPagination(PageNumberPagination):
-    page_size = 20
-    page_size_query_param = 'page_size'
-    max_page_size = 1000
 
 
 class UserViewSet(viewsets.ModelViewSet):

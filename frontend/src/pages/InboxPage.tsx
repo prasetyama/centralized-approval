@@ -13,6 +13,7 @@ import api from '@/services/api';
 import { Card } from '@/components/atoms/Card';
 import { Button } from '@/components/atoms/Button';
 import { Badge } from '@/components/atoms/Badge';
+import { Pagination } from '@/components/atoms/Pagination';
 import {
     Table,
     TableBody,
@@ -26,9 +27,17 @@ import { Link } from 'react-router-dom';
 
 export const InboxPage = () => {
     const [activeTab, setActiveTab] = useState<'inbox' | 'watching'>('inbox');
+    const [page, setPage] = useState(1);
+    const [pageSize, setPageSize] = useState(10);
+
+    const handleTabChange = (tab: 'inbox' | 'watching') => {
+        setActiveTab(tab);
+        setPage(1);
+    };
+
     const { data: inbox, isLoading } = useQuery({
-        queryKey: ['inbox', activeTab],
-        queryFn: () => api.get('/inbox', { params: { tab: activeTab } }) as Promise<any>,
+        queryKey: ['inbox', activeTab, page, pageSize],
+        queryFn: () => api.get('/inbox', { params: { tab: activeTab, page, page_size: pageSize } }) as Promise<any>,
     });
 
     const getModuleIcon = (code: string) => {
@@ -57,7 +66,7 @@ export const InboxPage = () => {
         <div className="space-y-8">
             <div className="flex border-b border-slate-100">
                 <button
-                    onClick={() => setActiveTab('inbox')}
+                    onClick={() => handleTabChange('inbox')}
                     className={`px-6 py-4 text-sm font-bold flex items-center gap-2 transition-all ${activeTab === 'inbox'
                         ? 'text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50/30'
                         : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'
@@ -67,7 +76,7 @@ export const InboxPage = () => {
                     Inbox
                 </button>
                 <button
-                    onClick={() => setActiveTab('watching')}
+                    onClick={() => handleTabChange('watching')}
                     className={`px-6 py-4 text-sm font-bold flex items-center gap-2 transition-all ${activeTab === 'watching'
                         ? 'text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50/30'
                         : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'
@@ -161,6 +170,16 @@ export const InboxPage = () => {
                         )}
                     </TableBody>
                 </Table>
+
+                {inbox?.count !== undefined && inbox.count > 0 && (
+                    <Pagination
+                        currentPage={page}
+                        pageSize={pageSize}
+                        totalCount={inbox.count}
+                        onPageChange={setPage}
+                        onPageSizeChange={setPageSize}
+                    />
+                )}
             </Card>
         </div>
     );
