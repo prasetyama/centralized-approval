@@ -52,26 +52,53 @@ class Company(models.Model):
 class Department(models.Model):
     """
     Department structure used for contextual and organizational approval routing.
+    Configured with a 1 to 3 tier approval hierarchy (Approver 1, Approver 2, Approver 3).
     """
     name = models.CharField(max_length=100, unique=True, help_text="Department name (e.g., 'Finance', 'Marketing', 'Procurement')")
     code = models.CharField(max_length=50, unique=True, help_text="Unique code (e.g., 'DEPT_FIN', 'DEPT_MKT')")
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name='departments',
+        null=True,
+        blank=True,
+        help_text="Linked Company instance"
+    )
+    approver_1 = models.ForeignKey(
+        'User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='dept_approver_1',
+        help_text="First level approver (e.g. Supervisor / Section Head)"
+    )
+    approver_2 = models.ForeignKey(
+        'User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='dept_approver_2',
+        help_text="Second level approver (e.g. Department Head)"
+    )
+    approver_3 = models.ForeignKey(
+        'User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='dept_approver_3',
+        help_text="Third level approver (e.g. Division Head / Director)"
+    )
     dept_head = models.ForeignKey(
         'User',
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
         related_name='headed_departments',
-        help_text="User designated as the Head of this Department"
+        help_text="User designated as the Head of this Department (defaults to Approver 2 or 1)"
     )
     description = models.TextField(blank=True, default='')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    company = models.ForeignKey(
-        Company,
-        on_delete=models.CASCADE,
-        related_name='departments',
-        help_text="Linked Company instance"
-    )
 
     class Meta:
         db_table = 'aw_department'
@@ -79,6 +106,20 @@ class Department(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.code})"
+
+    def save(self, *args, **kwargs):
+        if not self.dept_head and (self.approver_2 or self.approver_1):
+            self.dept_head = self.approver_2 or self.approver_1
+        super().save(*args, **kwargs)
+
+    def get_approvers(self):
+        """Returns ordered list of approvers [approver_1, approver_2, approver_3] excluding None."""
+        approvers = []
+        for app in [self.approver_1, self.approver_2, self.approver_3]:
+            if app and app not in approvers:
+                approvers.append(app)
+        return approvers
+
 
 
 class Role(models.Model):
@@ -150,13 +191,15 @@ class User(AbstractUser):
 
 class OrganizationStructure(models.Model):
     """
-    Master Organization Structure.
-    Maps employees (User) to Company, Department, Position Title, Hierarchy Level, and Direct Reports To (Manager/Head).
+    Master Organization Structure / Department Member Mapping.
+    Maps employees (User) to Department (and optional Company/Position Title).
     """
     company = models.ForeignKey(
         Company,
         on_delete=models.CASCADE,
         related_name='org_structures',
+        null=True,
+        blank=True,
         help_text="Company this node belongs to"
     )
     user = models.ForeignKey(
@@ -171,7 +214,7 @@ class OrganizationStructure(models.Model):
         related_name='org_structures',
         help_text="Department within the company"
     )
-    position_title = models.CharField(max_length=150, help_text="e.g. Staff Marketing, Manager Marketing, Head of Department")
+    position_title = models.CharField(max_length=150, blank=True, default='Staff / Requestor', help_text="e.g. Staff Marketing, Manager Marketing, Head of Department")
     level_order = models.PositiveIntegerField(default=1, help_text="Hierarchy level: 1=Staff, 2=Manager, 3=Dept Head, 4=Director")
     reports_to = models.ForeignKey(
         'User',
@@ -179,7 +222,7 @@ class OrganizationStructure(models.Model):
         null=True,
         blank=True,
         related_name='direct_reports',
-        help_text="Direct manager or department head to report to"
+        help_text="Direct manager or department head to report to (optional)"
     )
     is_dept_head = models.BooleanField(default=False, help_text="True if this node is the Department Head")
     created_at = models.DateTimeField(auto_now_add=True)
@@ -188,10 +231,17 @@ class OrganizationStructure(models.Model):
     class Meta:
         db_table = 'aw_organization_structure'
         unique_together = ['company', 'user', 'department']
-        ordering = ['company', 'department', 'level_order']
+        ordering = ['department', 'level_order']
 
     def __str__(self):
-        return f"[{self.company.code}] {self.user.username} - {self.position_title} ({self.department.name})"
+        comp = f"[{self.company.code}] " if self.company else ""
+        return f"{comp}{self.user.username} - {self.position_title} ({self.department.name})"
+
+    def save(self, *args, **kwargs):
+        if not self.company_id and self.department and self.department.company_id:
+            self.company = self.department.company
+        super().save(*args, **kwargs)
+
 
 
 

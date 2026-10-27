@@ -253,10 +253,55 @@ class WorkflowEngine:
     @staticmethod
     def get_org_approval_chain(requester, company_code=None):
         """
-        Traverse the master OrganizationStructure table to resolve the approval hierarchy chain
-        starting from the requester up to the Department Head / top level manager.
+        Resolve the approval hierarchy chain for REQ_DEPT_HEAD based on the requester's Department
+        approvers (Approver 1 -> Approver 2 -> Approver 3).
+        Falls back to reports_to traversal if Department approvers are not configured.
         Returns a list of dicts: [{'user': User, 'title': str, 'level_order': int, 'is_dept_head': bool}]
         """
+        if not requester:
+            return []
+
+        # 1. Look up the requester's department
+        req_org = OrganizationStructure.objects.filter(user=requester).select_related('department', 'company').first()
+        dept = None
+        if req_org and req_org.department:
+            dept = req_org.department
+        elif hasattr(requester, 'department') and requester.department:
+            dept = Department.objects.filter(
+                Q(name=requester.department) | Q(code=requester.department)
+            ).first()
+
+        # 2. Check simplified department approvers (approver_1, approver_2, approver_3)
+        if dept and (dept.approver_1 or dept.approver_2 or dept.approver_3):
+            chain = []
+            candidates = [
+                (1, dept.approver_1, 'Approver 1'),
+                (2, dept.approver_2, 'Approver 2 (Dept Head)'),
+                (3, dept.approver_3, 'Approver 3'),
+            ]
+            active_levels = [lvl for lvl, usr, _ in candidates if usr]
+            highest_level = max(active_levels) if active_levels else 2
+
+            for lvl, app_user, label in candidates:
+                if not app_user:
+                    continue
+                # If requester is one of the approvers, skip this step so they don't approve their own request
+                if app_user.id == requester.id:
+                    continue
+                if any(link['user'].id == app_user.id for link in chain):
+                    continue
+
+                chain.append({
+                    'user': app_user,
+                    'title': f"{dept.name} - {label}",
+                    'level_order': lvl,
+                    'is_dept_head': (lvl == highest_level or (lvl == 2 and not dept.approver_3)),
+                })
+
+            if chain:
+                return chain
+
+        # 3. Fallback: Traverse legacy reports_to hierarchy in OrganizationStructure
         chain = []
         visited = set()
         current_user = requester
@@ -265,10 +310,8 @@ class WorkflowEngine:
         company = None
         if company_code:
             company = Company.objects.filter(code=company_code).first()
-        if not company and requester:
-            req_org = OrganizationStructure.objects.filter(user=requester).select_related('company').first()
-            if req_org and req_org.company:
-                company = req_org.company
+        if not company and req_org and req_org.company:
+            company = req_org.company
 
         while current_user and current_user.id not in visited:
             visited.add(current_user.id)
@@ -306,13 +349,41 @@ class WorkflowEngine:
     @staticmethod
     def get_dept_approval_chain(department, company_code=None, requester=None):
         """
-        Traverse the master OrganizationStructure table to resolve the approval hierarchy chain
+        Traverse the master OrganizationStructure table or Department approvers to resolve the approval hierarchy chain
         for a specific department (e.g. Purchasing).
-        Includes the department starting node (e.g. Staff) up through manager / Dept Head.
         Returns a list of dicts: [{'user': User, 'title': str, 'level_order': int, 'is_dept_head': bool}]
         """
         if not department:
             return []
+
+        # Check simplified department approvers
+        if department and (department.approver_1 or department.approver_2 or department.approver_3):
+            chain = []
+            candidates = [
+                (1, department.approver_1, 'Approver 1'),
+                (2, department.approver_2, 'Approver 2 (Dept Head)'),
+                (3, department.approver_3, 'Approver 3'),
+            ]
+            active_levels = [lvl for lvl, usr, _ in candidates if usr]
+            highest_level = max(active_levels) if active_levels else 2
+
+            for lvl, app_user, label in candidates:
+                if not app_user:
+                    continue
+                if requester and app_user.id == requester.id:
+                    continue
+                if any(link['user'].id == app_user.id for link in chain):
+                    continue
+
+                chain.append({
+                    'user': app_user,
+                    'title': f"{department.name} - {label}",
+                    'level_order': lvl,
+                    'is_dept_head': (lvl == highest_level or (lvl == 2 and not department.approver_3)),
+                })
+
+            if chain:
+                return chain
 
         company = None
         if company_code:
@@ -341,6 +412,7 @@ class WorkflowEngine:
                 current_user = start_node.reports_to
             else:
                 return []
+
 
         while current_user and current_user.id not in visited:
             visited.add(current_user.id)
@@ -469,13 +541,15 @@ class WorkflowEngine:
                     assignee = None
                     if step_def.approver_type == WorkflowStepDefinition.ApproverType.REQ_DEPT_HEAD:
                         req_org = OrganizationStructure.objects.filter(user=requester).select_related('department', 'department__dept_head').first()
-                        if req_org and req_org.department:
-                            if req_org.department.dept_head:
-                                assignee = req_org.department.dept_head
-                            else:
-                                dept_node = OrganizationStructure.objects.filter(department=req_org.department, user__is_active=True, user__is_approver=True).select_related('user').first()
-                                if dept_node:
-                                    assignee = dept_node.user
+                        dept = req_org.department if req_org else None
+                        if not dept and hasattr(requester, 'department') and requester.department:
+                            dept = Department.objects.filter(Q(name=requester.department) | Q(code=requester.department)).first()
+                        if dept:
+                            assignee = dept.approver_2 or dept.approver_1 or dept.dept_head
+                        else:
+                            dept_node = OrganizationStructure.objects.filter(user__is_active=True, user__is_approver=True).select_related('user').first()
+                            if dept_node:
+                                assignee = dept_node.user
                     else:
                         purch_dept = step_def.target_department or Department.objects.filter(
                             Q(code__in=['DEPT_PURCHASING', 'PURCHASING', 'PROC', 'PURCH']) |
@@ -679,7 +753,10 @@ class WorkflowEngine:
                 is_authorized = True
         elif current_step.approver_type == WorkflowStepDefinition.ApproverType.REQ_DEPT_HEAD:
             req_dept = approval_request.requester.department
-            if approver.department == req_dept and (approver.is_approver or approver.user_roles.filter(role__code__in=['MGR', 'DEPT_HEAD']).exists()):
+            dept_obj = Department.objects.filter(Q(name=req_dept) | Q(code=req_dept)).first()
+            if dept_obj and approver in dept_obj.get_approvers():
+                is_authorized = True
+            elif approver.department == req_dept and (approver.is_approver or approver.user_roles.filter(role__code__in=['MGR', 'DEPT_HEAD']).exists()):
                 is_authorized = True
             elif approver.headed_departments.filter(Q(code=req_dept) | Q(name=req_dept)).exists():
                 is_authorized = True

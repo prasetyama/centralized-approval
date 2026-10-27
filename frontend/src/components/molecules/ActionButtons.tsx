@@ -469,7 +469,7 @@ export const ActionButtons = ({
                                             <CheckCircle2 size={13} className="text-emerald-600" />
                                             Quotation Terpilih (Disetujui Approver Sebelumnya)
                                         </span>
-                                        {(selectedQuotation.url || selectedQuotation.data) && (
+                                        {(selectedQuotation.url || selectedQuotation.quotation) && (
                                             <button
                                                 type="button"
                                                 onClick={() => handlePreviewQuotation(selectedQuotation)}

@@ -759,11 +759,72 @@ class OrganizationStructureViewSet(viewsets.ModelViewSet):
 
 
 class DepartmentViewSet(viewsets.ModelViewSet):
-    """CRUD for Departments."""
-    queryset = Department.objects.all()
+    """CRUD for Departments with tiered approvers and members."""
+    queryset = Department.objects.all().select_related('company', 'approver_1', 'approver_2', 'approver_3', 'dept_head').prefetch_related('org_structures__user')
     serializer_class = DepartmentSerializer
     permission_classes = [IsAuthenticated]
-    search_fields = ['name', 'code']
+    filterset_fields = ['company']
+    search_fields = ['name', 'code', 'company__name']
+
+    @action(detail=True, methods=['post'], url_path='assign-members')
+    def assign_members(self, request, pk=None):
+        """
+        Assign user(s) to this department.
+        Accepts: {"user_ids": [1, 2, ...]} or {"user_id": 1, "position_title": "..."}
+        """
+        department = self.get_object()
+        user_ids = request.data.get('user_ids')
+        if not user_ids and request.data.get('user_id'):
+            user_ids = [request.data.get('user_id')]
+
+        if not user_ids:
+            return Response({'error': 'user_ids is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        position_title = request.data.get('position_title') or 'Staff / Requestor'
+        created_count = 0
+        for uid in user_ids:
+            u = User.objects.filter(id=uid).first()
+            if u:
+                OrganizationStructure.objects.update_or_create(
+                    user=u,
+                    department=department,
+                    defaults={
+                        'company': department.company,
+                        'position_title': position_title,
+                        'level_order': 1,
+                    }
+                )
+                created_count += 1
+
+        return Response({
+            'success': True,
+            'message': f'{created_count} user(s) assigned to {department.name}',
+            'members': DepartmentSerializer(department).data['members']
+        })
+
+    @action(detail=True, methods=['post'], url_path='remove-member')
+    def remove_member(self, request, pk=None):
+        """
+        Remove a user mapping from this department.
+        Accepts: {"user_id": 1} or {"org_id": 2}
+        """
+        department = self.get_object()
+        user_id = request.data.get('user_id')
+        org_id = request.data.get('org_id')
+
+        if org_id:
+            OrganizationStructure.objects.filter(id=org_id, department=department).delete()
+        elif user_id:
+            OrganizationStructure.objects.filter(user_id=user_id, department=department).delete()
+        else:
+            return Response({'error': 'user_id or org_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response({
+            'success': True,
+            'message': f'Member removed from {department.name}',
+            'members': DepartmentSerializer(department).data['members']
+        })
+
 
 
 class DivisionViewSet(viewsets.ModelViewSet):

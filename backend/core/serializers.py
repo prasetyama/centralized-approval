@@ -50,12 +50,55 @@ class OrganizationStructureSerializer(serializers.ModelSerializer):
 
 
 class DepartmentSerializer(serializers.ModelSerializer):
-    """Serializer for Department model."""
+    """Serializer for Department model with tiered approvers and members."""
+    company_name = serializers.CharField(source='company.name', read_only=True)
+    company_code = serializers.CharField(source='company.code', read_only=True)
     dept_head_name = serializers.CharField(source='dept_head.get_full_name', read_only=True)
+    approver_1_name = serializers.SerializerMethodField()
+    approver_2_name = serializers.SerializerMethodField()
+    approver_3_name = serializers.SerializerMethodField()
+    members_count = serializers.SerializerMethodField()
+    members = serializers.SerializerMethodField()
+
     class Meta:
         model = Department
-        fields = ['id', 'name', 'code', 'dept_head', 'dept_head_name', 'description', 'created_at', 'updated_at']
+        fields = [
+            'id', 'company', 'company_name', 'company_code',
+            'name', 'code', 'description',
+            'approver_1', 'approver_1_name',
+            'approver_2', 'approver_2_name',
+            'approver_3', 'approver_3_name',
+            'dept_head', 'dept_head_name',
+            'members_count', 'members',
+            'created_at', 'updated_at'
+        ]
         read_only_fields = ['created_at', 'updated_at']
+
+    def get_approver_1_name(self, obj):
+        return obj.approver_1.get_full_name() or obj.approver_1.username if obj.approver_1 else None
+
+    def get_approver_2_name(self, obj):
+        return obj.approver_2.get_full_name() or obj.approver_2.username if obj.approver_2 else None
+
+    def get_approver_3_name(self, obj):
+        return obj.approver_3.get_full_name() or obj.approver_3.username if obj.approver_3 else None
+
+    def get_members_count(self, obj):
+        return obj.org_structures.count()
+
+    def get_members(self, obj):
+        return [
+            {
+                'id': m.user.id,
+                'org_id': m.id,
+                'username': m.user.username,
+                'full_name': m.user.get_full_name() or m.user.username,
+                'email': m.user.email,
+                'position_title': m.position_title
+            }
+            for m in obj.org_structures.select_related('user').all()
+        ]
+
 
 
 class DivisionSerializer(serializers.ModelSerializer):

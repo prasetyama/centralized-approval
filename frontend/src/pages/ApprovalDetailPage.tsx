@@ -316,8 +316,6 @@ export const ApprovalDetailPage = () => {
     const selectedQuotation = extractSelectedQuotation(detail);
 
     const activeStep = detail?.steps?.find((s: any) => s.step_order === detail.current_step);
-    console.log("active step: ", activeStep)
-    console.log("user: ", user)
 
     const isApprover = (() => {
         if (!activeStep) return false;
