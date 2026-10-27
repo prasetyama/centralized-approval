@@ -327,7 +327,7 @@ export const AdminOrgStructurePage = () => {
                         className="gap-2 border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold"
                     >
                         <Building2 size={15} className="text-slate-500" />
-                        Perusahaan ({companies.length})
+                        Tambah Perusahaan ({companies.length})
                     </Button>
                     <Button
                         onClick={() => openMappingModal()}
@@ -530,7 +530,7 @@ export const AdminOrgStructurePage = () => {
                                                     title="Lihat & Kelola Anggota Departemen"
                                                 >
                                                     <Users size={13} />
-                                                    <span>{dept.members_count || 0} Pegawai</span>
+                                                    <span>{dept.members_count || 0} Requestor</span>
                                                 </button>
                                             </td>
 
@@ -541,9 +541,9 @@ export const AdminOrgStructurePage = () => {
                                                     size="sm"
                                                     onClick={() => openDeptMembersModal(dept)}
                                                     className="h-8 px-2 text-indigo-600 hover:bg-indigo-50 text-xs gap-1"
-                                                    title="Kelola Pegawai"
+                                                    title="Kelola Requestor"
                                                 >
-                                                    <UserCheck size={14} /> Kelola Pegawai
+                                                    <UserCheck size={14} /> Kelola Requestor
                                                 </Button>
                                                 <Button
                                                     variant="ghost"
@@ -597,11 +597,11 @@ export const AdminOrgStructurePage = () => {
                     </div>
 
                     {isOrgLoading ? (
-                        <div className="p-12 text-center text-slate-400 animate-pulse">Memuat pemetaan pegawai...</div>
+                        <div className="p-12 text-center text-slate-400 animate-pulse">Memuat pemetaan Requestor...</div>
                     ) : filteredNodes.length === 0 ? (
                         <div className="p-12 text-center">
                             <Users className="mx-auto text-slate-300 mb-3" size={42} />
-                            <p className="text-sm font-bold text-slate-700">Belum ada pegawai yang dimapping ke departemen</p>
+                            <p className="text-sm font-bold text-slate-700">Belum ada Requestor yang dimapping ke departemen</p>
                             <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
                                 Klik tombol <strong>Petakan Pegawai Baru</strong> untuk memasukkan nama pegawai ke dalam departemen mereka.
                             </p>
@@ -731,7 +731,7 @@ export const AdminOrgStructurePage = () => {
                             <div className="p-4 bg-slate-50/80 rounded-xl border border-slate-200/80 space-y-3.5">
                                 <div className="flex items-center gap-2 text-xs font-bold text-indigo-700 uppercase tracking-wider">
                                     <ShieldCheck size={16} />
-                                    <span>Hirarki Persetujuan (REQ_DEPT_HEAD)</span>
+                                    <span>Hirarki Persetujuan</span>
                                 </div>
 
                                 <div className="space-y-3">
@@ -806,7 +806,7 @@ export const AdminOrgStructurePage = () => {
                             <div>
                                 <h3 className="text-lg font-bold text-slate-900">Tambah Requestor ke Departemen</h3>
                                 <p className="text-xs text-slate-500 mt-0.5">
-                                    Pilih pegawai yang akan ditambahkan sebagai requestor.
+                                    Pilih user yang akan ditambahkan sebagai requestor.
                                 </p>
                             </div>
                             <button onClick={() => setIsMappingModalOpen(false)} className="text-slate-400 hover:text-slate-600">
@@ -822,7 +822,7 @@ export const AdminOrgStructurePage = () => {
                                     return;
                                 }
                                 if (mappingFormData.user_ids.length === 0) {
-                                    alert('Silakan pilih minimal 1 pegawai');
+                                    alert('Silakan pilih minimal 1 user');
                                     return;
                                 }
                                 assignMembersMutation.mutate({
@@ -885,7 +885,7 @@ export const AdminOrgStructurePage = () => {
                                     })}
                                 </div>
                                 <span className="text-[11px] text-slate-400">
-                                    {mappingFormData.user_ids.length} pegawai terpilih
+                                    {mappingFormData.user_ids.length} user terpilih
                                 </span>
                             </div>
 
@@ -922,7 +922,7 @@ export const AdminOrgStructurePage = () => {
                                     Anggota Departemen: {activeDepartment.name}
                                 </h3>
                                 <p className="text-xs text-slate-500 mt-0.5">
-                                    Daftar pegawai/requestor yang terdaftar pada departemen ini.
+                                    Daftar requestor yang terdaftar pada departemen ini.
                                 </p>
                             </div>
                             <button onClick={() => setIsDeptMembersModalOpen(false)} className="text-slate-400 hover:text-slate-600">
@@ -937,7 +937,7 @@ export const AdminOrgStructurePage = () => {
                                     value={quickAddUserId}
                                     onChange={(e) => setQuickAddUserId(e.target.value)}
                                     options={[
-                                        { value: '', label: '-- Pilih Pegawai untuk ditambahkan --' },
+                                        { value: '', label: '-- Pilih user untuk ditambahkan --' },
                                         ...users.map((u: any) => ({
                                             value: u.id,
                                             label: `${u.first_name} ${u.last_name}`.trim() || u.username
@@ -978,7 +978,7 @@ export const AdminOrgStructurePage = () => {
                             {(!activeDepartment.members || activeDepartment.members.length === 0) ? (
                                 <div className="p-8 text-center text-slate-400">
                                     <Users size={32} className="mx-auto mb-2 opacity-50" />
-                                    <p className="text-xs font-semibold">Belum ada pegawai di departemen ini.</p>
+                                    <p className="text-xs font-semibold">Belum ada requestor di departemen ini.</p>
                                     <p className="text-[11px] text-slate-400 mt-0.5">Gunakan form di atas untuk menambahkan pegawai.</p>
                                 </div>
                             ) : (

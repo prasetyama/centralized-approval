@@ -468,7 +468,7 @@ export const ActionButtons = ({
                                     <div className="flex flex-col gap-1">
                                         <span className="font-bold text-emerald-800 flex items-center gap-1.5 uppercase tracking-wide text-[10px]">
                                             <CheckCircle2 size={13} className="text-emerald-600" />
-                                            Quotation Terpilih (Disetujui Approver Sebelumnya)
+                                            Quotation Terpilih
                                         </span>
                                         {(selectedQuotation.url || selectedQuotation.quotation) && (
                                             <AttachmentList

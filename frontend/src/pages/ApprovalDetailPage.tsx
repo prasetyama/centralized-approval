@@ -172,7 +172,6 @@ const extractAvailableQuotations = (detail: any): any[] => {
 
 const extractSelectedQuotation = (detail: any): any => {
     if (!detail) return null;
-    console.log("detail", detail);
     if (detail.payload?.approval_quotation) {
         return {
             quotation: detail.payload.approval_quotation,
