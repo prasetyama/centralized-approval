@@ -26,7 +26,8 @@ export interface PRNonTradeData {
     wbs_no?: string;
     equipment_name?: string;
     submission_remark?: string;
-    status?: 'DRAFT' | 'SUBMITTED' | 'CANCELLED';
+    status?: 'DRAFT' | 'SUBMITTED' | 'IN_PROGRESS' | 'APPROVED' | 'REJECTED' | 'CANCELLED' | string;
+    approval_status?: string;
     approval_request?: number;
     created_at?: string;
     updated_at?: string;

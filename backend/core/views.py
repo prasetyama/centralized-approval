@@ -1157,8 +1157,8 @@ class PRNonTradeViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         if user.is_staff or user.is_superuser:
-            return PRNonTrade.objects.all().prefetch_related('items')
-        return PRNonTrade.objects.filter(requestor=user).prefetch_related('items')
+            return PRNonTrade.objects.all().select_related('approval_request').prefetch_related('items')
+        return PRNonTrade.objects.filter(requestor=user).select_related('approval_request').prefetch_related('items')
 
     def perform_create(self, serializer):
         user = self.request.user

@@ -146,9 +146,24 @@ export const PRNonTradeListPage: React.FC = () => {
                                                     DRAFT
                                                 </span>
                                             )}
-                                            {item.status === 'SUBMITTED' && (
+                                            {(item.status === 'SUBMITTED' || item.status === 'PENDING') && (
                                                 <span className="px-3 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-900 border border-blue-200">
                                                     SUBMITTED
+                                                </span>
+                                            )}
+                                            {item.status === 'IN_PROGRESS' && (
+                                                <span className="px-3 py-1 rounded-full text-xs font-bold bg-indigo-100 text-indigo-900 border border-indigo-200">
+                                                    IN PROGRESS
+                                                </span>
+                                            )}
+                                            {item.status === 'APPROVED' && (
+                                                <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-900 border border-emerald-200">
+                                                    APPROVED
+                                                </span>
+                                            )}
+                                            {item.status === 'REJECTED' && (
+                                                <span className="px-3 py-1 rounded-full text-xs font-bold bg-rose-100 text-rose-900 border border-rose-200">
+                                                    REJECTED
                                                 </span>
                                             )}
                                             {item.status === 'CANCELLED' && (

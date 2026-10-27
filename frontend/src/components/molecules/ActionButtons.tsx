@@ -516,7 +516,7 @@ export const ActionButtons = ({
 
                             <div className="space-y-2">
                                 <div className="flex justify-between items-center">
-                                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Comments</label>
+                                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Remark</label>
                                     {error && <span className="text-[10px] font-bold text-red-500 uppercase animate-pulse">{error}</span>}
                                 </div>
                                 <textarea

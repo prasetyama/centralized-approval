@@ -696,6 +696,8 @@ class PRNonTradeItemSerializer(serializers.ModelSerializer):
 class PRNonTradeSerializer(serializers.ModelSerializer):
     items = PRNonTradeItemSerializer(many=True, required=False)
     transaction_date = serializers.SerializerMethodField()
+    status = serializers.SerializerMethodField()
+    approval_status = serializers.SerializerMethodField()
 
     class Meta:
         model = PRNonTrade
@@ -703,10 +705,10 @@ class PRNonTradeSerializer(serializers.ModelSerializer):
             'id', 'transaction_id', 'transaction_date', 'requestor', 'requestor_name',
             'requester_department', 'requester_company', 'purpose', 'goods_service_type',
             'purchase_type', 'car_tbr_no', 'asset_type', 'asset_no', 'wbs_no',
-            'equipment_name', 'submission_remark', 'status', 'approval_request',
+            'equipment_name', 'submission_remark', 'status', 'approval_status', 'approval_request',
             'created_at', 'updated_at', 'items'
         ]
-        read_only_fields = ['id', 'requestor', 'approval_request', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'requestor', 'status', 'approval_status', 'approval_request', 'created_at', 'updated_at']
 
     def get_transaction_date(self, obj):
         if not obj.transaction_date:
@@ -714,6 +716,43 @@ class PRNonTradeSerializer(serializers.ModelSerializer):
         if hasattr(obj.transaction_date, 'strftime'):
             return obj.transaction_date.strftime('%Y-%m-%d')
         return str(obj.transaction_date).split('T')[0]
+
+    def get_approval_status(self, obj):
+        """
+        Dapatkan status approval (IN_PROGRESS, APPROVED, REJECTED, dll.)
+        dari tabel aw_approval_request berdasarkan relasi reference_id.
+        """
+        # 1. Cek via foreign key jika reference_id cocok dan sudah di-load/cache
+        if obj.approval_request_id:
+            try:
+                ar = obj.approval_request
+                if ar and (not obj.transaction_id or ar.reference_id == obj.transaction_id):
+                    return ar.status
+            except Exception:
+                pass
+
+        # 2. Query ke tabel aw_approval_request via reference_id = transaction_id
+        if obj.transaction_id:
+            ar = ApprovalRequest.objects.filter(reference_id=obj.transaction_id).only('status').first()
+            if ar:
+                return ar.status
+
+        return None
+
+    def get_status(self, obj):
+        """
+        Jika form masih DRAFT atau CANCELLED, kembalikan status tersebut.
+        Jika sudah diajukan (SUBMITTED), dapatkan status terkini dari
+        tabel aw_approval_request (misal: IN_PROGRESS, APPROVED, REJECTED).
+        """
+        if obj.status in ('DRAFT', 'CANCELLED'):
+            return obj.status
+
+        approval_status = self.get_approval_status(obj)
+        if approval_status:
+            return approval_status
+
+        return obj.status
 
     def create(self, validated_data):
         items_data = validated_data.pop('items', [])
