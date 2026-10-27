@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
     Inbox,
@@ -6,11 +7,13 @@ import {
     ShoppingCart,
     Wallet,
     Users,
+    RotateCw,
 } from 'lucide-react';
 import api from '@/services/api';
 import { Card } from '@/components/atoms/Card';
 import { Button } from '@/components/atoms/Button';
 import { Badge } from '@/components/atoms/Badge';
+import { Pagination } from '@/components/atoms/Pagination';
 import {
     Table,
     TableBody,
@@ -23,9 +26,12 @@ import { formatDate } from '@/lib/utils';
 import { Link } from 'react-router-dom';
 
 export const HistoryPage = () => {
-    const { data: history, isLoading } = useQuery<any>({
-        queryKey: ['history'],
-        queryFn: () => api.get('/history'),
+    const [page, setPage] = useState(1);
+    const [pageSize, setPageSize] = useState(10);
+
+    const { data: history, isLoading, refetch, isFetching } = useQuery<any>({
+        queryKey: ['history', page, pageSize],
+        queryFn: () => api.get('/history', { params: { page, page_size: pageSize } }),
     });
 
     const getModuleIcon = (code: string) => {
@@ -71,7 +77,12 @@ export const HistoryPage = () => {
                     <Button variant="outline" className="gap-2">
                         <Filter size={16} /> Filters
                     </Button>
-                    <Button className="gap-2">
+                    <Button
+                        onClick={() => refetch()}
+                        disabled={isFetching}
+                        className="gap-2"
+                    >
+                        <RotateCw size={15} className={isFetching ? 'animate-spin' : ''} />
                         Refresh
                     </Button>
                 </div>
@@ -146,6 +157,16 @@ export const HistoryPage = () => {
                         )}
                     </TableBody>
                 </Table>
+
+                {history?.count !== undefined && history.count > 0 && (
+                    <Pagination
+                        currentPage={page}
+                        pageSize={pageSize}
+                        totalCount={history.count}
+                        onPageChange={setPage}
+                        onPageSizeChange={setPageSize}
+                    />
+                )}
             </Card>
         </div>
     );
