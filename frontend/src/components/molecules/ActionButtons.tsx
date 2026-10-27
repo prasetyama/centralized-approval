@@ -5,6 +5,7 @@ import { Card } from '@/components/atoms/Card';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/context/ToastContext';
 import { useAuth } from '@/context/AuthContext';
+import { AttachmentList } from './AttachmentList';
 
 interface QuotationFile {
     name: string;
@@ -464,24 +465,27 @@ export const ActionButtons = ({
                             {/* Summary note for subsequent approvers when quotation is already chosen */}
                             {showModal === 'APPROVE' && !requiresApprovalQuotation && selectedQuotation && (
                                 <div className="p-3 bg-emerald-50/60 border border-emerald-200 rounded-xl text-xs space-y-1.5">
-                                    <div className="flex items-center justify-between">
+                                    <div className="flex flex-col gap-1">
                                         <span className="font-bold text-emerald-800 flex items-center gap-1.5 uppercase tracking-wide text-[10px]">
                                             <CheckCircle2 size={13} className="text-emerald-600" />
                                             Quotation Terpilih (Disetujui Approver Sebelumnya)
                                         </span>
                                         {(selectedQuotation.url || selectedQuotation.quotation) && (
-                                            <button
-                                                type="button"
-                                                onClick={() => handlePreviewQuotation(selectedQuotation)}
-                                                className="text-[11px] text-blue-600 hover:text-blue-800 font-semibold flex items-center gap-1"
-                                            >
-                                                <Eye size={11} /> Buka Berkas
-                                            </button>
+                                            <AttachmentList
+                                                compact
+                                                attachments={[
+                                                    {
+                                                        id: `selected-att-1`,
+                                                        name: selectedQuotation.quotation.name,
+                                                        size: selectedQuotation.quotation.size,
+                                                        type: selectedQuotation.quotation.type,
+                                                        data: selectedQuotation.quotation.data
+                                                    }
+                                                ]}
+                                                selectedQuotation={selectedQuotation.quotation}
+                                            />
                                         )}
                                     </div>
-                                    <p className="font-semibold text-slate-800 truncate">
-                                        {typeof selectedQuotation === 'string' ? selectedQuotation : selectedQuotation.name || 'Quotation Disetujui'}
-                                    </p>
                                 </div>
                             )}
 
