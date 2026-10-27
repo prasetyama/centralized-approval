@@ -109,6 +109,7 @@ export const InboxPage = () => {
                 <Table>
                     <TableHeader>
                         <TableRow>
+                            <TableHead className='w-[10px]'>No.</TableHead>
                             <TableHead className="w-[100px]">Module</TableHead>
                             <TableHead>Request Title</TableHead>
                             <TableHead>Requester</TableHead>
@@ -118,8 +119,9 @@ export const InboxPage = () => {
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {(inbox?.results || []).map((item: any) => (
+                        {(inbox?.results || []).map((item: any, index: number) => (
                             <TableRow key={item.id}>
+                                <TableCell>{((page - 1) * pageSize) + index + 1}</TableCell>
                                 <TableCell>
                                     <div className="flex items-center gap-2">
                                         <div className="h-8 w-8 rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-center">

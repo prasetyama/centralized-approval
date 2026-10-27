@@ -92,6 +92,7 @@ export const HistoryPage = () => {
                 <Table>
                     <TableHeader>
                         <TableRow>
+                            <TableHead className='w-[15px]'>No.</TableHead>
                             <TableHead className="w-[100px]">Module</TableHead>
                             <TableHead>Request Title</TableHead>
                             <TableHead>Requester</TableHead>
@@ -102,8 +103,9 @@ export const HistoryPage = () => {
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {(history?.results || []).map((item: any) => (
+                        {(history?.results || []).map((item: any, index: number) => (
                             <TableRow key={item.id}>
+                                <TableCell>{((page - 1) * pageSize) + index + 1}</TableCell>
                                 <TableCell>
                                     <div className="flex items-center gap-2">
                                         <div className="h-8 w-8 rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-center">
