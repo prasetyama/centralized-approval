@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { CheckCircle2, XCircle, AlertTriangle, Paperclip, UploadCloud, FileText, Trash2, Eye } from 'lucide-react';
+import { CheckCircle2, XCircle, AlertTriangle, Paperclip, UploadCloud, FileText, Trash2, Eye, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/atoms/Button';
 import { Card } from '@/components/atoms/Card';
 import { cn } from '@/lib/utils';
@@ -18,8 +18,10 @@ interface ActionButtonsProps {
     requestId?: number;
     onApprove: (comments: string, dlvdate?: string, step_data?: Record<string, any>) => Promise<void>;
     onReject: (comments: string) => Promise<void>;
+    onRevise?: (comments: string) => Promise<void>;
     isLoading: boolean;
     canAction: boolean;
+    canRevise?: boolean;
     isWatcher?: boolean;
     showDlvDateForm?: boolean;
     requiredInputs?: any[];
@@ -66,8 +68,10 @@ const formatFileSize = (bytes: number) => {
 export const ActionButtons = ({
     onApprove,
     onReject,
+    onRevise,
     isLoading,
     canAction,
+    canRevise,
     isWatcher,
     showDlvDateForm,
     requiredInputs,
@@ -79,7 +83,7 @@ export const ActionButtons = ({
     initialPoNumber = '',
 }: ActionButtonsProps) => {
     const { addToast } = useToast();
-    const [showModal, setShowModal] = useState<'APPROVE' | 'REJECT' | null>(null);
+    const [showModal, setShowModal] = useState<'APPROVE' | 'REJECT' | 'REVISE' | null>(null);
     const [comments, setComments] = useState('');
     const [dlvdate, setDlvdate] = useState('');
     const [poNumber, setPoNumber] = useState(initialPoNumber);
@@ -231,6 +235,15 @@ export const ActionButtons = ({
             } else if (showModal === 'REJECT') {
                 await onReject(comments);
                 addToast('Pengajuan berhasil ditolak (Rejected)', 'success');
+            } else if (showModal === 'REVISE') {
+                if (!comments.trim()) {
+                    setError('Alasan revisi wajib diisi');
+                    return;
+                }
+                if (onRevise) {
+                    await onRevise(comments.trim());
+                    addToast('Pengajuan berhasil dikembalikan ke step upload quotation untuk revisi', 'success');
+                }
             }
 
             setShowModal(null);
@@ -262,6 +275,16 @@ export const ActionButtons = ({
             >
                 <CheckCircle2 size={18} className="mr-2" /> Approve
             </Button>
+            {canRevise && (
+                <Button
+                    variant="outline"
+                    className="flex-1 border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 shadow-sm"
+                    onClick={() => setShowModal('REVISE')}
+                    loading={isLoading}
+                >
+                    <RotateCcw size={18} className="mr-2 text-amber-600" /> Revise
+                </Button>
+            )}
             <Button
                 variant="danger"
                 className="flex-1"
@@ -282,7 +305,7 @@ export const ActionButtons = ({
                                         showModal === 'REJECT' ? "bg-red-50 text-red-600" : "bg-amber-50 text-amber-600"
                                 )}>
                                     {showModal === 'APPROVE' ? <CheckCircle2 size={24} /> :
-                                        showModal === 'REJECT' ? <XCircle size={24} /> : <AlertTriangle size={24} />}
+                                        showModal === 'REJECT' ? <XCircle size={24} /> : <RotateCcw size={24} />}
                                 </div>
                                 <h3 className="text-xl font-bold text-slate-900">
                                     {showModal === 'APPROVE' ? 'Approve Request' :
@@ -291,7 +314,9 @@ export const ActionButtons = ({
                             </div>
 
                             <p className="text-sm text-slate-500 font-medium leading-relaxed">
-                                You are about to {showModal.toLowerCase()} this request. Please provide any required information or comments.
+                                {showModal === 'REVISE'
+                                    ? 'Pengajuan akan dikembalikan ke step upload quotation agar penawaran harga dapat diperbarui.'
+                                    : `You are about to ${showModal.toLowerCase()} this request. Please provide any required information or comments.`}
                             </p>
 
                             {showModal === 'APPROVE' && requiresPr && (
@@ -516,7 +541,11 @@ export const ActionButtons = ({
 
                             <div className="space-y-2">
                                 <div className="flex justify-between items-center">
-                                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Remark</label>
+                                    <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                                        {showModal === 'REVISE' ? (
+                                            <>Alasan Revisi <span className="text-red-500">*</span></>
+                                        ) : 'Remark'}
+                                    </label>
                                     {error && <span className="text-[10px] font-bold text-red-500 uppercase animate-pulse">{error}</span>}
                                 </div>
                                 <textarea
@@ -526,7 +555,7 @@ export const ActionButtons = ({
                                             ? "border-red-200 bg-red-50/30 focus:bg-white focus:ring-red-100 placeholder:text-red-300"
                                             : "border-slate-200 bg-slate-50 focus:bg-white focus:ring-blue-100"
                                     )}
-                                    placeholder="Type your feedback here..."
+                                    placeholder={showModal === 'REVISE' ? "Jelaskan alasan mengapa quotation / pengajuan ini perlu direvisi..." : "Type your feedback here..."}
                                     value={comments}
                                     onChange={(e) => {
                                         setComments(e.target.value);
@@ -557,11 +586,12 @@ export const ActionButtons = ({
                                     className={cn(
                                         "flex-1",
                                         showModal === 'APPROVE' && "bg-emerald-600 hover:bg-emerald-700",
+                                        showModal === 'REVISE' && "bg-amber-600 hover:bg-amber-700 text-white border-transparent shadow-sm",
                                     )}
                                     onClick={handleAction}
                                     loading={isLoading}
                                 >
-                                    Confirm {showModal.toLowerCase()}
+                                    {showModal === 'REVISE' ? 'Kirim Revisi' : `Confirm ${showModal?.toLowerCase()}`}
                                 </Button>
                             </div>
                         </div>

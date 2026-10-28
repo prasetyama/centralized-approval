@@ -697,6 +697,68 @@ class WorkflowEngine:
 
 
     @staticmethod
+    def _is_user_authorized_for_step(approver, current_step, approval_request):
+        """Check if an approver is authorized to take action on the given step."""
+        if approver.is_superuser:
+            return True
+        if current_step.assigned_to and current_step.assigned_to == approver:
+            return True
+        if current_step.user_required and current_step.user_required == approver:
+            return True
+        if current_step.approver_type == WorkflowStepDefinition.ApproverType.REQUESTOR:
+            if approval_request.requester == approver:
+                return True
+        elif current_step.approver_type == WorkflowStepDefinition.ApproverType.REQ_DEPT_HEAD:
+            req_dept = approval_request.requester.department
+            dept_obj = Department.objects.filter(Q(name=req_dept) | Q(code=req_dept)).first()
+            if dept_obj and approver in dept_obj.get_approvers():
+                return True
+            elif approver.department == req_dept and (approver.is_approver or approver.user_roles.filter(role__code__in=['MGR', 'DEPT_HEAD']).exists()):
+                return True
+            elif approver.headed_departments.filter(Q(code=req_dept) | Q(name=req_dept)).exists():
+                return True
+        elif current_step.approver_type == WorkflowStepDefinition.ApproverType.FINANCE_DEPT_HEAD:
+            if 'finance' in (approver.department or '').lower() or approver.user_roles.filter(role__code__icontains='FINANCE').exists():
+                return True
+        elif current_step.approver_type == WorkflowStepDefinition.ApproverType.PURCH_DEPT_HEAD:
+            purch_dept = current_step.target_department or Department.objects.filter(
+                Q(code__in=['DEPT_PURCHASING', 'PURCHASING', 'PROC', 'PURCH']) |
+                Q(name__icontains='Purchasing') |
+                Q(name__icontains='Procurement')
+            ).first()
+            app_org = OrganizationStructure.objects.filter(user=approver).first()
+            app_dept_name = app_org.department.name if app_org and app_org.department else ''
+            if (purch_dept and app_org and app_org.department_id == purch_dept.id) or \
+               'purchasing' in app_dept_name.lower() or 'procurement' in app_dept_name.lower() or \
+               approver.user_roles.filter(Q(role__code__icontains='PURCHASING') | Q(role__code__icontains='PROCUREMENT')).exists():
+                return True
+        elif current_step.approver_type == WorkflowStepDefinition.ApproverType.TARGET_DEPT_ROLE:
+            target_dept = current_step.target_department
+            if target_dept:
+                approver_dept_ids = approver.get_department_ids() if hasattr(approver, 'get_department_ids') else []
+                if (
+                    target_dept.id in approver_dept_ids or
+                    OrganizationStructure.objects.filter(user=approver, department=target_dept).exists() or
+                    approver.department_ref == target_dept or
+                    (approver.department and (
+                        approver.department.strip().lower() == target_dept.name.strip().lower() or
+                        approver.department.strip().lower() == (target_dept.code or '').strip().lower()
+                    )) or
+                    approver.user_roles.filter(
+                        Q(dept__iexact=target_dept.name) | Q(dept__iexact=target_dept.code)
+                    ).exists()
+                ):
+                    return True
+        elif current_step.role_required:
+            if approver.user_roles.filter(role=current_step.role_required).exists():
+                if not approval_request.division or approver.division == approval_request.division:
+                    return True
+                else:
+                    raise ValidationError(f"You are not authorized to approve requests for division '{approval_request.division}'.")
+
+        return False
+
+    @staticmethod
     @transaction.atomic
     def approve_step(request_id, approver, comments='', ip_address=None, dlvdate=None, step_data=None):
         """
@@ -739,67 +801,7 @@ class WorkflowEngine:
             raise ValidationError("No active step found for this request.")
 
         # Verify the approver is authorized
-        is_authorized = False
-        
-        # Superuser master override
-        if approver.is_superuser:
-            is_authorized = True
-        elif current_step.assigned_to and current_step.assigned_to == approver:
-            is_authorized = True
-        elif current_step.user_required and current_step.user_required == approver:
-            is_authorized = True
-        elif current_step.approver_type == WorkflowStepDefinition.ApproverType.REQUESTOR:
-            if approval_request.requester == approver:
-                is_authorized = True
-        elif current_step.approver_type == WorkflowStepDefinition.ApproverType.REQ_DEPT_HEAD:
-            req_dept = approval_request.requester.department
-            dept_obj = Department.objects.filter(Q(name=req_dept) | Q(code=req_dept)).first()
-            if dept_obj and approver in dept_obj.get_approvers():
-                is_authorized = True
-            elif approver.department == req_dept and (approver.is_approver or approver.user_roles.filter(role__code__in=['MGR', 'DEPT_HEAD']).exists()):
-                is_authorized = True
-            elif approver.headed_departments.filter(Q(code=req_dept) | Q(name=req_dept)).exists():
-                is_authorized = True
-        elif current_step.approver_type == WorkflowStepDefinition.ApproverType.FINANCE_DEPT_HEAD:
-            if 'finance' in (approver.department or '').lower() or approver.user_roles.filter(role__code__icontains='FINANCE').exists():
-                is_authorized = True
-        elif current_step.approver_type == WorkflowStepDefinition.ApproverType.PURCH_DEPT_HEAD:
-            purch_dept = current_step.target_department or Department.objects.filter(
-                Q(code__in=['DEPT_PURCHASING', 'PURCHASING', 'PROC', 'PURCH']) |
-                Q(name__icontains='Purchasing') |
-                Q(name__icontains='Procurement')
-            ).first()
-            app_org = OrganizationStructure.objects.filter(user=approver).first()
-            app_dept_name = app_org.department.name if app_org and app_org.department else ''
-            if (purch_dept and app_org and app_org.department_id == purch_dept.id) or \
-               'purchasing' in app_dept_name.lower() or 'procurement' in app_dept_name.lower() or \
-               approver.user_roles.filter(Q(role__code__icontains='PURCHASING') | Q(role__code__icontains='PROCUREMENT')).exists():
-                is_authorized = True
-        elif current_step.approver_type == WorkflowStepDefinition.ApproverType.TARGET_DEPT_ROLE:
-            target_dept = current_step.target_department
-            if target_dept:
-                approver_dept_ids = approver.get_department_ids() if hasattr(approver, 'get_department_ids') else []
-                if (
-                    target_dept.id in approver_dept_ids or
-                    OrganizationStructure.objects.filter(user=approver, department=target_dept).exists() or
-                    approver.department_ref == target_dept or
-                    (approver.department and (
-                        approver.department.strip().lower() == target_dept.name.strip().lower() or
-                        approver.department.strip().lower() == (target_dept.code or '').strip().lower()
-                    )) or
-                    approver.user_roles.filter(
-                        Q(dept__iexact=target_dept.name) | Q(dept__iexact=target_dept.code)
-                    ).exists()
-                ):
-                    is_authorized = True
-        elif current_step.role_required:
-            if approver.user_roles.filter(role=current_step.role_required).exists():
-                if not approval_request.division or approver.division == approval_request.division:
-                    is_authorized = True
-                else:
-                    raise ValidationError(f"You are not authorized to approve requests for division '{approval_request.division}'.")
-
-        if not is_authorized:
+        if not WorkflowEngine._is_user_authorized_for_step(approver, current_step, approval_request):
             raise ValidationError("You are not authorized to approve this step.")
 
         # Validate required_inputs if defined for this step
@@ -897,45 +899,7 @@ class WorkflowEngine:
             raise ValidationError("No active step found for this request.")
 
         # Verify the approver is authorized
-        is_authorized = False
-        
-        if approver.is_superuser:
-            is_authorized = True
-        elif current_step.user_required:
-            if current_step.user_required == approver:
-                is_authorized = True
-        elif current_step.assigned_to:
-            if current_step.assigned_to == approver:
-                is_authorized = True
-        elif current_step.approver_type == WorkflowStepDefinition.ApproverType.REQUESTOR:
-            if approval_request.requester == approver:
-                is_authorized = True
-        elif current_step.approver_type == WorkflowStepDefinition.ApproverType.TARGET_DEPT_ROLE:
-            target_dept = current_step.target_department
-            if target_dept:
-                approver_dept_ids = approver.get_department_ids() if hasattr(approver, 'get_department_ids') else []
-                if (
-                    target_dept.id in approver_dept_ids or
-                    OrganizationStructure.objects.filter(user=approver, department=target_dept).exists() or
-                    approver.department_ref == target_dept or
-                    (approver.department and (
-                        approver.department.strip().lower() == target_dept.name.strip().lower() or
-                        approver.department.strip().lower() == (target_dept.code or '').strip().lower()
-                    )) or
-                    approver.user_roles.filter(
-                        Q(dept__iexact=target_dept.name) | Q(dept__iexact=target_dept.code)
-                    ).exists()
-                ):
-                    is_authorized = True
-        
-        if not is_authorized and current_step.role_required:
-            if approver.user_roles.filter(role=current_step.role_required).exists():
-                if not approval_request.division or approver.division == approval_request.division:
-                    is_authorized = True
-                else:
-                    raise ValidationError(f"You are not authorized to reject requests for division '{approval_request.division}'.")
-
-        if not is_authorized:
+        if not WorkflowEngine._is_user_authorized_for_step(approver, current_step, approval_request):
             raise ValidationError("You are not authorized to reject this step.")
 
         # Reject the step
@@ -1066,6 +1030,125 @@ class WorkflowEngine:
             ip_address=ip_address,
             payload_snapshot=approval_request.payload,
         )
+
+    @staticmethod
+    @transaction.atomic
+    def revise_step(request_id, approver, comments='', ip_address=None):
+        """
+        Revise the workflow from the current active step back to the upload quotation step.
+        Applicable when a request is IN_PROGRESS and current step is after the quotation upload step
+        (e.g., Approval 1, Approval 2, or Purchasing Team).
+        Steps between quotation upload and current step are reset to PENDING.
+        Target quotation upload step is set to WAITING.
+        Activity log (AuditLog) records the revision.
+
+        Args:
+            request_id (int): ID of the ApprovalRequest.
+            approver (User): User requesting the revision (must be authorized for current step).
+            comments (str): Reason for revision (required).
+            ip_address (str): IP address.
+
+        Returns:
+            ApprovalRequest: The updated approval request.
+        """
+        try:
+            approval_request = ApprovalRequest.objects.select_for_update().get(id=request_id)
+        except ApprovalRequest.DoesNotExist:
+            raise ValidationError(f"Approval request {request_id} not found.")
+
+        if approval_request.status != ApprovalRequest.Status.IN_PROGRESS:
+            raise ValidationError(
+                f"Cannot revise: request is in '{approval_request.status}' state."
+            )
+
+        try:
+            current_step = ApprovalStep.objects.get(
+                request=approval_request,
+                step_order=approval_request.current_step,
+                status=ApprovalStep.StepStatus.WAITING,
+            )
+        except ApprovalStep.DoesNotExist:
+            raise ValidationError("No active step found for this request.")
+
+        if not WorkflowEngine._is_user_authorized_for_step(approver, current_step, approval_request):
+            raise ValidationError("You are not authorized to revise this step.")
+
+        if not comments or not comments.strip():
+            raise ValidationError("Alasan revisi wajib diisi.")
+
+        # Find preceding quotation upload step (required_inputs contains 'quotation')
+        quotation_step = None
+        for prev_step in approval_request.steps.filter(step_order__lt=current_step.step_order).order_by('-step_order'):
+            req_inputs = prev_step.required_inputs or []
+            keys = [(k.get('key') if isinstance(k, dict) else k) for k in req_inputs]
+            if 'quotation' in keys:
+                quotation_step = prev_step
+                break
+
+        if not quotation_step:
+            raise ValidationError("Fitur revisi ini hanya berlaku setelah step upload quotation.")
+
+        # Record comments on current step before resetting
+        current_step.comments = comments.strip()
+        current_step.save(update_fields=['comments'])
+
+        # Reset intermediate and current steps back to PENDING
+        steps_to_reset = approval_request.steps.filter(
+            step_order__gt=quotation_step.step_order,
+            step_order__lte=current_step.step_order
+        )
+        for s in steps_to_reset:
+            s.status = ApprovalStep.StepStatus.PENDING
+            s.acted_at = None
+            if s.step_data and isinstance(s.step_data, dict):
+                s.step_data.pop('approval_quotation', None)
+                s.save(update_fields=['status', 'acted_at', 'step_data'])
+            else:
+                s.save(update_fields=['status', 'acted_at'])
+
+        # Ensure all subsequent steps remain PENDING
+        approval_request.steps.filter(
+            step_order__gt=current_step.step_order
+        ).exclude(
+            status=ApprovalStep.StepStatus.SKIPPED
+        ).update(
+            status=ApprovalStep.StepStatus.PENDING,
+            acted_at=None
+        )
+
+        # Set quotation upload step to WAITING
+        quotation_step.status = ApprovalStep.StepStatus.WAITING
+        quotation_step.acted_at = None
+        quotation_step.save(update_fields=['status', 'acted_at'])
+
+        # Update approval_request current_step and payload
+        approval_request.current_step = quotation_step.step_order
+        if isinstance(approval_request.payload, dict) and 'approval_quotation' in approval_request.payload:
+            approval_request.payload.pop('approval_quotation', None)
+            approval_request.save(update_fields=['current_step', 'payload', 'updated_at'])
+        else:
+            approval_request.save(update_fields=['current_step', 'updated_at'])
+
+        # Create AuditLog entry
+        log_details = f"Step {current_step.step_order} ({current_step.name}) direvisi oleh {approver.get_full_name() or approver.username} kembali ke Step {quotation_step.step_order} ({quotation_step.name}). Alasan: {comments.strip()}"
+        AuditLog.objects.create(
+            request=approval_request,
+            step=current_step,
+            actor=approver,
+            action=AuditLog.Action.REVISED,
+            details=log_details,
+            ip_address=ip_address,
+            payload_snapshot=approval_request.payload,
+        )
+
+        # Notify external system and email
+        _captured_current_step = current_step
+        _captured_target_step = quotation_step
+        _captured_approver = approver
+        transaction.on_commit(lambda: WorkflowEngine.notify_external_system(
+            approval_request, acted_step=_captured_current_step, approver=_captured_approver
+        ))
+        transaction.on_commit(lambda: email_service.send_step_notification(_captured_target_step))
 
         return approval_request
 

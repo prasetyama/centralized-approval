@@ -1,6 +1,6 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Clock, History } from 'lucide-react';
+import { ArrowLeft, Clock, History, RotateCcw } from 'lucide-react';
 import { useState } from 'react';
 import api from '@/services/api';
 import { Button } from '@/components/atoms/Button';
@@ -352,6 +352,21 @@ export const ApprovalDetailPage = () => {
 
     const showDlvDateForm = Boolean(isScmStep && isUrgentOrder);
 
+    const quotationStep = detail?.steps?.find((s: any) => {
+        const keys = (s.required_inputs || []).map((i: any) => (typeof i === 'string' ? i : i.key));
+        return keys.includes('quotation');
+    });
+
+    const canRevise = Boolean(
+        isApprover &&
+        detail?.status === 'IN_PROGRESS' &&
+        quotationStep &&
+        activeStep &&
+        activeStep.step_order > quotationStep.step_order
+    );
+
+    const lastRevisedLog = detail?.audit_logs?.find((log: any) => log.action === 'REVISED');
+
     return (
         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -403,6 +418,16 @@ export const ApprovalDetailPage = () => {
                     }
                 </div>
             </div>
+
+            {detail?.status === 'IN_PROGRESS' && lastRevisedLog && quotationStep && activeStep?.step_order === quotationStep.step_order && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50/80 p-4 text-amber-900 shadow-sm flex items-start gap-3 animate-in fade-in">
+                    <RotateCcw size={20} className="text-amber-600 shrink-0 mt-0.5" />
+                    <div className="space-y-1">
+                        <p className="text-sm font-bold text-amber-900">Perhatian: Pengajuan Memerlukan Revisi Quotation</p>
+                        <p className="text-xs text-amber-800 leading-relaxed">{lastRevisedLog.details}</p>
+                    </div>
+                </div>
+            )}
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 <div className="lg:col-span-2 space-y-8">
@@ -542,8 +567,10 @@ export const ApprovalDetailPage = () => {
                     <ActionButtons
                         onApprove={async (comments, dlvdate, step_data) => { await actionMutation.mutateAsync({ action: 'approve', comments, dlvdate, step_data }); }}
                         onReject={async (comments) => { await actionMutation.mutateAsync({ action: 'reject', comments }); }}
+                        onRevise={async (comments) => { await actionMutation.mutateAsync({ action: 'revise', comments }); }}
                         isLoading={actionMutation.isPending}
                         canAction={isApprover === true}
+                        canRevise={canRevise}
                         isWatcher={isWatcher}
                         showDlvDateForm={showDlvDateForm}
                         requiredInputs={activeStep?.required_inputs || []}

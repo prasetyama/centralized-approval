@@ -279,25 +279,67 @@ class WorkflowRejectView(generics.GenericAPIView):
 class WorkflowReviseView(generics.GenericAPIView):
     """
     POST /api/v1/workflow/<id>/revise
-    Revise a rejected request with optional updated payload.
+    - If request status is IN_PROGRESS: Revises current step back to upload quotation.
+    - If request status is REJECTED: Resubmits revised payload by original requester.
     """
+    serializer_class = ActionSerializer
     permission_classes = [IsAuthenticated]
 
     def post(self, request, pk):
-        updated_payload = request.data.get('payload')
+        try:
+            req_obj = ApprovalRequest.objects.get(id=pk)
+        except ApprovalRequest.DoesNotExist:
+            raise ValidationError(f"Approval request {pk} not found.")
 
-        approval_request = WorkflowEngine.revise_request(
-            request_id=pk,
-            requester=request.user,
-            updated_payload=updated_payload,
-            ip_address=_get_client_ip(request),
-        )
+        if req_obj.status == ApprovalRequest.Status.IN_PROGRESS:
+            serializer = self.get_serializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            comments = serializer.validated_data.get('comments', '')
+            if not comments.strip():
+                raise ValidationError("Komentar alasan revisi wajib diisi.")
 
-        return Response({
-            'success': True,
-            'data': ApprovalRequestDetailSerializer(approval_request).data,
-            'message': 'Request revised and resubmitted.',
-        })
+            try:
+                approval_request = WorkflowEngine.revise_step(
+                    request_id=pk,
+                    approver=request.user,
+                    comments=comments,
+                    ip_address=_get_client_ip(request),
+                )
+            except Exception as e:
+                logging.getLogger(__name__).error(
+                    "[Core.Views] Failed to revise workflow %s by user %s: %s",
+                    pk, request.user.username, str(e), exc_info=True
+                )
+                raise ValidationError(f"Gagal melakukan revisi: {str(e)}")
+
+            return Response({
+                'success': True,
+                'data': ApprovalRequestDetailSerializer(approval_request).data,
+                'message': 'Pengajuan berhasil dikembalikan ke step upload quotation untuk revisi.',
+            })
+        elif req_obj.status == ApprovalRequest.Status.REJECTED:
+            updated_payload = request.data.get('payload')
+            try:
+                approval_request = WorkflowEngine.revise_request(
+                    request_id=pk,
+                    requester=request.user,
+                    updated_payload=updated_payload,
+                    ip_address=_get_client_ip(request),
+                )
+            except Exception as e:
+                logging.getLogger(__name__).error(
+                    "[Core.Views] Failed to resubmit revised workflow %s by user %s: %s",
+                    pk, request.user.username, str(e), exc_info=True
+                )
+                raise ValidationError(f"Gagal submit revisi: {str(e)}")
+
+            return Response({
+                'success': True,
+                'data': ApprovalRequestDetailSerializer(approval_request).data,
+                'message': 'Request revised and resubmitted.',
+            })
+        else:
+            raise ValidationError(f"Cannot revise request in status '{req_obj.status}'.")
 
 
 class WorkflowDelegateView(generics.GenericAPIView):
