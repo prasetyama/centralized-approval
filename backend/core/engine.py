@@ -276,7 +276,7 @@ class WorkflowEngine:
             chain = []
             candidates = [
                 (1, dept.approver_1, 'Approver 1'),
-                (2, dept.approver_2, 'Approver 2 (Dept Head)'),
+                (2, dept.approver_2, 'Approver 2'),
                 (3, dept.approver_3, 'Approver 3'),
             ]
             active_levels = [lvl for lvl, usr, _ in candidates if usr]
@@ -346,98 +346,98 @@ class WorkflowEngine:
 
         return chain
 
-    @staticmethod
-    def get_dept_approval_chain(department, company_code=None, requester=None):
-        """
-        Traverse the master OrganizationStructure table or Department approvers to resolve the approval hierarchy chain
-        for a specific department (e.g. Purchasing).
-        Returns a list of dicts: [{'user': User, 'title': str, 'level_order': int, 'is_dept_head': bool}]
-        """
-        if not department:
-            return []
+    # @staticmethod
+    # def get_dept_approval_chain(department, company_code=None, requester=None):
+    #     """
+    #     Traverse the master OrganizationStructure table or Department approvers to resolve the approval hierarchy chain
+    #     for a specific department (e.g. Purchasing).
+    #     Returns a list of dicts: [{'user': User, 'title': str, 'level_order': int, 'is_dept_head': bool}]
+    #     """
+    #     if not department:
+    #         return []
 
-        # Check simplified department approvers
-        if department and (department.approver_1 or department.approver_2 or department.approver_3):
-            chain = []
-            candidates = [
-                (1, department.approver_1, 'Approver 1'),
-                (2, department.approver_2, 'Approver 2 (Dept Head)'),
-                (3, department.approver_3, 'Approver 3'),
-            ]
-            active_levels = [lvl for lvl, usr, _ in candidates if usr]
-            highest_level = max(active_levels) if active_levels else 2
+    #     # Check simplified department approvers
+    #     if department and (department.approver_1 or department.approver_2 or department.approver_3):
+    #         chain = []
+    #         candidates = [
+    #             (1, department.approver_1, 'Approver 1'),
+    #             (2, department.approver_2, 'Approver 2'),
+    #             (3, department.approver_3, 'Approver 3'),
+    #         ]
+    #         active_levels = [lvl for lvl, usr, _ in candidates if usr]
+    #         highest_level = max(active_levels) if active_levels else 2
 
-            for lvl, app_user, label in candidates:
-                if not app_user:
-                    continue
-                if requester and app_user.id == requester.id:
-                    continue
-                if any(link['user'].id == app_user.id for link in chain):
-                    continue
+    #         for lvl, app_user, label in candidates:
+    #             if not app_user:
+    #                 continue
+    #             if requester and app_user.id == requester.id:
+    #                 continue
+    #             if any(link['user'].id == app_user.id for link in chain):
+    #                 continue
 
-                chain.append({
-                    'user': app_user,
-                    'title': f"{department.name} - {label}",
-                    'level_order': lvl,
-                    'is_dept_head': (lvl == highest_level or (lvl == 2 and not department.approver_3)),
-                })
+    #             chain.append({
+    #                 'user': app_user,
+    #                 'title': f"{department.name} - ",
+    #                 'level_order': lvl,
+    #                 'is_dept_head': (lvl == highest_level or (lvl == 2 and not department.approver_3)),
+    #             })
 
-            if chain:
-                return chain
+    #         if chain:
+    #             return chain
 
-        company = None
-        if company_code:
-            company = Company.objects.filter(code=company_code).first()
-        if not company and requester:
-            req_org = OrganizationStructure.objects.filter(user=requester).select_related('company').first()
-            if req_org and req_org.company:
-                company = req_org.company
+    #     company = None
+    #     if company_code:
+    #         company = Company.objects.filter(code=company_code).first()
+    #     if not company and requester:
+    #         req_org = OrganizationStructure.objects.filter(user=requester).select_related('company').first()
+    #         if req_org and req_org.company:
+    #             company = req_org.company
 
-        # Find starting node in target department
-        qs = OrganizationStructure.objects.filter(department=department).select_related('user', 'reports_to', 'company')
-        if company:
-            qs = qs.filter(company=company)
+    #     # Find starting node in target department
+    #     qs = OrganizationStructure.objects.filter(department=department).select_related('user', 'reports_to', 'company')
+    #     if company:
+    #         qs = qs.filter(company=company)
 
-        start_node = qs.order_by('level_order').first()
-        if not start_node or not start_node.user:
-            return []
+    #     start_node = qs.order_by('level_order').first()
+    #     if not start_node or not start_node.user:
+    #         return []
 
-        chain = []
-        visited = set()
-        current_user = start_node.user
+    #     chain = []
+    #     visited = set()
+    #     current_user = start_node.user
 
-        # If requester is the starting node in department, skip requester to start from their manager
-        if requester and current_user.id == requester.id:
-            if start_node.reports_to:
-                current_user = start_node.reports_to
-            else:
-                return []
+    #     # If requester is the starting node in department, skip requester to start from their manager
+    #     if requester and current_user.id == requester.id:
+    #         if start_node.reports_to:
+    #             current_user = start_node.reports_to
+    #         else:
+    #             return []
 
 
-        while current_user and current_user.id not in visited:
-            visited.add(current_user.id)
+    #     while current_user and current_user.id not in visited:
+    #         visited.add(current_user.id)
 
-            node_qs = OrganizationStructure.objects.filter(user=current_user).select_related('reports_to', 'department', 'company')
-            if company:
-                node_qs = node_qs.filter(company=company)
-            node = node_qs.first()
+    #         node_qs = OrganizationStructure.objects.filter(user=current_user).select_related('reports_to', 'department', 'company')
+    #         if company:
+    #             node_qs = node_qs.filter(company=company)
+    #         node = node_qs.first()
 
-            chain.append({
-                'user': current_user,
-                'title': node.position_title if node else (current_user.get_full_name() or current_user.username),
-                'level_order': node.level_order if node else 1,
-                'is_dept_head': node.is_dept_head if node else False,
-            })
+    #         chain.append({
+    #             'user': current_user,
+    #             'title': node.position_title if node else (current_user.get_full_name() or current_user.username),
+    #             'level_order': node.level_order if node else 1,
+    #             'is_dept_head': node.is_dept_head if node else False,
+    #         })
 
-            if node and node.is_dept_head:
-                break
+    #         if node and node.is_dept_head:
+    #             break
 
-            if not node or not node.reports_to:
-                break
+    #         if not node or not node.reports_to:
+    #             break
 
-            current_user = node.reports_to
+    #         current_user = node.reports_to
 
-        return chain
+    #     return chain
 
     @staticmethod
     @transaction.atomic
