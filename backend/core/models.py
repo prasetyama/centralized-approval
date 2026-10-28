@@ -1077,6 +1077,7 @@ class PRNonTrade(models.Model):
     STATUS_CHOICES = [
         ('DRAFT', 'Draft'),
         ('SUBMITTED', 'Submitted'),
+        ('REVISE', 'Revise'),
         ('CANCELLED', 'Cancelled'),
     ]
 

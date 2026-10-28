@@ -22,6 +22,7 @@ interface ActionButtonsProps {
     isLoading: boolean;
     canAction: boolean;
     canRevise?: boolean;
+    isBeforeQuotationStep?: boolean;
     isWatcher?: boolean;
     showDlvDateForm?: boolean;
     requiredInputs?: any[];
@@ -72,6 +73,7 @@ export const ActionButtons = ({
     isLoading,
     canAction,
     canRevise,
+    isBeforeQuotationStep = false,
     isWatcher,
     showDlvDateForm,
     requiredInputs,
@@ -242,7 +244,12 @@ export const ActionButtons = ({
                 }
                 if (onRevise) {
                     await onRevise(comments.trim());
-                    addToast('Pengajuan berhasil dikembalikan ke step upload quotation untuk revisi', 'success');
+                    addToast(
+                        isBeforeQuotationStep
+                            ? 'Pengajuan berhasil dikembalikan ke requestor untuk revisi'
+                            : 'Pengajuan berhasil dikembalikan ke step upload quotation untuk revisi',
+                        'success'
+                    );
                 }
             }
 
@@ -315,7 +322,9 @@ export const ActionButtons = ({
 
                             <p className="text-sm text-slate-500 font-medium leading-relaxed">
                                 {showModal === 'REVISE'
-                                    ? 'Pengajuan akan dikembalikan ke step upload quotation agar penawaran harga dapat diperbarui.'
+                                    ? (isBeforeQuotationStep
+                                        ? 'Pengajuan akan dikembalikan ke requestor agar formulir pengajuan dapat direvisi dan disesuaikan.'
+                                        : 'Pengajuan akan dikembalikan ke step upload quotation agar penawaran harga dapat diperbarui.')
                                     : `You are about to ${showModal.toLowerCase()} this request. Please provide any required information or comments.`}
                             </p>
 
@@ -555,7 +564,13 @@ export const ActionButtons = ({
                                             ? "border-red-200 bg-red-50/30 focus:bg-white focus:ring-red-100 placeholder:text-red-300"
                                             : "border-slate-200 bg-slate-50 focus:bg-white focus:ring-blue-100"
                                     )}
-                                    placeholder={showModal === 'REVISE' ? "Jelaskan alasan mengapa quotation / pengajuan ini perlu direvisi..." : "Type your feedback here..."}
+                                    placeholder={
+                                        showModal === 'REVISE'
+                                            ? (isBeforeQuotationStep
+                                                ? "Jelaskan alasan mengapa formulir pengajuan ini perlu direvisi oleh requestor..."
+                                                : "Jelaskan alasan mengapa quotation / pengajuan ini perlu direvisi...")
+                                            : "Type your feedback here..."
+                                    }
                                     value={comments}
                                     onChange={(e) => {
                                         setComments(e.target.value);

@@ -1085,72 +1085,137 @@ class WorkflowEngine:
                 quotation_step = prev_step
                 break
 
-        if not quotation_step:
-            raise ValidationError("Fitur revisi ini hanya berlaku setelah step upload quotation.")
+        if quotation_step:
+            # === ALUR A: Revisi Quotation (Setelah Upload Quotation) ===
+            # Record comments on current step before resetting
+            current_step.comments = comments.strip()
+            current_step.save(update_fields=['comments'])
 
-        # Record comments on current step before resetting
-        current_step.comments = comments.strip()
-        current_step.save(update_fields=['comments'])
+            # Reset intermediate and current steps back to PENDING
+            steps_to_reset = approval_request.steps.filter(
+                step_order__gt=quotation_step.step_order,
+                step_order__lte=current_step.step_order
+            )
+            for s in steps_to_reset:
+                s.status = ApprovalStep.StepStatus.PENDING
+                s.acted_at = None
+                if s.step_data and isinstance(s.step_data, dict):
+                    s.step_data.pop('approval_quotation', None)
+                    s.save(update_fields=['status', 'acted_at', 'step_data'])
+                else:
+                    s.save(update_fields=['status', 'acted_at'])
 
-        # Reset intermediate and current steps back to PENDING
-        steps_to_reset = approval_request.steps.filter(
-            step_order__gt=quotation_step.step_order,
-            step_order__lte=current_step.step_order
-        )
-        for s in steps_to_reset:
-            s.status = ApprovalStep.StepStatus.PENDING
-            s.acted_at = None
-            if s.step_data and isinstance(s.step_data, dict):
-                s.step_data.pop('approval_quotation', None)
-                s.save(update_fields=['status', 'acted_at', 'step_data'])
+            # Ensure all subsequent steps remain PENDING
+            approval_request.steps.filter(
+                step_order__gt=current_step.step_order
+            ).exclude(
+                status=ApprovalStep.StepStatus.SKIPPED
+            ).update(
+                status=ApprovalStep.StepStatus.PENDING,
+                acted_at=None
+            )
+
+            # Set quotation upload step to WAITING
+            quotation_step.status = ApprovalStep.StepStatus.WAITING
+            quotation_step.acted_at = None
+            quotation_step.save(update_fields=['status', 'acted_at'])
+
+            # Update approval_request current_step and payload
+            approval_request.current_step = quotation_step.step_order
+            if isinstance(approval_request.payload, dict) and 'approval_quotation' in approval_request.payload:
+                approval_request.payload.pop('approval_quotation', None)
+                approval_request.save(update_fields=['current_step', 'payload', 'updated_at'])
             else:
-                s.save(update_fields=['status', 'acted_at'])
+                approval_request.save(update_fields=['current_step', 'updated_at'])
 
-        # Ensure all subsequent steps remain PENDING
-        approval_request.steps.filter(
-            step_order__gt=current_step.step_order
-        ).exclude(
-            status=ApprovalStep.StepStatus.SKIPPED
-        ).update(
-            status=ApprovalStep.StepStatus.PENDING,
-            acted_at=None
-        )
+            # Create AuditLog entry
+            log_details = f"Step {current_step.step_order} ({current_step.name}) direvisi oleh {approver.get_full_name() or approver.username} kembali ke Step {quotation_step.step_order} ({quotation_step.name}). Alasan: {comments.strip()}"
+            AuditLog.objects.create(
+                request=approval_request,
+                step=current_step,
+                actor=approver,
+                action=AuditLog.Action.REVISED,
+                details=log_details,
+                ip_address=ip_address,
+                payload_snapshot=approval_request.payload,
+            )
 
-        # Set quotation upload step to WAITING
-        quotation_step.status = ApprovalStep.StepStatus.WAITING
-        quotation_step.acted_at = None
-        quotation_step.save(update_fields=['status', 'acted_at'])
+            # Notify external system and email
+            _captured_current_step = current_step
+            _captured_target_step = quotation_step
+            _captured_approver = approver
+            transaction.on_commit(lambda: WorkflowEngine.notify_external_system(
+                approval_request, acted_step=_captured_current_step, approver=_captured_approver
+            ))
+            transaction.on_commit(lambda: email_service.send_step_notification(_captured_target_step))
 
-        # Update approval_request current_step and payload
-        approval_request.current_step = quotation_step.step_order
-        if isinstance(approval_request.payload, dict) and 'approval_quotation' in approval_request.payload:
-            approval_request.payload.pop('approval_quotation', None)
-            approval_request.save(update_fields=['current_step', 'payload', 'updated_at'])
+            return approval_request
+
         else:
-            approval_request.save(update_fields=['current_step', 'updated_at'])
+            # === ALUR B: Revisi PR Form (Sebelum / Pada Saat Upload Quotation) ===
+            current_step.comments = comments.strip()
+            current_step.save(update_fields=['comments'])
 
-        # Create AuditLog entry
-        log_details = f"Step {current_step.step_order} ({current_step.name}) direvisi oleh {approver.get_full_name() or approver.username} kembali ke Step {quotation_step.step_order} ({quotation_step.name}). Alasan: {comments.strip()}"
-        AuditLog.objects.create(
-            request=approval_request,
-            step=current_step,
-            actor=approver,
-            action=AuditLog.Action.REVISED,
-            details=log_details,
-            ip_address=ip_address,
-            payload_snapshot=approval_request.payload,
-        )
+            # Find linked PRNonTrade
+            pr = None
+            if hasattr(approval_request, 'pr_non_trade_headers'):
+                pr = approval_request.pr_non_trade_headers.first()
+            if not pr and approval_request.reference_id:
+                from core.models import PRNonTrade
+                pr = PRNonTrade.objects.filter(transaction_id=approval_request.reference_id).first()
 
-        # Notify external system and email
-        _captured_current_step = current_step
-        _captured_target_step = quotation_step
-        _captured_approver = approver
-        transaction.on_commit(lambda: WorkflowEngine.notify_external_system(
-            approval_request, acted_step=_captured_current_step, approver=_captured_approver
-        ))
-        transaction.on_commit(lambda: email_service.send_step_notification(_captured_target_step))
+            if pr:
+                pr.status = 'REVISE'
+                pr.save(update_fields=['status', 'updated_at'])
 
-        return approval_request
+            # Reset steps: all steps become PENDING
+            for s in approval_request.steps.all().exclude(status=ApprovalStep.StepStatus.SKIPPED):
+                s.status = ApprovalStep.StepStatus.PENDING
+                s.acted_at = None
+                if s.step_data and isinstance(s.step_data, dict):
+                    s.step_data.pop('approval_quotation', None)
+                    s.save(update_fields=['status', 'acted_at', 'step_data'])
+                else:
+                    s.save(update_fields=['status', 'acted_at'])
+
+            # Set approval request status to REVISED, reset current_step to 1
+            approval_request.status = ApprovalRequest.Status.REVISED
+            approval_request.current_step = 1
+            if isinstance(approval_request.payload, dict) and 'approval_quotation' in approval_request.payload:
+                approval_request.payload.pop('approval_quotation', None)
+                approval_request.save(update_fields=['status', 'current_step', 'payload', 'updated_at'])
+            else:
+                approval_request.save(update_fields=['status', 'current_step', 'updated_at'])
+
+            # Create AuditLog entry
+            requester_name = approval_request.requester.get_full_name() or approval_request.requester.username
+            log_details = (
+                f"Step {current_step.step_order} ({current_step.name}) direvisi oleh "
+                f"{approver.get_full_name() or approver.username}. Alasan: {comments.strip()}. "
+                f"Status PR Form diubah menjadi REVISE untuk diedit kembali oleh pemohon ({requester_name})."
+            )
+            AuditLog.objects.create(
+                request=approval_request,
+                step=current_step,
+                actor=approver,
+                action=AuditLog.Action.REVISED,
+                details=log_details,
+                ip_address=ip_address,
+                payload_snapshot=approval_request.payload,
+            )
+
+            # Send email notification to requester
+            _captured_current_step = current_step
+            _captured_approver = approver
+            _captured_comments = comments.strip()
+            transaction.on_commit(lambda: WorkflowEngine.notify_external_system(
+                approval_request, acted_step=_captured_current_step, approver=_captured_approver
+            ))
+            transaction.on_commit(lambda: email_service.send_revised_to_requester_notification(
+                approval_request, _captured_current_step, revisor=_captured_approver, comments=_captured_comments
+            ))
+
+            return approval_request
 
     @staticmethod
     @transaction.atomic
@@ -1176,11 +1241,18 @@ class WorkflowEngine:
         except ApprovalRequest.DoesNotExist:
             raise ValidationError(f"Approval request {request_id} not found.")
 
-        if approval_request.status != ApprovalRequest.Status.REJECTED:
-            raise ValidationError("Only rejected requests can be revised.")
+        if approval_request.status not in (ApprovalRequest.Status.REJECTED, ApprovalRequest.Status.REVISED):
+            raise ValidationError("Only rejected or revised requests can be revised.")
 
         if approval_request.requester != requester:
             raise ValidationError("Only the original requester can revise this request.")
+
+        # Update linked PRNonTrade status if exists
+        if hasattr(approval_request, 'pr_non_trade_headers') and approval_request.pr_non_trade_headers.exists():
+            approval_request.pr_non_trade_headers.update(status='SUBMITTED')
+        elif approval_request.reference_id:
+            from core.models import PRNonTrade
+            PRNonTrade.objects.filter(transaction_id=approval_request.reference_id).update(status='SUBMITTED')
 
         # Update payload if provided
         if updated_payload:

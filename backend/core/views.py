@@ -44,6 +44,7 @@ from core.serializers import (
     PRNonTradeSerializer, PRNonTradeItemSerializer
 )
 from core.engine import WorkflowEngine
+from core import email_service
 from django.utils import timezone
 from rest_framework.decorators import action
 
@@ -315,9 +316,13 @@ class WorkflowReviseView(generics.GenericAPIView):
             return Response({
                 'success': True,
                 'data': ApprovalRequestDetailSerializer(approval_request).data,
-                'message': 'Pengajuan berhasil dikembalikan ke step upload quotation untuk revisi.',
+                'message': (
+                    'Pengajuan berhasil dikembalikan ke pemohon untuk revisi formulir PR.'
+                    if approval_request.status == ApprovalRequest.Status.REVISED
+                    else 'Pengajuan berhasil dikembalikan ke step upload quotation untuk revisi.'
+                ),
             })
-        elif req_obj.status == ApprovalRequest.Status.REJECTED:
+        elif req_obj.status in (ApprovalRequest.Status.REJECTED, ApprovalRequest.Status.REVISED):
             updated_payload = request.data.get('payload')
             try:
                 approval_request = WorkflowEngine.revise_request(
@@ -1377,7 +1382,11 @@ class PRNonTradeViewSet(viewsets.ModelViewSet):
             )
             if not wf_def.steps.exists():
                 spv_role = Role.objects.filter(code='SPV').first() or Role.objects.first()
-                mgr_role = Role.objects.filter(code='MGR').first() or Role.objects.first()
+                if not spv_role:
+                    spv_role = Role.objects.create(name='Supervisor', code='SPV')
+                mgr_role = Role.objects.filter(code='MGR').first() or Role.objects.filter(code='SPV').first() or spv_role
+                if not mgr_role:
+                    mgr_role = Role.objects.create(name='Manager', code='MGR')
                 WorkflowStepDefinition.objects.create(
                     workflow=wf_def,
                     step_order=1,
@@ -1412,20 +1421,53 @@ class PRNonTradeViewSet(viewsets.ModelViewSet):
             'items': items_list
         }
 
-        approval_request = WorkflowEngine.submit_request(
-            module_code='PR_NON_TRADE',
-            workflow_id=10,
-            requester=user,
-            title=f"PR Non Trade - {pr.transaction_id}",
-            payload=payload,
-            description=pr.purpose,
-            priority='MEDIUM',
-            reference_id=pr.transaction_id,
-            ip_address=_get_client_ip(request),
-        )
+        if pr.approval_request:
+            approval_request = pr.approval_request
+            approval_request.payload = payload
+            approval_request.description = pr.purpose
+            approval_request.title = f"PR Non Trade - {pr.transaction_id}"
+            approval_request.status = ApprovalRequest.Status.IN_PROGRESS
+            approval_request.current_step = 1
+            approval_request.save(update_fields=['payload', 'description', 'title', 'status', 'current_step', 'updated_at'])
 
-        pr.approval_request = approval_request
-        pr.save(update_fields=['approval_request'])
+            # Reset steps back to step 1 waiting
+            steps = approval_request.steps.all().order_by('step_order')
+            for s in steps:
+                if s.step_order == 1:
+                    s.status = ApprovalStep.StepStatus.WAITING
+                else:
+                    s.status = ApprovalStep.StepStatus.PENDING
+                s.comments = ''
+                s.acted_at = None
+                s.save(update_fields=['status', 'comments', 'acted_at'])
+
+            # Add AuditLog
+            AuditLog.objects.create(
+                request=approval_request,
+                actor=user,
+                action=AuditLog.Action.SUBMITTED,
+                details=f"PR Form telah direvisi dan disubmit ulang oleh pemohon ({user.get_full_name() or user.username}).",
+                ip_address=_get_client_ip(request),
+                payload_snapshot=approval_request.payload,
+            )
+
+            step1 = steps.filter(step_order=1).first()
+            if step1:
+                transaction.on_commit(lambda: email_service.send_step_notification(step1))
+        else:
+            approval_request = WorkflowEngine.submit_request(
+                module_code='PR_NON_TRADE',
+                workflow_id=10,
+                requester=user,
+                title=f"PR Non Trade - {pr.transaction_id}",
+                payload=payload,
+                description=pr.purpose,
+                priority='MEDIUM',
+                reference_id=pr.transaction_id,
+                ip_address=_get_client_ip(request),
+            )
+            pr.approval_request = approval_request
+            pr.save(update_fields=['approval_request'])
 
         return Response({
             'success': True,

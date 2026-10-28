@@ -18,6 +18,7 @@ VALID_TRANSITIONS = {
     ApprovalRequest.Status.IN_PROGRESS: [
         ApprovalRequest.Status.APPROVED,
         ApprovalRequest.Status.REJECTED,
+        ApprovalRequest.Status.REVISED,
     ],
     ApprovalRequest.Status.REJECTED: [
         ApprovalRequest.Status.REVISED,

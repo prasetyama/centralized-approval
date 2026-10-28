@@ -357,12 +357,14 @@ export const ApprovalDetailPage = () => {
         return keys.includes('quotation');
     });
 
+    const isBeforeQuotationStep = Boolean(
+        activeStep && (!quotationStep || activeStep.step_order <= quotationStep.step_order)
+    );
+
     const canRevise = Boolean(
         isApprover &&
         detail?.status === 'IN_PROGRESS' &&
-        quotationStep &&
-        activeStep &&
-        activeStep.step_order > quotationStep.step_order
+        activeStep
     );
 
     const lastRevisedLog = detail?.audit_logs?.find((log: any) => log.action === 'REVISED');
@@ -419,11 +421,15 @@ export const ApprovalDetailPage = () => {
                 </div>
             </div>
 
-            {detail?.status === 'IN_PROGRESS' && lastRevisedLog && quotationStep && activeStep?.step_order === quotationStep.step_order && (
+            {((detail?.status === 'IN_PROGRESS' && quotationStep && activeStep?.step_order === quotationStep.step_order) || detail?.status === 'REVISED') && lastRevisedLog && (
                 <div className="rounded-xl border border-amber-200 bg-amber-50/80 p-4 text-amber-900 shadow-sm flex items-start gap-3 animate-in fade-in">
                     <RotateCcw size={20} className="text-amber-600 shrink-0 mt-0.5" />
                     <div className="space-y-1">
-                        <p className="text-sm font-bold text-amber-900">Perhatian: Pengajuan Memerlukan Revisi Quotation</p>
+                        <p className="text-sm font-bold text-amber-900">
+                            {detail?.status === 'REVISED'
+                                ? 'Perhatian: Pengajuan Memerlukan Revisi dari Pemohon (Requester)'
+                                : 'Perhatian: Pengajuan Memerlukan Revisi Quotation'}
+                        </p>
                         <p className="text-xs text-amber-800 leading-relaxed">{lastRevisedLog.details}</p>
                     </div>
                 </div>
@@ -571,6 +577,7 @@ export const ApprovalDetailPage = () => {
                         isLoading={actionMutation.isPending}
                         canAction={isApprover === true}
                         canRevise={canRevise}
+                        isBeforeQuotationStep={isBeforeQuotationStep}
                         isWatcher={isWatcher}
                         showDlvDateForm={showDlvDateForm}
                         requiredInputs={activeStep?.required_inputs || []}

@@ -166,6 +166,11 @@ export const PRNonTradeListPage: React.FC = () => {
                                                     REJECTED
                                                 </span>
                                             )}
+                                            {(item.status === 'REVISE' || item.status === 'REVISED') && (
+                                                <span className="px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-900 border border-amber-200">
+                                                    REVISED
+                                                </span>
+                                            )}
                                             {item.status === 'CANCELLED' && (
                                                 <span className="px-3 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200">
                                                     CANCELLED
@@ -177,12 +182,12 @@ export const PRNonTradeListPage: React.FC = () => {
                                         </td>
                                         <td className="py-3.5 px-4 text-center">
                                             <div className="flex items-center justify-center gap-1.5">
-                                                {item.status === 'DRAFT' ? (
+                                                {item.status === 'DRAFT' || item.status === 'REVISE' || item.status === 'REVISED' ? (
                                                     <>
                                                         <button
                                                             onClick={() => navigate(`/pr-non-trade/${item.id}/edit`)}
                                                             className="p-2 text-amber-700 hover:bg-amber-50 rounded-lg transition-colors cursor-pointer"
-                                                            title="Edit Draft"
+                                                            title="Edit / Revisi Pengajuan"
                                                         >
                                                             <Edit3 size={17} />
                                                         </button>

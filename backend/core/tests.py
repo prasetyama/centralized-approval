@@ -504,6 +504,111 @@ class WorkflowEngineOrgStructureTest(TestCase):
         self.assertTrue(response.data.get('success'))
         self.assertEqual(response.data.get('data', {}).get('current_step'), 1)
 
+    def test_revise_step_before_quotation_pr_form(self):
+        """Test revising PR Form at a step before quotation upload and resubmitting."""
+        from core.models import PRNonTrade, PRNonTradeItem, Module
+        from rest_framework.test import APIClient
+
+        pr_module, _ = Module.objects.get_or_create(code='PR_NON_TRADE', defaults={'name': 'PR Non Trade', 'is_active': True})
+        wf = WorkflowDefinition.objects.create(
+            name='PR Review & Quotation WF',
+            module=pr_module,
+            is_active=True
+        )
+        WorkflowStepDefinition.objects.create(
+            workflow=wf,
+            step_order=1,
+            name='Dept Review',
+            approver_type='USER',
+            user_required=self.manager
+        )
+        WorkflowStepDefinition.objects.create(
+            workflow=wf,
+            step_order=2,
+            name='Purchasing Submission Quotation',
+            approver_type='USER',
+            user_required=self.dept_head,
+            required_inputs=['quotation']
+        )
+
+        # 1. Create and submit PRNonTrade
+        pr = PRNonTrade.objects.create(
+            transaction_id='PR/HO/NT/2026/000099',
+            requestor=self.staff,
+            requestor_name='Staff User',
+            purpose='Pengadaan Laptop Dev',
+            status='SUBMITTED'
+        )
+        PRNonTradeItem.objects.create(
+            pr_non_trade=pr,
+            item_order=1,
+            goods_name='Laptop 16GB',
+            quantity=2
+        )
+
+        req = WorkflowEngine.submit_request(
+            module_code='PR_NON_TRADE',
+            workflow_id=wf.id,
+            requester=self.staff,
+            title="PR Non Trade - PR/HO/NT/2026/000099",
+            payload={"transaction_id": pr.transaction_id, "purpose": pr.purpose},
+            reference_id=pr.transaction_id
+        )
+        pr.approval_request = req
+        pr.save()
+
+        self.assertEqual(req.current_step, 1)
+        self.assertEqual(pr.status, 'SUBMITTED')
+
+        # 2. Dept Review (manager) performs revise from Step 1
+        WorkflowEngine.revise_step(
+            req.id,
+            self.manager,
+            comments="Spesifikasi RAM perlu dinaikkan ke 32GB"
+        )
+
+        pr.refresh_from_db()
+        req.refresh_from_db()
+
+        # PR status becomes REVISE
+        self.assertEqual(pr.status, 'REVISE')
+        self.assertEqual(req.status, 'REVISED')
+        self.assertEqual(req.current_step, 1)
+
+        # AuditLog recorded
+        audit = AuditLog.objects.filter(request=req, action=AuditLog.Action.REVISED).latest('id')
+        self.assertIn('REVISE', audit.details)
+        self.assertIn('32GB', audit.details)
+
+        # 3. Requestor resubmits the edited PR form via API
+        client = APIClient()
+        client.force_authenticate(user=self.staff)
+        res = client.post(
+            '/api/v1/pr-non-trade/submit/',
+            {
+                'id': pr.id,
+                'purpose': 'Pengadaan Laptop Dev 32GB',
+                'items': [
+                    {'goods_name': 'Laptop 32GB', 'quantity': 2, 'unit': 'UNIT'}
+                ]
+            },
+            format='json'
+        )
+        self.assertEqual(res.status_code, 200)
+
+        pr.refresh_from_db()
+        req.refresh_from_db()
+
+        self.assertEqual(pr.status, 'SUBMITTED')
+        self.assertEqual(req.status, 'IN_PROGRESS')
+        self.assertEqual(req.current_step, 1)
+        self.assertEqual(req.steps.get(step_order=1).status, 'WAITING')
+        self.assertEqual(req.payload.get('purpose'), 'Pengadaan Laptop Dev 32GB')
+
+        # AuditLog recorded for resubmission
+        resubmit_audit = AuditLog.objects.filter(request=req, action=AuditLog.Action.SUBMITTED).latest('id')
+        self.assertIn('disubmit ulang', resubmit_audit.details)
+
 
 class CCEmailConfigTest(TestCase):
     def setUp(self):
