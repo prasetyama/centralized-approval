@@ -313,11 +313,8 @@ export const AdminOrgStructurePage = () => {
                 <div>
                     <h1 className="text-2xl font-bold tracking-tight text-slate-900 flex items-center gap-2.5">
                         <FolderTree className="text-indigo-600" size={28} />
-                        Master Organization Structure & Approvers
+                        Master Organization Structure & Approval
                     </h1>
-                    <p className="mt-1 text-slate-500 text-sm">
-                        Kelola struktur Departemen beserta hirarki persetujuan (Approver 1, 2, 3), lalu tambahkan requestor untuk alur otomatis <strong>Request Department Approval</strong>.
-                    </p>
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2.5">
@@ -424,11 +421,8 @@ export const AdminOrgStructurePage = () => {
                     <div className="p-4 bg-slate-50/70 border-b border-slate-200/80 flex items-center justify-between">
                         <div>
                             <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                                Daftar Departemen & Approver Bertingkat ({filteredDepartments.length} Departemen)
+                                Daftar Departemen & Approval Bertingkat ({filteredDepartments.length} Departemen)
                             </span>
-                            <p className="text-xs text-slate-500 mt-0.5">
-                                Approver 1 (SPV/Lvl 1) → Approver 2 (Dept Head/Lvl 2) → Approver 3 (Director/Lvl 3)
-                            </p>
                         </div>
                         <Button onClick={openAddDept} size="sm" className="gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-xs font-semibold">
                             <Plus size={14} /> Tambah Departemen

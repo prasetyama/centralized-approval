@@ -293,7 +293,7 @@ class WorkflowEngine:
 
                 chain.append({
                     'user': app_user,
-                    'title': f"{dept.name} - {label}",
+                    'title': f"{label}",
                     'level_order': lvl,
                     'is_dept_head': (lvl == highest_level or (lvl == 2 and not dept.approver_3)),
                 })
