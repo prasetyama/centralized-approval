@@ -160,12 +160,16 @@ class UserListSerializer(serializers.ModelSerializer):
     role_name = serializers.SerializerMethodField()
     role_code = serializers.SerializerMethodField()
     division_name = serializers.SerializerMethodField()
+    company = serializers.SerializerMethodField()
+    company_id = serializers.SerializerMethodField()
+    company_code = serializers.SerializerMethodField()
 
     class Meta:
         model = User
         fields = [
             'id', 'username', 'email', 'first_name', 'last_name',
-            'role', 'role_name', 'role_code', 'division', 'division_name', 'department', 'department_id', 'is_approver', 'is_active',
+            'role', 'role_name', 'role_code', 'division', 'division_name', 'department', 'department_id',
+            'company', 'company_id', 'company_code', 'is_approver', 'is_active',
             'is_superuser', 'is_staff',
         ]
 
@@ -205,12 +209,42 @@ class UserListSerializer(serializers.ModelSerializer):
                 return str(obj.division)
         return None
 
+    def _get_user_company_obj(self, obj):
+        try:
+            if hasattr(obj, 'company_ref') and obj.company_ref:
+                return obj.company_ref
+            org = obj.org_positions.select_related('company', 'department__company').first()
+            if org:
+                if org.company:
+                    return org.company
+                if org.department and org.department.company:
+                    return org.department.company
+        except Exception:
+            pass
+        return None
+
+    def get_company(self, obj):
+        comp = self._get_user_company_obj(obj)
+        return comp.name if comp else (getattr(obj, 'company', '') or '')
+
+    def get_company_id(self, obj):
+        comp = self._get_user_company_obj(obj)
+        return comp.id if comp else getattr(obj, 'company_id', None)
+
+    def get_company_code(self, obj):
+        comp = self._get_user_company_obj(obj)
+        return comp.code if comp else (getattr(obj, 'company_code', '') or '')
+
 
 class UserDetailSerializer(serializers.ModelSerializer):
     """Full user serializer for detail/create/update views."""
     role = serializers.IntegerField(write_only=True, required=False, allow_null=True)
     role_details = serializers.SerializerMethodField()
     division_details = serializers.SerializerMethodField()
+    company = serializers.SerializerMethodField()
+    company_id = serializers.SerializerMethodField()
+    company_code = serializers.SerializerMethodField()
+    company_details = serializers.SerializerMethodField()
     role_name = serializers.SerializerMethodField()
     role_code = serializers.SerializerMethodField()
     roles = serializers.SerializerMethodField()
@@ -220,7 +254,8 @@ class UserDetailSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             'id', 'username', 'email', 'first_name', 'last_name',
-            'role', 'role_name', 'role_code', 'role_details', 'roles', 'division', 'division_details', 'department', 'department_id', 'phone',
+            'role', 'role_name', 'role_code', 'role_details', 'roles', 'division', 'division_details',
+            'department', 'department_id', 'company', 'company_id', 'company_code', 'company_details', 'phone',
             'is_approver', 'is_active', 'is_superuser', 'is_staff', 'password', 'date_joined',
         ]
         read_only_fields = ['date_joined']
@@ -297,6 +332,36 @@ class UserDetailSerializer(serializers.ModelSerializer):
             except Exception:
                 return {"code": obj.division, "name": str(obj.division)}
         return None
+
+    def _get_user_company_obj(self, obj):
+        try:
+            if hasattr(obj, 'company_ref') and obj.company_ref:
+                return obj.company_ref
+            org = obj.org_positions.select_related('company', 'department__company').first()
+            if org:
+                if org.company:
+                    return org.company
+                if org.department and org.department.company:
+                    return org.department.company
+        except Exception:
+            pass
+        return None
+
+    def get_company(self, obj):
+        comp = self._get_user_company_obj(obj)
+        return comp.name if comp else (getattr(obj, 'company', '') or '')
+
+    def get_company_id(self, obj):
+        comp = self._get_user_company_obj(obj)
+        return comp.id if comp else getattr(obj, 'company_id', None)
+
+    def get_company_code(self, obj):
+        comp = self._get_user_company_obj(obj)
+        return comp.code if comp else (getattr(obj, 'company_code', '') or '')
+
+    def get_company_details(self, obj):
+        comp = self._get_user_company_obj(obj)
+        return CompanySerializer(comp).data if comp else None
 
     def create(self, validated_data):
         password = validated_data.pop('password', None)

@@ -174,6 +174,43 @@ class User(AbstractUser):
         org = self.org_positions.select_related('department').first()
         return org.department if org else None
 
+    @property
+    def company(self):
+        org = self.org_positions.select_related('company', 'department__company').first()
+        if org:
+            if org.company:
+                return org.company.name
+            if org.department and org.department.company:
+                return org.department.company.name
+        return ''
+
+    @property
+    def company_id(self):
+        org = self.org_positions.select_related('company', 'department__company').first()
+        if org:
+            if org.company_id:
+                return org.company_id
+            if org.department and org.department.company_id:
+                return org.department.company_id
+        return None
+
+    @property
+    def company_code(self):
+        org = self.org_positions.select_related('company', 'department__company').first()
+        if org:
+            if org.company:
+                return org.company.code
+            if org.department and org.department.company:
+                return org.department.company.code
+        return ''
+
+    @property
+    def company_ref(self):
+        org = self.org_positions.select_related('company', 'department__company').first()
+        if org:
+            return org.company or (org.department.company if org.department else None)
+        return None
+
     def get_department_ids(self):
         """Returns a list of department IDs associated with this user."""
         dept_ids = set(self.org_positions.filter(department__isnull=False).values_list('department_id', flat=True))
@@ -1189,7 +1226,7 @@ class PRNonTradeItem(models.Model):
     goods_code = models.CharField(max_length=100)
     goods_name = models.CharField(max_length=255)
     unit = models.CharField(max_length=50, default='PCS')
-    quantity = models.DecimalField(max_digits=12, decimal_places=2, default=1.0)
+    quantity = models.IntegerField(default=1)
     remark = models.TextField(blank=True, default='')
 
     class Meta:

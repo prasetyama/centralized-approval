@@ -920,7 +920,11 @@ class RoleViewSet(viewsets.ModelViewSet):
 
 class UserViewSet(viewsets.ModelViewSet):
     """CRUD for Users."""
-    queryset = User.objects.prefetch_related('user_roles__role').all()
+    queryset = User.objects.prefetch_related(
+        'user_roles__role',
+        'org_positions__company',
+        'org_positions__department__company'
+    ).all()
     permission_classes = [IsAuthenticated]
     pagination_class = StandardResultsSetPagination
     search_fields = ['username', 'first_name', 'last_name', 'email']
@@ -1209,13 +1213,8 @@ class PRNonTradeViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         user = self.request.user
-        dept = ''
-        comp = ''
-        if hasattr(user, 'org_positions'):
-            org = user.org_positions.first()
-            if org:
-                dept = org.department.name if org.department else ''
-                comp = org.company.name if org.company else ''
+        dept = user.department if hasattr(user, 'department') else ''
+        comp = user.company if hasattr(user, 'company') else ''
 
         serializer.save(
             requestor=user,
@@ -1234,14 +1233,10 @@ class PRNonTradeViewSet(viewsets.ModelViewSet):
         code_name = request.data.get('code_name') or 'HO'
 
         user = request.user
-        dept = ''
-        comp = ''
-        if hasattr(user, 'org_positions'):
-            org = user.org_positions.first()
-            if org:
-                dept = org.department.name if org.department else ''
-                comp = org.company.name if org.company else ''
-                code_name = org.company.code or code_name
+        dept = user.department if hasattr(user, 'department') else ''
+        comp = user.company if hasattr(user, 'company') else ''
+        if hasattr(user, 'company_code') and user.company_code:
+            code_name = user.company_code
 
         if pr_id:
             try:
@@ -1299,14 +1294,10 @@ class PRNonTradeViewSet(viewsets.ModelViewSet):
         code_name = request.data.get('code_name') or 'HO'
 
         user = request.user
-        dept = ''
-        comp = ''
-        if hasattr(user, 'org_positions'):
-            org = user.org_positions.first()
-            if org:
-                dept = org.department.name if org.department else ''
-                comp = org.company.name if org.company else ''
-                code_name = org.company.code or code_name
+        dept = user.department if hasattr(user, 'department') else ''
+        comp = user.company if hasattr(user, 'company') else ''
+        if hasattr(user, 'company_code') and user.company_code:
+            code_name = user.company_code
 
         if pr_id:
             try:
