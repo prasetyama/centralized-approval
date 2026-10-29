@@ -5,8 +5,9 @@ Unified database schema for the Centralized Approval Workflow engine.
 Includes all models: Module, Role, User, WorkflowDefinition, WorkflowStepDefinition,
 ApprovalRequest, ApprovalStep, and AuditLog.
 """
-from django.db import models
+from django.db import models, transaction
 from django.contrib.auth.models import AbstractUser
+from django.utils import timezone
 
 
 class Division(models.Model):
@@ -51,26 +52,53 @@ class Company(models.Model):
 class Department(models.Model):
     """
     Department structure used for contextual and organizational approval routing.
+    Configured with a 1 to 3 tier approval hierarchy (Approver 1, Approver 2, Approver 3).
     """
     name = models.CharField(max_length=100, unique=True, help_text="Department name (e.g., 'Finance', 'Marketing', 'Procurement')")
     code = models.CharField(max_length=50, unique=True, help_text="Unique code (e.g., 'DEPT_FIN', 'DEPT_MKT')")
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name='departments',
+        null=True,
+        blank=True,
+        help_text="Linked Company instance"
+    )
+    approver_1 = models.ForeignKey(
+        'User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='dept_approver_1',
+        help_text="First level approver (e.g. Supervisor / Section Head)"
+    )
+    approver_2 = models.ForeignKey(
+        'User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='dept_approver_2',
+        help_text="Second level approver (e.g. Department Head)"
+    )
+    approver_3 = models.ForeignKey(
+        'User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='dept_approver_3',
+        help_text="Third level approver (e.g. Division Head / Director)"
+    )
     dept_head = models.ForeignKey(
         'User',
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
         related_name='headed_departments',
-        help_text="User designated as the Head of this Department"
+        help_text="User designated as the Head of this Department (defaults to Approver 2 or 1)"
     )
     description = models.TextField(blank=True, default='')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    company = models.ForeignKey(
-        Company,
-        on_delete=models.CASCADE,
-        related_name='departments',
-        help_text="Linked Company instance"
-    )
 
     class Meta:
         db_table = 'aw_department'
@@ -78,6 +106,20 @@ class Department(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.code})"
+
+    def save(self, *args, **kwargs):
+        if not self.dept_head and (self.approver_2 or self.approver_1):
+            self.dept_head = self.approver_2 or self.approver_1
+        super().save(*args, **kwargs)
+
+    def get_approvers(self):
+        """Returns ordered list of approvers [approver_1, approver_2, approver_3] excluding None."""
+        approvers = []
+        for app in [self.approver_1, self.approver_2, self.approver_3]:
+            if app and app not in approvers:
+                approvers.append(app)
+        return approvers
+
 
 
 class Role(models.Model):
@@ -123,27 +165,85 @@ class User(AbstractUser):
         return org.department.name if org and org.department else ''
 
     @property
+    def department_id(self):
+        org = self.org_positions.select_related('department').first()
+        return org.department.id if org and org.department else None
+
+    @property
     def department_ref(self):
         org = self.org_positions.select_related('department').first()
         return org.department if org else None
 
+    @property
+    def company(self):
+        org = self.org_positions.select_related('company', 'department__company').first()
+        if org:
+            if org.company:
+                return org.company.name
+            if org.department and org.department.company:
+                return org.department.company.name
+        return ''
+
+    @property
+    def company_id(self):
+        org = self.org_positions.select_related('company', 'department__company').first()
+        if org:
+            if org.company_id:
+                return org.company_id
+            if org.department and org.department.company_id:
+                return org.department.company_id
+        return None
+
+    @property
+    def company_code(self):
+        org = self.org_positions.select_related('company', 'department__company').first()
+        if org:
+            if org.company:
+                return org.company.code
+            if org.department and org.department.company:
+                return org.department.company.code
+        return ''
+
+    @property
+    def company_ref(self):
+        org = self.org_positions.select_related('company', 'department__company').first()
+        if org:
+            return org.company or (org.department.company if org.department else None)
+        return None
+
+    def get_department_ids(self):
+        """Returns a list of department IDs associated with this user."""
+        dept_ids = set(self.org_positions.filter(department__isnull=False).values_list('department_id', flat=True))
+        dept_names = set(self.user_roles.exclude(dept='').values_list('dept', flat=True))
+        dept_prop = self.department
+        if dept_prop:
+            dept_names.add(dept_prop)
+        if dept_names:
+            extra_ids = Department.objects.filter(
+                models.Q(name__in=dept_names) | models.Q(code__in=dept_names)
+            ).values_list('id', flat=True)
+            dept_ids.update(extra_ids)
+        return list(dept_ids)
+
 
 class OrganizationStructure(models.Model):
     """
-    Master Organization Structure.
-    Maps employees (User) to Company, Department, Position Title, Hierarchy Level, and Direct Reports To (Manager/Head).
+    Master Organization Structure / Department Member Mapping.
+    Maps employees (User) to Department (and optional Company/Position Title).
     """
     company = models.ForeignKey(
         Company,
         on_delete=models.CASCADE,
         related_name='org_structures',
+        null=True,
+        blank=True,
         help_text="Company this node belongs to"
     )
     user = models.ForeignKey(
         'User',
         on_delete=models.CASCADE,
         related_name='org_positions',
-        help_text="Employee user"
+        help_text="Employee user"   
     )
     department = models.ForeignKey(
         Department,
@@ -151,7 +251,7 @@ class OrganizationStructure(models.Model):
         related_name='org_structures',
         help_text="Department within the company"
     )
-    position_title = models.CharField(max_length=150, help_text="e.g. Staff Marketing, Manager Marketing, Head of Department")
+    position_title = models.CharField(max_length=150, blank=True, default='Staff / Requestor', help_text="e.g. Staff Marketing, Manager Marketing, Head of Department")
     level_order = models.PositiveIntegerField(default=1, help_text="Hierarchy level: 1=Staff, 2=Manager, 3=Dept Head, 4=Director")
     reports_to = models.ForeignKey(
         'User',
@@ -159,7 +259,7 @@ class OrganizationStructure(models.Model):
         null=True,
         blank=True,
         related_name='direct_reports',
-        help_text="Direct manager or department head to report to"
+        help_text="Direct manager or department head to report to (optional)"
     )
     is_dept_head = models.BooleanField(default=False, help_text="True if this node is the Department Head")
     created_at = models.DateTimeField(auto_now_add=True)
@@ -168,10 +268,17 @@ class OrganizationStructure(models.Model):
     class Meta:
         db_table = 'aw_organization_structure'
         unique_together = ['company', 'user', 'department']
-        ordering = ['company', 'department', 'level_order']
+        ordering = ['department', 'level_order']
 
     def __str__(self):
-        return f"[{self.company.code}] {self.user.username} - {self.position_title} ({self.department.name})"
+        comp = f"[{self.company.code}] " if self.company else ""
+        return f"{comp}{self.user.username} - {self.position_title} ({self.department.name})"
+
+    def save(self, *args, **kwargs):
+        if not self.company_id and self.department and self.department.company_id:
+            self.company = self.department.company
+        super().save(*args, **kwargs)
+
 
 
 
@@ -346,6 +453,7 @@ class WorkflowStepDefinition(models.Model):
         FINANCE_DEPT_HEAD = 'FINANCE_DEPT_HEAD', 'Finance Dept Head / Team'
         PURCH_DEPT_HEAD = 'PURCH_DEPT_HEAD', 'Purchasing Approval'
         TARGET_DEPT_ROLE = 'TARGET_DEPT_ROLE', 'Target Dept Role'
+        REQUESTOR = 'REQUESTOR', 'Requestor'
 
     workflow = models.ForeignKey(
         WorkflowDefinition,
@@ -419,6 +527,8 @@ class WorkflowStepDefinition(models.Model):
 
     def clean(self):
         from django.core.exceptions import ValidationError
+        if self.approver_type:
+            self.approver_type = str(self.approver_type).upper()
         if self.approver_type == self.ApproverType.ROLE and not self.role_required:
             raise ValidationError("role_required was not provided for ROLE-based step.")
         if self.approver_type == self.ApproverType.USER and not self.user_required:
@@ -435,6 +545,8 @@ class WorkflowStepDefinition(models.Model):
             approver = self.role_required.code if self.role_required else "No Role"
         elif self.approver_type == self.ApproverType.USER:
             approver = self.user_required.username if self.user_required else "No User"
+        elif self.approver_type == self.ApproverType.REQUESTOR:
+            approver = "Requestor"
         else:
             approver = self.approver_type
         return f"Step {self.step_order}: {self.name} ({approver})"
@@ -651,6 +763,8 @@ class ApprovalStep(models.Model):
             approver = f"Role: {self.role_required.code}"
         elif self.approver_type == WorkflowStepDefinition.ApproverType.USER and self.user_required:
             approver = f"User: {self.user_required.username}"
+        elif self.approver_type == WorkflowStepDefinition.ApproverType.REQUESTOR:
+            approver = "Requestor"
             
         return f"Step {self.step_order}: {self.name} ({approver}) - {self.status}"
 
@@ -902,5 +1016,225 @@ class CCEmailConfig(models.Model):
     def __str__(self):
         ship_to_str = f" [{self.ship_to}]" if self.ship_to else ""
         return f"{self.email} [{self.subject}]{ship_to_str} ({'Active' if self.is_active else 'Inactive'})"
+
+
+# ─────────────────────────────────────────────
+# Master Data Models for PR Non-Trade
+# ─────────────────────────────────────────────
+
+class MasterAsset(models.Model):
+    """Master Asset data table for Asset No lookup."""
+    code = models.CharField(max_length=50, unique=True, help_text="Asset Code / Tag Number")
+    name = models.CharField(max_length=255, help_text="Asset Name / Description")
+    category = models.CharField(max_length=100, blank=True, default='')
+    description = models.TextField(blank=True, default='')
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'aw_master_asset'
+        ordering = ['code']
+
+    def __str__(self):
+        return f"{self.code} - {self.name}"
+
+
+class MasterWBS(models.Model):
+    """Master WBS data table for WBS No lookup."""
+    code = models.CharField(max_length=50, unique=True, help_text="WBS Element Code")
+    description = models.CharField(max_length=255, help_text="WBS Description")
+    project_name = models.CharField(max_length=255, blank=True, default='')
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'aw_master_wbs'
+        ordering = ['code']
+
+    def __str__(self):
+        return f"{self.code} - {self.description}"
+
+
+class MasterEquipment(models.Model):
+    """Master Equipment data table for Equipment Name lookup."""
+    code = models.CharField(max_length=50, unique=True, help_text="Equipment Code")
+    name = models.CharField(max_length=255, help_text="Equipment Name")
+    category = models.CharField(max_length=100, blank=True, default='')
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'aw_master_equipment'
+        ordering = ['name']
+
+    def __str__(self):
+        return f"{self.code} - {self.name}"
+
+
+class MasterGoods(models.Model):
+    """Master Goods data table for Goods Code lookup."""
+    code = models.CharField(max_length=50, unique=True, help_text="Goods Code")
+    name = models.CharField(max_length=255, help_text="Goods Name")
+    unit = models.CharField(max_length=50, default='PCS')
+    category = models.CharField(max_length=100, blank=True, default='')
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'aw_master_goods'
+        ordering = ['name']
+
+    def __str__(self):
+        return f"{self.code} - {self.name} ({self.unit})"
+
+
+# ─────────────────────────────────────────────
+# PR Non-Trade Models & Running Number Sequence
+# ─────────────────────────────────────────────
+
+class PRNonTradeSequence(models.Model):
+    """Sequence counter for generating PR Non-Trade running numbers per year and company/code_name."""
+    code_name = models.CharField(max_length=50)
+    year = models.IntegerField()
+    last_number = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        db_table = 'aw_pr_non_trade_sequence'
+        unique_together = ['code_name', 'year']
+
+    def __str__(self):
+        return f"{self.code_name}/{self.year}: {self.last_number}"
+
+
+class PRNonTrade(models.Model):
+    """
+    PR Non-Trade Header Model to save form data (Draft and Submitted).
+    Format: PR/{code_name}/NT/{year}/{6_digit_running_number}
+    """
+    STATUS_CHOICES = [
+        ('DRAFT', 'Draft'),
+        ('SUBMITTED', 'Submitted'),
+        ('REVISE', 'Revise'),
+        ('CANCELLED', 'Cancelled'),
+    ]
+
+    GOODS_SERVICE_CHOICES = [
+        ('lumpsum', 'Lumpsum'),
+        ('not_lumpsum', 'Not Lumpsum'),
+    ]
+
+    PURCHASE_TYPE_CHOICES = [
+        ('asset', 'Asset'),
+        ('non_asset', 'Non Asset'),
+    ]
+
+    ASSET_TYPE_CHOICES = [
+        ('non_wbs', 'Non WBS'),
+        ('wbs', 'WBS'),
+    ]
+
+    transaction_id = models.CharField(
+        max_length=100,
+        unique=True,
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="Format: PR/{code_name}/NT/{year}/{6_digit_running_number}"
+    )
+    transaction_date = models.DateField(default=timezone.localdate)
+    requestor = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='pr_non_trade_requests'
+    )
+    requestor_name = models.CharField(max_length=255)
+    requester_department = models.CharField(max_length=255, blank=True, default='')
+    requester_company = models.CharField(max_length=255, blank=True, default='')
+
+    # General Data
+    purpose = models.TextField(blank=True, default='')
+    goods_service_type = models.CharField(
+        max_length=20,
+        choices=GOODS_SERVICE_CHOICES,
+        default='not_lumpsum'
+    )
+    purchase_type = models.CharField(
+        max_length=20,
+        choices=PURCHASE_TYPE_CHOICES,
+        default='non_asset'
+    )
+    car_tbr_no = models.CharField(max_length=100, blank=True, default='')
+    asset_type = models.CharField(
+        max_length=20,
+        choices=ASSET_TYPE_CHOICES,
+        default='non_wbs'
+    )
+    asset_no = models.CharField(max_length=100, blank=True, default='')
+    wbs_no = models.CharField(max_length=100, blank=True, default='')
+    equipment_name = models.CharField(max_length=255, blank=True, default='')
+
+    submission_remark = models.TextField(blank=True, default='')
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='DRAFT'
+    )
+    approval_request = models.ForeignKey(
+        ApprovalRequest,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='pr_non_trade_headers'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'aw_pr_non_trade'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.transaction_id or 'Draft'} - {self.requestor_name} ({self.status})"
+
+    @classmethod
+    def generate_transaction_id(cls, code_name='HO', date_obj=None):
+        if not date_obj:
+            date_obj = timezone.localdate()
+        year = date_obj.year
+        code_clean = (code_name or 'HO').upper().replace(' ', '_')
+        
+        with transaction.atomic():
+            seq, _ = PRNonTradeSequence.objects.select_for_update().get_or_create(
+                code_name=code_clean,
+                year=year,
+                defaults={'last_number': 0}
+            )
+            seq.last_number += 1
+            seq.save()
+            running_num = f"{seq.last_number:06d}"
+            return f"PR/{code_clean}/NT/{year}/{running_num}"
+
+
+class PRNonTradeItem(models.Model):
+    """Detail items for PR Non-Trade form."""
+    pr_non_trade = models.ForeignKey(
+        PRNonTrade,
+        on_delete=models.CASCADE,
+        related_name='items'
+    )
+    item_order = models.PositiveIntegerField(default=1)
+    goods_code = models.CharField(max_length=100)
+    goods_name = models.CharField(max_length=255)
+    unit = models.CharField(max_length=50, default='PCS')
+    quantity = models.IntegerField(default=1)
+    remark = models.TextField(blank=True, default='')
+
+    class Meta:
+        db_table = 'aw_pr_non_trade_item'
+        ordering = ['item_order', 'id']
+
+    def __str__(self):
+        return f"[{self.goods_code}] {self.goods_name} x {self.quantity} {self.unit}"
+
 
 

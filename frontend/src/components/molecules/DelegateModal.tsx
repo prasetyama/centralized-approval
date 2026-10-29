@@ -12,7 +12,6 @@ interface DelegateModalProps {
     isOpen: boolean;
     onClose: () => void;
     onSubmit: (newAssigneeId: number, comments: string) => Promise<void>;
-    roleRequiredId: number;
     roleName: string;
     isLoading?: boolean;
 }
@@ -21,7 +20,6 @@ export const DelegateModal = ({
     isOpen,
     onClose,
     onSubmit,
-    roleRequiredId,
     roleName,
     isLoading: isSubmitting
 }: DelegateModalProps) => {
@@ -30,14 +28,14 @@ export const DelegateModal = ({
     const [error, setError] = useState<string | null>(null);
 
     const { data: usersData, isLoading: isLoadingUsers } = useQuery({
-        queryKey: ['users-by-role', roleRequiredId],
+        queryKey: ['users-by-role', roleName],
         queryFn: async () => {
             const response: any = await api.get('/admin/users', {
-                params: { user_roles__role: roleRequiredId, is_active: true, is_approver: true, page_size: 1000 }
+                params: { role_names__icontains: roleName, is_active: true, is_approver: true, page_size: 1000 }
             });
             return response;
         },
-        enabled: isOpen && !!roleRequiredId,
+        enabled: isOpen && !!roleName,
     });
 
     const handleConfirm = async () => {

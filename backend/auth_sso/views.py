@@ -46,7 +46,11 @@ def login_view(request):
         )
 
     from core.models import User
-    user = User.objects.prefetch_related('user_roles__role').get(id=result.user_id)
+    user = User.objects.prefetch_related(
+        'user_roles__role',
+        'org_positions__company',
+        'org_positions__department__company'
+    ).get(id=result.user_id)
 
     return Response({
         'success': True,

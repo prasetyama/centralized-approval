@@ -1,6 +1,6 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Clock, History } from 'lucide-react';
+import { ArrowLeft, Clock, History, RotateCcw } from 'lucide-react';
 import { useState } from 'react';
 import api from '@/services/api';
 import { Button } from '@/components/atoms/Button';
@@ -19,6 +19,182 @@ import { AddWatcherModal } from '@/components/molecules/AddWatcherModal';
 import { ConfirmationModal } from '@/components/molecules/ConfirmationModal';
 import { WatcherAvatarGroup } from '@/components/molecules/WatcherAvatarGroup';
 import { ActivityTimeline } from '@/components/organisms/ActivityTimeline';
+import { AttachmentList, AttachmentItem } from '@/components/molecules/AttachmentList';
+
+const extractAttachmentsFromDetail = (detail: any): AttachmentItem[] => {
+    if (!detail) return [];
+    const items: AttachmentItem[] = [];
+    const seenKeys = new Set<string>();
+    let counter = 1;
+
+    const processItem = (rawItem: any, sourceLabel: string) => {
+        if (!rawItem) return;
+
+        if (Array.isArray(rawItem)) {
+            rawItem.forEach((sub) => processItem(sub, sourceLabel));
+            return;
+        }
+
+        if (typeof rawItem === 'object' && rawItem !== null) {
+            if (rawItem.name || rawItem.data || rawItem.url || rawItem.file_path) {
+                const fileData = rawItem.data || rawItem.base64 || '';
+                const fileUrl = rawItem.url || rawItem.file_path || '';
+                const fileName = rawItem.name || rawItem.filename || `Attachment-${counter}`;
+                const fileSize = rawItem.size || '';
+
+                const key = fileData ? fileData.slice(0, 300) : fileUrl ? fileUrl : `${fileName}_${fileSize}`;
+                if (seenKeys.has(key)) return;
+                seenKeys.add(key);
+
+                items.push({
+                    id: `att-${counter++}`,
+                    name: fileName,
+                    size: rawItem.size,
+                    type: rawItem.type || rawItem.content_type,
+                    data: fileData || undefined,
+                    url: fileUrl || undefined,
+                    source: sourceLabel,
+                });
+            }
+            return;
+        }
+
+        if (typeof rawItem === 'string' && rawItem.trim()) {
+            const str = rawItem.trim();
+            if (str.startsWith('data:') || str.startsWith('http://') || str.startsWith('https://') || str.startsWith('/media/')) {
+                const key = str.slice(0, 300);
+                if (seenKeys.has(key)) return;
+                seenKeys.add(key);
+
+                let name = `Attachment-${counter}`;
+                if (str.includes('name=')) {
+                    name = str.split('name=')[1].split(';')[0];
+                }
+                items.push({
+                    id: `att-${counter++}`,
+                    name,
+                    data: str.startsWith('data:') ? str : undefined,
+                    url: !str.startsWith('data:') ? str : undefined,
+                    source: sourceLabel,
+                });
+            }
+        }
+    };
+
+    // 1. Process steps first to get specific step source labels
+    if (Array.isArray(detail.steps)) {
+        detail.steps.forEach((step: any) => {
+            if (step.step_data) {
+                const stepLabel = step.name || `Step ${step.step_order}`;
+                if (step.step_data.quotation) {
+                    processItem(step.step_data.quotation, `${stepLabel}`);
+                }
+                if (step.step_data.attachments) {
+                    processItem(step.step_data.attachments, `${stepLabel}`);
+                }
+                if (step.step_data.files) {
+                    processItem(step.step_data.files, `${stepLabel}`);
+                }
+            }
+        });
+    }
+
+    // 2. Process payload (if not already added from a step)
+    if (detail.payload) {
+        if (detail.payload.quotation) processItem(detail.payload.quotation, 'Payload Quotation');
+        if (detail.payload.attachments) processItem(detail.payload.attachments, 'Payload Attachment');
+        if (detail.payload.files) processItem(detail.payload.files, 'Payload File');
+    }
+
+    return items;
+};
+
+const extractAvailableQuotations = (detail: any): any[] => {
+    if (!detail) return [];
+    const list: any[] = [];
+    const seen = new Set<string>();
+
+    const addQuotation = (item: any, sourceLabel?: string) => {
+        if (!item) return;
+        if (Array.isArray(item)) {
+            item.forEach((sub) => addQuotation(sub, sourceLabel));
+            return;
+        }
+        if (typeof item === 'object') {
+            const key = item.name || item.url || item.data || JSON.stringify(item);
+            if (!seen.has(key)) {
+                seen.add(key);
+                list.push({
+                    id: key,
+                    name: item.name || 'Quotation File',
+                    size: item.size || 0,
+                    type: item.type || item.content_type || 'application/octet-stream',
+                    data: item.data,
+                    url: item.url,
+                    source: sourceLabel || 'Purchasing',
+                    raw: item,
+                });
+            }
+        } else if (typeof item === 'string' && item.trim()) {
+            const str = item.trim();
+            if (!seen.has(str)) {
+                seen.add(str);
+                list.push({
+                    id: str,
+                    name: str.includes('/') ? str.split('/').pop() : str,
+                    size: 0,
+                    type: 'application/octet-stream',
+                    url: str.startsWith('http') || str.startsWith('/media') ? str : undefined,
+                    data: str.startsWith('data:') ? str : undefined,
+                    source: sourceLabel || 'Purchasing',
+                    raw: str,
+                });
+            }
+        }
+    };
+
+    // 1. Look in steps step_data (purchasing or earlier steps)
+    if (Array.isArray(detail.steps)) {
+        detail.steps.forEach((step: any) => {
+            if (step.step_data?.quotation) {
+                addQuotation(step.step_data.quotation, step.name || `Step ${step.step_order}`);
+            }
+        });
+    }
+
+    // 2. Look in payload.quotation
+    if (detail.payload?.quotation) {
+        addQuotation(detail.payload.quotation, 'Payload Quotation');
+    }
+
+    return list;
+};
+
+const extractSelectedQuotation = (detail: any): any => {
+    if (!detail) return null;
+    if (detail.payload?.approval_quotation) {
+        return {
+            quotation: detail.payload.approval_quotation,
+            approvedBy: detail.payload.approved_by || 'Pemohon',
+            stepName: 'Payload Data',
+        };
+    }
+    if (Array.isArray(detail.steps)) {
+        for (const step of detail.steps) {
+            if (step.step_data?.approval_quotation) {
+                return {
+                    quotation: step.step_data.approval_quotation,
+                    approvedBy: step.assigned_to_name || step.assignee_name || step.action_by_name || 'Approver',
+                    stepName: step.name || `Step ${step.step_order}`,
+                    actionDate: step.acted_at || step.action_date,
+                    comments: step.comments,
+                };
+            }
+        }
+    }
+    return null;
+};
+
 
 export const ApprovalDetailPage = () => {
     const { id } = useParams();
@@ -134,6 +310,10 @@ export const ApprovalDetailPage = () => {
     const detail = request as any;
     if (!detail) return null;
 
+    const allAttachments = extractAttachmentsFromDetail(detail);
+    const availableQuotations = extractAvailableQuotations(detail);
+    const selectedQuotation = extractSelectedQuotation(detail);
+
     const activeStep = detail?.steps?.find((s: any) => s.step_order === detail.current_step);
 
     const isApprover = (() => {
@@ -142,10 +322,18 @@ export const ApprovalDetailPage = () => {
         if (detail.status !== 'IN_PROGRESS' && detail.status !== 'WAITING') return false;
         if (activeStep.status !== 'WAITING') return false;
 
+        if (user?.is_superuser) return true;
+
         // Use email for matching since user.id is from SSO and activeStep.assigned_to is from local DB
         if (activeStep.assigned_to_email === user?.email) return true;
         if (activeStep.approver_type === 'USER' && activeStep.user_required_email === user?.email) return true;
         if (activeStep.approver_type === 'ROLE' && activeStep.role_required == user?.role) return true;
+        if (activeStep.approver_type === 'REQUESTOR' && (detail?.requester_email === user?.email || activeStep.assigned_to_email === user?.email || detail?.requester === user?.id)) return true;
+        if (activeStep.approver_type === 'TARGET_DEPT_ROLE') {
+            const stepDept = (activeStep.target_department_name || '').trim().toLowerCase();
+            const userDept = (user?.department || '').trim().toLowerCase();
+            if (stepDept && userDept && (stepDept === userDept || stepDept.includes(userDept) || userDept.includes(stepDept))) return true;
+        }
 
         return false;
     })();
@@ -164,6 +352,23 @@ export const ApprovalDetailPage = () => {
 
     const showDlvDateForm = Boolean(isScmStep && isUrgentOrder);
 
+    const quotationStep = detail?.steps?.find((s: any) => {
+        const keys = (s.required_inputs || []).map((i: any) => (typeof i === 'string' ? i : i.key));
+        return keys.includes('quotation');
+    });
+
+    const isBeforeQuotationStep = Boolean(
+        activeStep && (!quotationStep || activeStep.step_order <= quotationStep.step_order)
+    );
+
+    const canRevise = Boolean(
+        isApprover &&
+        detail?.status === 'IN_PROGRESS' &&
+        activeStep
+    );
+
+    const lastRevisedLog = detail?.audit_logs?.find((log: any) => log.action === 'REVISED');
+
     return (
         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -171,10 +376,10 @@ export const ApprovalDetailPage = () => {
                     <Button variant="ghost" size="icon" onClick={() => backToApprovalList()} className="rounded-full">
                         <ArrowLeft size={20} />
                     </Button>
-                    <div>
-                        <div className="flex items-center gap-2">
+                    <div className="flex flex-col w-full gap-2">
+                        <div className="flex flex-col md:flex-row gap-2">
                             <h1 className="text-2xl font-bold text-slate-900">{detail.title}</h1>
-                            <Badge variant={getStatusVariant(detail.status)}>{detail.status}</Badge>
+                            <Badge variant={getStatusVariant(detail.status)} className="w-fit justify-center">{detail.status}</Badge>
                         </div>
                         <p className="text-sm text-slate-500 font-medium">
                             Reference: <span className="text-slate-900 font-bold">{detail.reference_id}</span> •
@@ -183,7 +388,7 @@ export const ApprovalDetailPage = () => {
                     </div>
                 </div>
                 <div className="flex items-center gap-6 flex-row">
-                    {user?.is_superuser || activeStep.assigned_to_email === user?.email && detail.status === 'IN_PROGRESS' && (
+                    {(user?.is_superuser || activeStep.assigned_to_email === user?.email || (activeStep.approver_type === 'TARGET_DEPT_ROLE' && isApprover)) && detail.status === 'IN_PROGRESS' && (
                         <Button
                             variant="outline"
                             className="bg-purple-50 text-purple-600 border-purple-200 hover:bg-purple-100 hover:text-purple-700 font-bold"
@@ -216,12 +421,37 @@ export const ApprovalDetailPage = () => {
                 </div>
             </div>
 
+            {((detail?.status === 'IN_PROGRESS' && quotationStep && activeStep?.step_order === quotationStep.step_order) || detail?.status === 'REVISED') && lastRevisedLog && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50/80 p-4 text-amber-900 shadow-sm flex items-start gap-3 animate-in fade-in">
+                    <RotateCcw size={20} className="text-amber-600 shrink-0 mt-0.5" />
+                    <div className="space-y-1">
+                        <p className="text-sm font-bold text-amber-900">
+                            {detail?.status === 'REVISED'
+                                ? 'Perhatian: Pengajuan Memerlukan Revisi dari Pemohon (Requester)'
+                                : 'Perhatian: Pengajuan Memerlukan Revisi Quotation'}
+                        </p>
+                        <p className="text-xs text-amber-800 leading-relaxed">{lastRevisedLog.details}</p>
+                    </div>
+                </div>
+            )}
+
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 <div className="lg:col-span-2 space-y-8">
+
                     <PayloadRenderer
                         moduleCode={detail.module_code}
                         payload={detail.payload}
                     />
+
+                    {(allAttachments.length > 0 || !!selectedQuotation) && (
+                        <Card className="border-slate-100 bg-white shadow-sm overflow-hidden p-6">
+                            <AttachmentList
+                                attachments={allAttachments}
+                                title="Lampiran"
+                                selectedQuotation={selectedQuotation}
+                            />
+                        </Card>
+                    )}
 
                     <Card className="border-slate-100 bg-white shadow-sm overflow-hidden">
                         <CardHeader className="bg-slate-50/50 border-b border-slate-100 flex flex-row items-center gap-3">
@@ -343,13 +573,20 @@ export const ApprovalDetailPage = () => {
                     <ActionButtons
                         onApprove={async (comments, dlvdate, step_data) => { await actionMutation.mutateAsync({ action: 'approve', comments, dlvdate, step_data }); }}
                         onReject={async (comments) => { await actionMutation.mutateAsync({ action: 'reject', comments }); }}
+                        onRevise={async (comments) => { await actionMutation.mutateAsync({ action: 'revise', comments }); }}
                         isLoading={actionMutation.isPending}
                         canAction={isApprover === true}
+                        canRevise={canRevise}
+                        isBeforeQuotationStep={isBeforeQuotationStep}
                         isWatcher={isWatcher}
                         showDlvDateForm={showDlvDateForm}
                         requiredInputs={activeStep?.required_inputs || []}
                         approverType={activeStep?.approver_type}
                         isDeptHeadStep={Boolean(activeStep?.name?.toLowerCase().includes('head') || activeStep?.name?.toLowerCase().includes('dept head'))}
+                        availableQuotations={availableQuotations}
+                        selectedQuotation={selectedQuotation}
+                        initialPrNumber={activeStep?.step_data?.pr_number || detail?.payload?.pr_number || ''}
+                        initialPoNumber={activeStep?.step_data?.po_number || detail?.payload?.po_number || ''}
                     />
 
                     {isWatcher && (
@@ -375,7 +612,6 @@ export const ApprovalDetailPage = () => {
                     onSubmit={async (new_assignee_id, comments) => {
                         await delegateMutation.mutateAsync({ new_assignee_id, comments });
                     }}
-                    roleRequiredId={activeStep.role_required}
                     roleName={activeStep.role_name}
                     isLoading={delegateMutation.isPending}
                 />

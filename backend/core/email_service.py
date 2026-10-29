@@ -243,6 +243,71 @@ def send_rejected_notification(approval_request, step) -> None:
         )
 
 
+@run_in_thread
+def send_revised_to_requester_notification(approval_request, step, revisor=None, comments: str = '') -> None:
+    """
+    Send an email notification to requester when their request is returned for revision.
+    """
+    requester = approval_request.requester
+    if not requester.email:
+        logger.warning(
+            f"[EmailService] Requester {requester.username} has no email. "
+            f"Skipping revision notification for request #{approval_request.id}."
+        )
+        return
+
+    actor = revisor or (step.assigned_to if step else None)
+    revisor_name = actor.get_full_name() or actor.username if actor else 'Approver'
+    step_name = step.name if step else 'Approval Review'
+    step_order = step.step_order if step else 1
+
+    subject = f"[Revisi Diperlukan] {approval_request.module.name}: {approval_request.title}"
+    text_body = (
+        f"Halo {requester.get_full_name() or requester.username},\n\n"
+        f"Pengajuan Anda memerlukan revisi formulir/dokumen sebelum dapat diproses lebih lanjut.\n\n"
+        f"Judul: {approval_request.title}\n"
+        f"Modul: {approval_request.module.name}\n"
+        f"Referensi: {approval_request.reference_id}\n"
+        f"Direvisi oleh: {revisor_name} (Step {step_order}: {step_name})\n"
+        f"Alasan Revisi: {comments or '(Wajib direvisi)'}\n\n"
+        f"Silakan periksa dan perbarui formulir pengajuan Anda.\n\n"
+        f"Salam,\nApproval HUB"
+    )
+
+    try:
+        context = {
+            'requester_name': requester.get_full_name() or requester.username,
+            'request_title': approval_request.title,
+            'request_id': approval_request.id,
+            'reference_id': approval_request.reference_id,
+            'module_name': approval_request.module.name,
+            'step_name': step_name,
+            'step_order': step_order,
+            'rejector_name': revisor_name,
+            'rejection_reason': comments or '(Wajib direvisi)',
+            'priority': approval_request.priority,
+            'frontend_url': _get_frontend_url(),
+            'detail_url': f"{_get_frontend_url()}/workflow/{approval_request.id}",
+        }
+        html_body = render_to_string('email/rejected.html', context)
+        msg = EmailMultiAlternatives(
+            subject=subject,
+            body=text_body,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            to=[requester.email],
+        )
+        msg.attach_alternative(html_body, "text/html")
+        msg.send(fail_silently=False)
+        logger.info(
+            f"[EmailService] Revision notification sent to {requester.email} "
+            f"for request #{approval_request.id}."
+        )
+    except Exception as e:
+        logger.error(
+            f"[EmailService] Failed to send revision notification to {requester.email}: {e}"
+        )
+
+
 def _get_cc_emails_for_subject(subject_name: str = 'eorder information', ship_to: str | None = None) -> list[str]:
     """Fetch list of active CC emails for the specified subject and optional ship_to."""
     try:

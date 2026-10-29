@@ -1,9 +1,11 @@
 import { useState } from 'react';
-import { CheckCircle2, XCircle, AlertTriangle, Paperclip, UploadCloud, FileText, Trash2 } from 'lucide-react';
+import { CheckCircle2, XCircle, AlertTriangle, Paperclip, UploadCloud, FileText, Trash2, Eye, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/atoms/Button';
 import { Card } from '@/components/atoms/Card';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/context/ToastContext';
+import { useAuth } from '@/context/AuthContext';
+import { AttachmentList } from './AttachmentList';
 
 interface QuotationFile {
     name: string;
@@ -16,13 +18,20 @@ interface ActionButtonsProps {
     requestId?: number;
     onApprove: (comments: string, dlvdate?: string, step_data?: Record<string, any>) => Promise<void>;
     onReject: (comments: string) => Promise<void>;
+    onRevise?: (comments: string) => Promise<void>;
     isLoading: boolean;
     canAction: boolean;
+    canRevise?: boolean;
+    isBeforeQuotationStep?: boolean;
     isWatcher?: boolean;
     showDlvDateForm?: boolean;
     requiredInputs?: any[];
     approverType?: string;
     isDeptHeadStep?: boolean;
+    availableQuotations?: any[];
+    selectedQuotation?: any;
+    initialPrNumber?: string;
+    initialPoNumber?: string;
 }
 
 const getCleanErrorMessage = (err: any): string => {
@@ -60,33 +69,72 @@ const formatFileSize = (bytes: number) => {
 export const ActionButtons = ({
     onApprove,
     onReject,
+    onRevise,
     isLoading,
     canAction,
+    canRevise,
+    isBeforeQuotationStep = false,
     isWatcher,
     showDlvDateForm,
     requiredInputs,
     approverType,
     isDeptHeadStep,
+    availableQuotations,
+    selectedQuotation,
+    initialPrNumber = '',
+    initialPoNumber = '',
 }: ActionButtonsProps) => {
     const { addToast } = useToast();
-    const [showModal, setShowModal] = useState<'APPROVE' | 'REJECT' | null>(null);
+    const [showModal, setShowModal] = useState<'APPROVE' | 'REJECT' | 'REVISE' | null>(null);
     const [comments, setComments] = useState('');
     const [dlvdate, setDlvdate] = useState('');
-    const [poNumber, setPoNumber] = useState('');
+    const [poNumber, setPoNumber] = useState(initialPoNumber);
+    const [prNumber, setPrNumber] = useState(initialPrNumber);
     const [quotationFiles, setQuotationFiles] = useState<QuotationFile[]>([]);
+    const [selectedQuotId, setSelectedQuotId] = useState<string>('');
     const [error, setError] = useState<string | null>(null);
     const [dlvDateError, setDlvDateError] = useState<string | null>(null);
     const [poError, setPoError] = useState<string | null>(null);
+    const [prError, setPrError] = useState<string | null>(null);
     const [quotationError, setQuotationError] = useState<string | null>(null);
+    const [quotationSelectionError, setQuotationSelectionError] = useState<string | null>(null);
+
+    const { user } = useAuth();
 
     const isPurchasingStep = approverType === 'PURCH_DEPT_HEAD';
     const isDeptHead = isDeptHeadStep || requiredInputs?.length === 0;
+
+    const requiresPr = requiredInputs?.some((i: any) => {
+        const key = typeof i === 'string' ? i : i?.key;
+        return key === 'pr_number';
+    });
 
     // 1. Hilangkan requiredinput requiresPo pada step purchasing
     const requiresPo = !isPurchasingStep && !isDeptHead && requiredInputs?.some((i: any) => (typeof i === 'string' ? i : i.key) === 'po_number');
 
     // 2. Ketika sampe step purchasing head / dept head, tidak perlu lagi membaca required inputs
     const requiresQuotation = !isDeptHead && requiredInputs?.some((i: any) => (typeof i === 'string' ? i : i.key) === 'quotation');
+
+    // 3. Approval quotation (pemilihan quotation dari yang diunggah purchasing)
+    const requiresApprovalQuotation = requiredInputs?.some((i: any) => {
+        const key = typeof i === 'string' ? i : i?.key;
+        return key === 'approval_quotation' || key === 'selected_quotation';
+    });
+
+    const handlePreviewQuotation = (quot: any) => {
+        const target = quot.url || quot.data;
+        if (!target) return;
+        if (typeof target === 'string') {
+            if (target.startsWith('data:')) {
+                const win = window.open();
+                if (win) {
+                    win.document.write(`<iframe src="${target}" frameborder="0" style="border:0; top:0px; left:0px; bottom:0px; right:0px; width:100%; height:100%;" allowfullscreen></iframe>`);
+                }
+            } else {
+                window.open(target, '_blank', 'noopener,noreferrer');
+            }
+        }
+    };
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (!e.target.files || e.target.files.length === 0) return;
@@ -127,6 +175,10 @@ export const ActionButtons = ({
         }
 
         if (showModal === 'APPROVE') {
+            if (requiresPr && !prNumber.trim()) {
+                setPrError('PR Number wajib diisi');
+                hasError = true;
+            }
             if (requiresPo && !poNumber.trim()) {
                 setPoError('PO Number wajib diisi');
                 hasError = true;
@@ -134,6 +186,13 @@ export const ActionButtons = ({
             if (requiresQuotation && quotationFiles.length === 0) {
                 setQuotationError('Lampiran file penawaran / quotation wajib diunggah (minimal 1 file)');
                 hasError = true;
+            }
+            if (requiresApprovalQuotation) {
+                const effectiveId = selectedQuotId || (availableQuotations?.length === 1 ? availableQuotations[0].id : '');
+                if (!effectiveId) {
+                    setQuotationSelectionError('Silakan pilih salah satu quotation yang disetujui');
+                    hasError = true;
+                }
             }
         }
 
@@ -143,11 +202,30 @@ export const ActionButtons = ({
             setError(null);
             setDlvDateError(null);
             setPoError(null);
+            setPrError(null);
             setQuotationError(null);
+            setQuotationSelectionError(null);
 
             const stepData: Record<string, any> = {};
+            if (requiresPr && prNumber.trim()) stepData.pr_number = prNumber.trim();
             if (requiresPo && poNumber.trim()) stepData.po_number = poNumber.trim();
             if (requiresQuotation && quotationFiles.length > 0) stepData.quotation = quotationFiles;
+            if (requiresApprovalQuotation) {
+                const effectiveId = selectedQuotId || (availableQuotations?.length === 1 ? availableQuotations[0].id : '');
+                const chosen = availableQuotations?.find((q: any) => String(q.id) === String(effectiveId)) || (availableQuotations?.length === 1 ? availableQuotations[0] : null);
+                if (chosen) {
+                    stepData.approval_quotation = {
+                        ...(chosen.raw || {
+                            name: chosen.name,
+                            size: chosen.size,
+                            type: chosen.type,
+                            url: chosen.url,
+                            data: chosen.data,
+                        }),
+                        approved_by: user?.name || user?.username || user?.email,
+                    };
+                }
+            }
 
             if (showModal === 'APPROVE') {
                 await onApprove(
@@ -159,13 +237,29 @@ export const ActionButtons = ({
             } else if (showModal === 'REJECT') {
                 await onReject(comments);
                 addToast('Pengajuan berhasil ditolak (Rejected)', 'success');
+            } else if (showModal === 'REVISE') {
+                if (!comments.trim()) {
+                    setError('Alasan revisi wajib diisi');
+                    return;
+                }
+                if (onRevise) {
+                    await onRevise(comments.trim());
+                    addToast(
+                        isBeforeQuotationStep
+                            ? 'Pengajuan berhasil dikembalikan ke requestor untuk revisi'
+                            : 'Pengajuan berhasil dikembalikan ke step upload quotation untuk revisi',
+                        'success'
+                    );
+                }
             }
 
             setShowModal(null);
             setComments('');
             setDlvdate('');
             setPoNumber('');
+            setPrNumber('');
             setQuotationFiles([]);
+            setSelectedQuotId('');
         } catch (err: any) {
             const errorMessage = getCleanErrorMessage(err);
             addToast(errorMessage, 'error');
@@ -179,11 +273,25 @@ export const ActionButtons = ({
             <Button
                 variant="primary"
                 className="flex-1 bg-emerald-600 hover:bg-emerald-700 shadow-emerald-100"
-                onClick={() => setShowModal('APPROVE')}
+                onClick={() => {
+                    if (initialPrNumber && !prNumber) setPrNumber(initialPrNumber);
+                    if (initialPoNumber && !poNumber) setPoNumber(initialPoNumber);
+                    setShowModal('APPROVE');
+                }}
                 loading={isLoading}
             >
                 <CheckCircle2 size={18} className="mr-2" /> Approve
             </Button>
+            {canRevise && (
+                <Button
+                    variant="outline"
+                    className="flex-1 border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 shadow-sm"
+                    onClick={() => setShowModal('REVISE')}
+                    loading={isLoading}
+                >
+                    <RotateCcw size={18} className="mr-2 text-amber-600" /> Revise
+                </Button>
+            )}
             <Button
                 variant="danger"
                 className="flex-1"
@@ -204,7 +312,7 @@ export const ActionButtons = ({
                                         showModal === 'REJECT' ? "bg-red-50 text-red-600" : "bg-amber-50 text-amber-600"
                                 )}>
                                     {showModal === 'APPROVE' ? <CheckCircle2 size={24} /> :
-                                        showModal === 'REJECT' ? <XCircle size={24} /> : <AlertTriangle size={24} />}
+                                        showModal === 'REJECT' ? <XCircle size={24} /> : <RotateCcw size={24} />}
                                 </div>
                                 <h3 className="text-xl font-bold text-slate-900">
                                     {showModal === 'APPROVE' ? 'Approve Request' :
@@ -213,8 +321,36 @@ export const ActionButtons = ({
                             </div>
 
                             <p className="text-sm text-slate-500 font-medium leading-relaxed">
-                                You are about to {showModal.toLowerCase()} this request. Please provide any required information or comments.
+                                {showModal === 'REVISE'
+                                    ? (isBeforeQuotationStep
+                                        ? 'Pengajuan akan dikembalikan ke requestor agar formulir pengajuan dapat direvisi dan disesuaikan.'
+                                        : 'Pengajuan akan dikembalikan ke step upload quotation agar penawaran harga dapat diperbarui.')
+                                    : `You are about to ${showModal.toLowerCase()} this request. Please provide any required information or comments.`}
                             </p>
+
+                            {showModal === 'APPROVE' && requiresPr && (
+                                <div className="space-y-1">
+                                    <div className="flex justify-between items-center">
+                                        <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                                            PR Number <span className="text-red-500">*</span>
+                                        </label>
+                                        {prError && <span className="text-[10px] font-bold text-red-500 uppercase">{prError}</span>}
+                                    </div>
+                                    <input
+                                        type="text"
+                                        placeholder="Contoh: PR-2026/09/00042 atau PR/IT/2026/001"
+                                        className={cn(
+                                            "w-full rounded-xl border p-3 text-sm transition-all focus:outline-none focus:ring-4",
+                                            prError ? "border-red-300 bg-red-50/30" : "border-slate-200 bg-slate-50 focus:bg-white"
+                                        )}
+                                        value={prNumber}
+                                        onChange={(e) => {
+                                            setPrNumber(e.target.value);
+                                            if (e.target.value.trim()) setPrError(null);
+                                        }}
+                                    />
+                                </div>
+                            )}
 
                             {showModal === 'APPROVE' && requiresPo && (
                                 <div className="space-y-1">
@@ -288,6 +424,105 @@ export const ActionButtons = ({
                                 </div>
                             )}
 
+                            {/* Selection of quotation by 1st approval in org structure */}
+                            {showModal === 'APPROVE' && requiresApprovalQuotation && (
+                                <div className="space-y-3">
+                                    <div className="flex justify-between items-center">
+                                        {quotationSelectionError && (
+                                            <span className="text-[10px] font-bold text-red-500 uppercase animate-pulse">{quotationSelectionError}</span>
+                                        )}
+                                    </div>
+
+                                    {availableQuotations && availableQuotations.length > 0 ? (
+                                        <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                                            {availableQuotations.map((quot: any, idx: number) => {
+                                                const isSelected = String(selectedQuotId || (availableQuotations.length === 1 ? quot.id : '')) === String(quot.id);
+                                                return (
+                                                    <div
+                                                        key={quot.id || idx}
+                                                        onClick={() => {
+                                                            setSelectedQuotId(String(quot.id));
+                                                            if (quotationSelectionError) setQuotationSelectionError(null);
+                                                        }}
+                                                        className={cn(
+                                                            "flex items-center justify-between p-3 rounded-xl border-2 cursor-pointer transition-all",
+                                                            isSelected
+                                                                ? "border-emerald-500 bg-emerald-50/50 shadow-sm ring-1 ring-emerald-400"
+                                                                : "border-slate-200 hover:border-slate-300 bg-slate-50/50 hover:bg-slate-50"
+                                                        )}
+                                                    >
+                                                        <div className="flex items-center gap-3 truncate pr-2">
+                                                            <div className={cn(
+                                                                "w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors",
+                                                                isSelected ? "border-emerald-600 bg-emerald-600" : "border-slate-300 bg-white"
+                                                            )}
+                                                            >
+                                                                {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                                                            </div>
+                                                            <div className="truncate">
+                                                                <p className="text-xs font-bold text-slate-800 truncate">{quot.name}</p>
+                                                                <p className="text-[11px] text-slate-400">
+                                                                    {quot.size ? formatFileSize(quot.size) : 'Berkas Penawaran'} {quot.source ? `• ${quot.source}` : ''}
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                        {(quot.url || quot.data) && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handlePreviewQuotation(quot);
+                                                                }}
+                                                                className="text-xs font-semibold text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-2.5 py-1 rounded-lg shrink-0 transition-colors flex items-center gap-1"
+                                                            >
+                                                                <Eye size={12} /> Buka
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    ) : (
+                                        <div className="p-3.5 rounded-xl border border-amber-200 bg-amber-50 text-amber-800 text-xs space-y-1">
+                                            <p className="font-bold flex items-center gap-1.5">
+                                                <AlertTriangle size={14} className="text-amber-600" />
+                                                Belum Ada Berkas Quotation
+                                            </p>
+                                            <p className="text-amber-700">
+                                                Tidak ditemukan berkas penawaran yang diunggah oleh purchasing di step sebelumnya.
+                                            </p>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Summary note for subsequent approvers when quotation is already chosen */}
+                            {showModal === 'APPROVE' && !requiresApprovalQuotation && selectedQuotation && (
+                                <div className="p-3 bg-emerald-50/60 border border-emerald-200 rounded-xl text-xs space-y-1.5">
+                                    <div className="flex flex-col gap-1">
+                                        <span className="font-bold text-emerald-800 flex items-center gap-1.5 uppercase tracking-wide text-[10px]">
+                                            <CheckCircle2 size={13} className="text-emerald-600" />
+                                            Quotation Terpilih
+                                        </span>
+                                        {(selectedQuotation.url || selectedQuotation.quotation) && (
+                                            <AttachmentList
+                                                compact
+                                                attachments={[
+                                                    {
+                                                        id: `selected-att-1`,
+                                                        name: selectedQuotation.quotation.name,
+                                                        size: selectedQuotation.quotation.size,
+                                                        type: selectedQuotation.quotation.type,
+                                                        data: selectedQuotation.quotation.data
+                                                    }
+                                                ]}
+                                                selectedQuotation={selectedQuotation.quotation}
+                                            />
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+
                             {showModal === 'APPROVE' && showDlvDateForm && (
                                 <div className="space-y-2">
                                     <div className="flex justify-between items-center">
@@ -315,7 +550,11 @@ export const ActionButtons = ({
 
                             <div className="space-y-2">
                                 <div className="flex justify-between items-center">
-                                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Comments</label>
+                                    <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                                        {showModal === 'REVISE' ? (
+                                            <>Alasan Revisi <span className="text-red-500">*</span></>
+                                        ) : 'Remark'}
+                                    </label>
                                     {error && <span className="text-[10px] font-bold text-red-500 uppercase animate-pulse">{error}</span>}
                                 </div>
                                 <textarea
@@ -325,7 +564,13 @@ export const ActionButtons = ({
                                             ? "border-red-200 bg-red-50/30 focus:bg-white focus:ring-red-100 placeholder:text-red-300"
                                             : "border-slate-200 bg-slate-50 focus:bg-white focus:ring-blue-100"
                                     )}
-                                    placeholder="Type your feedback here..."
+                                    placeholder={
+                                        showModal === 'REVISE'
+                                            ? (isBeforeQuotationStep
+                                                ? "Jelaskan alasan mengapa formulir pengajuan ini perlu direvisi oleh requestor..."
+                                                : "Jelaskan alasan mengapa quotation / pengajuan ini perlu direvisi...")
+                                            : "Type your feedback here..."
+                                    }
                                     value={comments}
                                     onChange={(e) => {
                                         setComments(e.target.value);
@@ -344,7 +589,9 @@ export const ActionButtons = ({
                                         setError(null);
                                         setDlvDateError(null);
                                         setPoError(null);
+                                        setPrError(null);
                                         setQuotationError(null);
+                                        setQuotationSelectionError(null);
                                     }}
                                 >
                                     Cancel
@@ -354,11 +601,12 @@ export const ActionButtons = ({
                                     className={cn(
                                         "flex-1",
                                         showModal === 'APPROVE' && "bg-emerald-600 hover:bg-emerald-700",
+                                        showModal === 'REVISE' && "bg-amber-600 hover:bg-amber-700 text-white border-transparent shadow-sm",
                                     )}
                                     onClick={handleAction}
                                     loading={isLoading}
                                 >
-                                    Confirm {showModal.toLowerCase()}
+                                    {showModal === 'REVISE' ? 'Kirim Revisi' : `Confirm ${showModal?.toLowerCase()}`}
                                 </Button>
                             </div>
                         </div>

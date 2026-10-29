@@ -282,11 +282,31 @@ export const WorkflowSimulatorPage = () => {
                                     status = 'OPTIONAL';
                                 }
 
+                                let stepReqInputs = step.required_inputs || [];
+                                if (approverType === 'REQ_DEPT_HEAD') {
+                                    if (idx > 0) {
+                                        stepReqInputs = stepReqInputs.filter((i: any) => {
+                                            const key = typeof i === 'string' ? i : i.key;
+                                            return !['approval_quotation', 'quotation_selection', 'selected_quotation'].includes(key);
+                                        });
+                                    }
+                                } else if (approverType === 'PURCH_DEPT_HEAD') {
+                                    if (link.is_dept_head) {
+                                        stepReqInputs = [];
+                                    } else {
+                                        stepReqInputs = stepReqInputs.filter((i: any) => {
+                                            const key = typeof i === 'string' ? i : i.key;
+                                            return key !== 'po_number';
+                                        });
+                                    }
+                                }
+
                                 simulatedSteps.push({
                                     ...step,
                                     id: `${step.id}_chain_${idx}`,
                                     name: `${step.name} - ${link.title}`,
                                     simulatedAssignee: `${link.fullName} (${link.title} - ${link.department})`,
+                                    required_inputs: stepReqInputs,
                                     status
                                 });
                             });
@@ -334,6 +354,8 @@ export const WorkflowSimulatorPage = () => {
                             simulatedAssignee = "Finance Dept Head / Team";
                         } else if (approverType === 'TARGET_DEPT_ROLE') {
                             simulatedAssignee = step.target_department_name ? `${step.target_department_name} Role` : "Target Dept Role";
+                        } else if (approverType === 'REQUESTOR') {
+                            simulatedAssignee = requesterUser ? `${requesterUser} (Requestor)` : "Requestor";
                         } else {
                             simulatedAssignee = step.user_name || step.role_name || (step.role_users && step.role_users[0]?.name) || "Unassigned";
                         }

@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Trash2, ArrowUp, ArrowDown, Save, X } from 'lucide-react';
+import { Plus, Trash2, ArrowUp, ArrowDown, Save, X, Tag, XCircle } from 'lucide-react';
 import api from '@/services/api';
 import { Card } from '@/components/atoms/Card';
 import { Button } from '@/components/atoms/Button';
@@ -9,11 +9,126 @@ import { Select } from '@/components/atoms/Select';
 import { Textarea } from '@/components/atoms/Textarea';
 import { CriteriaRuleBuilder } from '@/components/molecules/CriteriaRuleBuilder';
 
+/** Preset pilihan required_inputs yang umum digunakan */
+const PRESET_REQUIRED_INPUTS: { key: string; label: string }[] = [
+    { key: 'pr_number', label: 'PR Number' },
+    { key: 'quotation', label: 'Quotation (Upload File)' },
+    { key: 'approval_quotation', label: 'Approval Quotation (Pilih Penawaran)' },
+    { key: 'delivery_date', label: 'Delivery Date' },
+    { key: 'invoice_number', label: 'Invoice Number' },
+    { key: 'receipt_number', label: 'Receipt Number' },
+    { key: 'budget_code', label: 'Budget Code' },
+];
+
+/** Editor tag untuk required_inputs */
+const RequiredInputsEditor: React.FC<{
+    value: string[];
+    onChange: (val: string[]) => void;
+}> = ({ value, onChange }) => {
+    const [customKey, setCustomKey] = useState('');
+    const inputRef = useRef<HTMLInputElement>(null);
+
+    const toggle = (key: string) => {
+        if (value.includes(key)) {
+            onChange(value.filter((k) => k !== key));
+        } else {
+            onChange([...value, key]);
+        }
+    };
+
+    const addCustom = () => {
+        const trimmed = customKey.trim().replace(/\s+/g, '_').toLowerCase();
+        if (trimmed && !value.includes(trimmed)) {
+            onChange([...value, trimmed]);
+        }
+        setCustomKey('');
+        inputRef.current?.focus();
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            addCustom();
+        }
+    };
+
+    const isPreset = (key: string) => PRESET_REQUIRED_INPUTS.some((p) => p.key === key);
+    const customTags = value.filter((k) => !isPreset(k));
+
+    return (
+        <div className="space-y-3">
+            {/* Preset checkboxes */}
+            <div className="flex flex-wrap gap-2">
+                {PRESET_REQUIRED_INPUTS.map((preset) => {
+                    const checked = value.includes(preset.key);
+                    return (
+                        <button
+                            key={preset.key}
+                            type="button"
+                            onClick={() => toggle(preset.key)}
+                            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border transition-colors ${checked
+                                    ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                                    : 'bg-white text-slate-600 border-slate-300 hover:border-blue-400 hover:text-blue-600'
+                                }`}
+                        >
+                            {checked ? <XCircle size={12} /> : <Plus size={12} />}
+                            {preset.label}
+                        </button>
+                    );
+                })}
+            </div>
+
+            {/* Custom tags yang sudah ditambahkan */}
+            {customTags.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                    {customTags.map((key) => (
+                        <span
+                            key={key}
+                            className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 border border-amber-300"
+                        >
+                            <Tag size={11} />
+                            {key}
+                            <button
+                                type="button"
+                                onClick={() => onChange(value.filter((k) => k !== key))}
+                                className="ml-0.5 text-amber-600 hover:text-amber-900"
+                            >
+                                <X size={11} />
+                            </button>
+                        </span>
+                    ))}
+                </div>
+            )}
+
+            {/* Input custom key */}
+            <div className="flex gap-2">
+                <input
+                    ref={inputRef}
+                    type="text"
+                    value={customKey}
+                    onChange={(e) => setCustomKey(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    placeholder="Tambah custom key (contoh: approval_note)"
+                    className="flex-1 px-3 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                />
+                <button
+                    type="button"
+                    onClick={addCustom}
+                    disabled={!customKey.trim()}
+                    className="px-3 py-1.5 text-xs bg-slate-800 text-white rounded-lg hover:bg-slate-700 disabled:opacity-40 transition-colors"
+                >
+                    Add
+                </button>
+            </div>
+        </div>
+    );
+};
+
 interface Step {
     id?: number;
     name: string;
     step_order: number;
-    approver_type: 'ROLE' | 'USER' | 'REQ_DEPT_HEAD' | 'FINANCE_DEPT_HEAD' | 'TARGET_DEPT_ROLE';
+    approver_type: 'ROLE' | 'USER' | 'REQ_DEPT_HEAD' | 'FINANCE_DEPT_HEAD' | 'PURCH_DEPT_HEAD' | 'TARGET_DEPT_ROLE' | 'REQUESTOR';
     role_required?: number | null;
     user_required?: number | null;
     target_department?: number | null;
@@ -272,7 +387,8 @@ export const WorkflowForm: React.FC<WorkflowFormProps> = ({ initialData, onClose
                                                     { value: 'PURCH_DEPT_HEAD', label: 'Purchasing Approval' },
                                                     { value: 'TARGET_DEPT_ROLE', label: 'Target Dept Role' },
                                                     { value: 'ROLE', label: 'Role-based (Global)' },
-                                                    { value: 'USER', label: 'Specific User' }
+                                                    { value: 'USER', label: 'Specific User' },
+                                                    { value: 'REQUESTOR', label: 'Requestor (Assign Back)' }
                                                 ]}
                                                 value={step.approver_type}
                                                 onChange={(e) => {
@@ -281,9 +397,15 @@ export const WorkflowForm: React.FC<WorkflowFormProps> = ({ initialData, onClose
                                                     if (type === 'ROLE') {
                                                         updates.role_required = (roles as any)?.results?.[0]?.id || null;
                                                         updates.user_required = null;
+                                                        updates.target_department = null;
                                                     } else if (type === 'USER') {
                                                         updates.user_required = (users as any)?.results?.[0]?.id || null;
                                                         updates.role_required = null;
+                                                        updates.target_department = null;
+                                                    } else if (type === 'REQUESTOR') {
+                                                        updates.role_required = null;
+                                                        updates.user_required = null;
+                                                        updates.target_department = null;
                                                     } else if (type === 'FINANCE_DEPT_HEAD') {
                                                         updates.required_inputs = ['po_number', 'quotation'];
                                                     }
@@ -318,6 +440,10 @@ export const WorkflowForm: React.FC<WorkflowFormProps> = ({ initialData, onClose
                                                         onChange={(e) => handleStepChange(index, { target_department: parseInt(e.target.value) })}
                                                         required
                                                     />
+                                                </div>
+                                            ) : step.approver_type === 'REQUESTOR' ? (
+                                                <div className="w-full text-xs text-slate-500 italic pb-2 flex items-center h-10">
+                                                    Assigned back to requestor
                                                 </div>
                                             ) :
                                                 ''
@@ -357,8 +483,27 @@ export const WorkflowForm: React.FC<WorkflowFormProps> = ({ initialData, onClose
                                         )}
                                     </div>
 
-                                    <div className="flex items-center gap-6 mt-4 pt-3 border-t border-slate-50">
-                                        <div className='flex items-center gap-2'>
+                                    <div className="flex flex-col gap-4 mt-4 pt-3 border-t border-slate-50">
+                                        {/* Required Inputs */}
+                                        <div className="space-y-2">
+                                            <label className="flex items-center gap-1.5 text-xs font-black text-slate-500 uppercase tracking-widest">
+                                                <Tag size={12} />
+                                                Required Inputs
+                                                <span className="font-normal normal-case tracking-normal text-slate-400">(field yang wajib diisi approver saat menyetujui)</span>
+                                            </label>
+                                            <RequiredInputsEditor
+                                                value={step.required_inputs || []}
+                                                onChange={(val) => handleStepChange(index, { required_inputs: val })}
+                                            />
+                                            {step.approver_type === 'REQ_DEPT_HEAD' && step.required_inputs?.includes('approval_quotation') && (
+                                                <p className="text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg p-2 font-medium">
+                                                    💡 <strong>Info:</strong> Input <code>approval_quotation</code> pada Department Approval hanya akan ditagihkan kepada <strong>Approval Pertama</strong> dari struktur organisasi. Level di atasnya (Dept Head, GM, dll.) otomatis tidak perlu memilih ulang.
+                                                </p>
+                                            )}
+                                        </div>
+
+                                        {/* Optional Step */}
+                                        <div className="flex items-center gap-2 pt-3 border-t border-slate-50">
                                             <input
                                                 type="checkbox"
                                                 id={`optional-${index}`}

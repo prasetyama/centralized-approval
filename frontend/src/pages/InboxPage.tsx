@@ -124,6 +124,11 @@ export const InboxPage = () => {
                                 <TableCell>{((page - 1) * pageSize) + index + 1}</TableCell>
                                 <TableCell>
                                     <div className="flex items-center gap-2">
+                                        {index + 1}
+                                    </div>
+                                </TableCell>
+                                <TableCell>
+                                    <div className="flex items-center gap-2">
                                         <div className="h-8 w-8 rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-center">
                                             {getModuleIcon(item.module_code)}
                                         </div>

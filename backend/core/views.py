@@ -12,6 +12,7 @@ from rest_framework.response import Response
 from django.db import transaction
 from django.db.models import Q, Prefetch, Count
 from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework.filters import SearchFilter
 from rest_framework.exceptions import ValidationError
 from rest_framework.pagination import PageNumberPagination
 import logging
@@ -26,7 +27,8 @@ from core.models import (
     Module, Role, User, WorkflowDefinition, WorkflowStepDefinition,
     ApprovalRequest, ApprovalStep, AuditLog, Division, Department, RequestFeedback,
     Company, OrganizationStructure, Brand, UserBrand, MasterWorkflowCriteria, RequestWatcher, ModuleVariable,
-    CCEmailConfig
+    CCEmailConfig, MasterAsset, MasterWBS, MasterEquipment, MasterGoods,
+    PRNonTrade, PRNonTradeItem, PRNonTradeSequence
 )
 from core.serializers import (
     ModuleSerializer, RoleSerializer, UserListSerializer, UserDetailSerializer,
@@ -37,9 +39,12 @@ from core.serializers import (
     DivisionSerializer, DepartmentSerializer, CompanySerializer, OrganizationStructureSerializer,
     DelegateRequestSerializer, RequestFeedbackSerializer,
     BrandSerializer, UserBrandSerializer, MasterWorkflowCriteriaSerializer,
-    RequestWatcherSerializer, ModuleVariableSerializer, CCEmailConfigSerializer
+    RequestWatcherSerializer, ModuleVariableSerializer, CCEmailConfigSerializer,
+    MasterAssetSerializer, MasterWBSSerializer, MasterEquipmentSerializer, MasterGoodsSerializer,
+    PRNonTradeSerializer, PRNonTradeItemSerializer
 )
 from core.engine import WorkflowEngine
+from core import email_service
 from django.utils import timezone
 from rest_framework.decorators import action
 
@@ -166,13 +171,15 @@ class WorkflowDetailView(generics.RetrieveAPIView):
         if user.is_superuser:
             return self.queryset
 
+        dept_ids = user.get_department_ids() if hasattr(user, 'get_department_ids') else []
         try:
             request_obj = self.queryset.filter(
                 Q(requester=user) |
                 Q(steps__assigned_to=user) |
-                Q(watchers__user=user) & Q(watchers__deleted_at=None)
+                Q(steps__approver_type='TARGET_DEPT_ROLE', steps__target_department_id__in=dept_ids) |
+                (Q(watchers__user=user) & Q(watchers__deleted_at=None))
             ).distinct()
-            if not request_obj:
+            if not request_obj.exists():
                 logging.getLogger(__name__).error(
                     "[Core.Views] User %s not authorized to view workflow %s", 
                     self.request.user.username, self.kwargs.get('pk')
@@ -180,6 +187,8 @@ class WorkflowDetailView(generics.RetrieveAPIView):
                 raise ValidationError("You are not authorized to view this request.")
             return request_obj
         except Exception as e:
+            if isinstance(e, ValidationError):
+                raise
             logging.getLogger(__name__).error(
                 "[Core.Views] Error in get_queryset for user %s and request %s", 
                 self.request.user.username, self.kwargs.get('pk')
@@ -205,8 +214,12 @@ class WorkflowApproveView(generics.GenericAPIView):
         # Merge individual fields if present
         if serializer.validated_data.get('po_number'):
             step_data['po_number'] = serializer.validated_data['po_number']
+        if serializer.validated_data.get('pr_number'):
+            step_data['pr_number'] = serializer.validated_data['pr_number']
         if serializer.validated_data.get('quotation'):
             step_data['quotation'] = serializer.validated_data['quotation']
+        if serializer.validated_data.get('approval_quotation'):
+            step_data['approval_quotation'] = serializer.validated_data['approval_quotation']
 
         try:
             approval_request = WorkflowEngine.approve_step(
@@ -267,25 +280,71 @@ class WorkflowRejectView(generics.GenericAPIView):
 class WorkflowReviseView(generics.GenericAPIView):
     """
     POST /api/v1/workflow/<id>/revise
-    Revise a rejected request with optional updated payload.
+    - If request status is IN_PROGRESS: Revises current step back to upload quotation.
+    - If request status is REJECTED: Resubmits revised payload by original requester.
     """
+    serializer_class = ActionSerializer
     permission_classes = [IsAuthenticated]
 
     def post(self, request, pk):
-        updated_payload = request.data.get('payload')
+        try:
+            req_obj = ApprovalRequest.objects.get(id=pk)
+        except ApprovalRequest.DoesNotExist:
+            raise ValidationError(f"Approval request {pk} not found.")
 
-        approval_request = WorkflowEngine.revise_request(
-            request_id=pk,
-            requester=request.user,
-            updated_payload=updated_payload,
-            ip_address=_get_client_ip(request),
-        )
+        if req_obj.status == ApprovalRequest.Status.IN_PROGRESS:
+            serializer = self.get_serializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            comments = serializer.validated_data.get('comments', '')
+            if not comments.strip():
+                raise ValidationError("Komentar alasan revisi wajib diisi.")
 
-        return Response({
-            'success': True,
-            'data': ApprovalRequestDetailSerializer(approval_request).data,
-            'message': 'Request revised and resubmitted.',
-        })
+            try:
+                approval_request = WorkflowEngine.revise_step(
+                    request_id=pk,
+                    approver=request.user,
+                    comments=comments,
+                    ip_address=_get_client_ip(request),
+                )
+            except Exception as e:
+                logging.getLogger(__name__).error(
+                    "[Core.Views] Failed to revise workflow %s by user %s: %s",
+                    pk, request.user.username, str(e), exc_info=True
+                )
+                raise ValidationError(f"Gagal melakukan revisi: {str(e)}")
+
+            return Response({
+                'success': True,
+                'data': ApprovalRequestDetailSerializer(approval_request).data,
+                'message': (
+                    'Pengajuan berhasil dikembalikan ke pemohon untuk revisi formulir PR.'
+                    if approval_request.status == ApprovalRequest.Status.REVISED
+                    else 'Pengajuan berhasil dikembalikan ke step upload quotation untuk revisi.'
+                ),
+            })
+        elif req_obj.status in (ApprovalRequest.Status.REJECTED, ApprovalRequest.Status.REVISED):
+            updated_payload = request.data.get('payload')
+            try:
+                approval_request = WorkflowEngine.revise_request(
+                    request_id=pk,
+                    requester=request.user,
+                    updated_payload=updated_payload,
+                    ip_address=_get_client_ip(request),
+                )
+            except Exception as e:
+                logging.getLogger(__name__).error(
+                    "[Core.Views] Failed to resubmit revised workflow %s by user %s: %s",
+                    pk, request.user.username, str(e), exc_info=True
+                )
+                raise ValidationError(f"Gagal submit revisi: {str(e)}")
+
+            return Response({
+                'success': True,
+                'data': ApprovalRequestDetailSerializer(approval_request).data,
+                'message': 'Request revised and resubmitted.',
+            })
+        else:
+            raise ValidationError(f"Cannot revise request in status '{req_obj.status}'.")
 
 
 class WorkflowDelegateView(generics.GenericAPIView):
@@ -357,11 +416,15 @@ class InboxView(generics.ListAPIView):
                 ).values_list('request_id', flat=True)
                 queryset = ApprovalRequest.objects.filter(id__in=watched_ids)
             else:
-                # 1. Requests where user is the active approver
+                dept_ids = user.get_department_ids() if hasattr(user, 'get_department_ids') else []
+
+                # 1. Requests where user is the active approver or member of target department
                 waiting_ids = ApprovalStep.objects.filter(
                     status=ApprovalStep.StepStatus.WAITING
                 ).filter(
-                    Q(assigned_to=user)
+                    Q(assigned_to=user) |
+                    Q(approver_type='REQUESTOR', request__requester=user) |
+                    Q(approver_type='TARGET_DEPT_ROLE', target_department_id__in=dept_ids)
                 ).values_list('request_id', flat=True)
 
                 # 2. Requests where user has participated in the discussion
@@ -588,6 +651,8 @@ def dashboard_summary(request):
     user = request.user
 
     try:
+        dept_ids = user.get_department_ids() if hasattr(user, 'get_department_ids') else []
+
         # Count requests by status, filtered by user involvement
         if user.is_superuser:
             relevant_requests = ApprovalRequest.objects.all()
@@ -595,10 +660,18 @@ def dashboard_summary(request):
             # 1. Tasks I have handled in the past (Approved/Rejected)
             acted_request_ids = AuditLog.objects.filter(actor=user).values_list('request_id', flat=True)
             
-            # 2. Combined relevance filter:
+            # 2. Requests currently waiting for my department
+            dept_waiting_request_ids = ApprovalStep.objects.filter(
+                status=ApprovalStep.StepStatus.WAITING,
+                approver_type='TARGET_DEPT_ROLE',
+                target_department_id__in=dept_ids
+            ).values_list('request_id', flat=True)
+
+            # 3. Combined relevance filter:
             relevant_requests = ApprovalRequest.objects.filter(
                 Q(requester=user) |                          # I am the requester
-                Q(id__in=acted_request_ids) 
+                Q(id__in=acted_request_ids) |
+                Q(id__in=dept_waiting_request_ids)
             ).distinct()
 
         status_counts = dict(
@@ -614,7 +687,9 @@ def dashboard_summary(request):
             waiting_ids = ApprovalStep.objects.filter(
                 status=ApprovalStep.StepStatus.WAITING
             ).filter(
-                Q(assigned_to=user)
+                Q(assigned_to=user) |
+                Q(approver_type='REQUESTOR', request__requester=user) |
+                Q(approver_type='TARGET_DEPT_ROLE', target_department_id__in=dept_ids)
             ).values_list('request_id', flat=True)
 
             discussion_ids = RequestFeedback.objects.filter(
@@ -633,9 +708,10 @@ def dashboard_summary(request):
         if user.is_superuser:
             recent_logs = AuditLog.objects.all()
         else:
-            # Modules where the user's role is an approver
+            # Modules where the user's role is an approver or user's department is targeted
             relevant_module_ids = WorkflowStepDefinition.objects.filter(
-                role_required__in=user.user_roles.values_list('role__id', flat=True)
+                Q(role_required__in=user.user_roles.values_list('role__id', flat=True)) |
+                Q(approver_type='TARGET_DEPT_ROLE', target_department_id__in=dept_ids)
             ).values_list('workflow__module_id', flat=True).distinct()
             
             recent_logs = AuditLog.objects.filter(
@@ -730,11 +806,72 @@ class OrganizationStructureViewSet(viewsets.ModelViewSet):
 
 
 class DepartmentViewSet(viewsets.ModelViewSet):
-    """CRUD for Departments."""
-    queryset = Department.objects.all()
+    """CRUD for Departments with tiered approvers and members."""
+    queryset = Department.objects.all().select_related('company', 'approver_1', 'approver_2', 'approver_3', 'dept_head').prefetch_related('org_structures__user')
     serializer_class = DepartmentSerializer
     permission_classes = [IsAuthenticated]
-    search_fields = ['name', 'code']
+    filterset_fields = ['company']
+    search_fields = ['name', 'code', 'company__name']
+
+    @action(detail=True, methods=['post'], url_path='assign-members')
+    def assign_members(self, request, pk=None):
+        """
+        Assign user(s) to this department.
+        Accepts: {"user_ids": [1, 2, ...]} or {"user_id": 1, "position_title": "..."}
+        """
+        department = self.get_object()
+        user_ids = request.data.get('user_ids')
+        if not user_ids and request.data.get('user_id'):
+            user_ids = [request.data.get('user_id')]
+
+        if not user_ids:
+            return Response({'error': 'user_ids is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        position_title = request.data.get('position_title') or 'Staff / Requestor'
+        created_count = 0
+        for uid in user_ids:
+            u = User.objects.filter(id=uid).first()
+            if u:
+                OrganizationStructure.objects.update_or_create(
+                    user=u,
+                    department=department,
+                    defaults={
+                        'company': department.company,
+                        'position_title': position_title,
+                        'level_order': 1,
+                    }
+                )
+                created_count += 1
+
+        return Response({
+            'success': True,
+            'message': f'{created_count} user(s) assigned to {department.name}',
+            'members': DepartmentSerializer(department).data['members']
+        })
+
+    @action(detail=True, methods=['post'], url_path='remove-member')
+    def remove_member(self, request, pk=None):
+        """
+        Remove a user mapping from this department.
+        Accepts: {"user_id": 1} or {"org_id": 2}
+        """
+        department = self.get_object()
+        user_id = request.data.get('user_id')
+        org_id = request.data.get('org_id')
+
+        if org_id:
+            OrganizationStructure.objects.filter(id=org_id, department=department).delete()
+        elif user_id:
+            OrganizationStructure.objects.filter(user_id=user_id, department=department).delete()
+        else:
+            return Response({'error': 'user_id or org_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response({
+            'success': True,
+            'message': f'Member removed from {department.name}',
+            'members': DepartmentSerializer(department).data['members']
+        })
+
 
 
 class DivisionViewSet(viewsets.ModelViewSet):
@@ -783,7 +920,11 @@ class RoleViewSet(viewsets.ModelViewSet):
 
 class UserViewSet(viewsets.ModelViewSet):
     """CRUD for Users."""
-    queryset = User.objects.prefetch_related('user_roles__role').all()
+    queryset = User.objects.prefetch_related(
+        'user_roles__role',
+        'org_positions__company',
+        'org_positions__department__company'
+    ).all()
     permission_classes = [IsAuthenticated]
     pagination_class = StandardResultsSetPagination
     search_fields = ['username', 'first_name', 'last_name', 'email']
@@ -1050,6 +1191,314 @@ class CCEmailConfigViewSet(viewsets.ModelViewSet):
                 {'detail': f'Terjadi kesalahan saat memproses file CSV: {str(e)}'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+
+# ─────────────────────────────────────────────
+# PR Non-Trade ViewSet & Master Data ViewSets
+# ─────────────────────────────────────────────
+
+class PRNonTradeViewSet(viewsets.ModelViewSet):
+    """
+    API endpoint for PR Non-Trade form submission & draft management.
+    Integrates with Centralized Approval Workflow ID 10 upon submission.
+    """
+    serializer_class = PRNonTradeSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.is_staff or user.is_superuser:
+            return PRNonTrade.objects.all().select_related('approval_request').prefetch_related('items')
+        return PRNonTrade.objects.filter(requestor=user).select_related('approval_request').prefetch_related('items')
+
+    def perform_create(self, serializer):
+        user = self.request.user
+        dept = user.department if hasattr(user, 'department') else ''
+        comp = user.company if hasattr(user, 'company') else ''
+
+        serializer.save(
+            requestor=user,
+            requestor_name=user.get_full_name() or user.username,
+            requester_department=serializer.validated_data.get('requester_department') or dept,
+            requester_company=serializer.validated_data.get('requester_company') or comp,
+        )
+
+    @action(detail=False, methods=['post'], url_path='save-draft')
+    def save_draft(self, request):
+        """
+        Save or update form as DRAFT.
+        Generates transaction_id in format PR/{code_name}/NT/{year}/{6_digit_running_number}
+        """
+        pr_id = request.data.get('id')
+        code_name = request.data.get('code_name') or 'HO'
+
+        user = request.user
+        dept = user.department if hasattr(user, 'department') else ''
+        comp = user.company if hasattr(user, 'company') else ''
+        if hasattr(user, 'company_code') and user.company_code:
+            code_name = user.company_code
+
+        if pr_id:
+            try:
+                pr = PRNonTrade.objects.get(id=pr_id, requestor=user)
+            except PRNonTrade.DoesNotExist:
+                return Response({'detail': 'PR Non-Trade record not found.'}, status=status.HTTP_404_NOT_FOUND)
+        else:
+            pr = PRNonTrade(requestor=user)
+
+        if not pr.transaction_id:
+            pr.transaction_id = PRNonTrade.generate_transaction_id(code_name=code_name)
+
+        pr.requestor_name = user.get_full_name() or user.username
+        pr.requester_department = request.data.get('requester_department') or dept
+        pr.requester_company = request.data.get('requester_company') or comp
+        pr.purpose = request.data.get('purpose', '')
+        pr.goods_service_type = request.data.get('goods_service_type', 'not_lumpsum')
+        pr.purchase_type = request.data.get('purchase_type', 'non_asset')
+        pr.car_tbr_no = request.data.get('car_tbr_no', '')
+        pr.asset_type = request.data.get('asset_type', 'non_wbs')
+        pr.asset_no = request.data.get('asset_no', '')
+        pr.wbs_no = request.data.get('wbs_no', '')
+        pr.equipment_name = request.data.get('equipment_name', '')
+        pr.submission_remark = request.data.get('submission_remark', '')
+        pr.status = 'DRAFT'
+        pr.save()
+        pr.refresh_from_db()
+
+        # Update items
+        items_data = request.data.get('items', [])
+        pr.items.all().delete()
+        for idx, item in enumerate(items_data, 1):
+            PRNonTradeItem.objects.create(
+                pr_non_trade=pr,
+                item_order=idx,
+                goods_code=item.get('goods_code', ''),
+                goods_name=item.get('goods_name', ''),
+                unit=item.get('unit', 'PCS'),
+                quantity=item.get('quantity', 1.0),
+                remark=item.get('remark', '')
+            )
+
+        return Response({
+            'success': True,
+            'message': f'Draft saved successfully with Transaction ID: {pr.transaction_id}',
+            'data': PRNonTradeSerializer(pr).data
+        }, status=status.HTTP_200_OK if pr_id else status.HTTP_201_CREATED)
+
+    @action(detail=False, methods=['post'], url_path='submit')
+    def submit_pr(self, request):
+        """
+        Submit PR Non-Trade form to Centralized Approval Workflow with workflow_id = 10.
+        """
+        pr_id = request.data.get('id')
+        code_name = request.data.get('code_name') or 'HO'
+
+        user = request.user
+        dept = user.department if hasattr(user, 'department') else ''
+        comp = user.company if hasattr(user, 'company') else ''
+        if hasattr(user, 'company_code') and user.company_code:
+            code_name = user.company_code
+
+        if pr_id:
+            try:
+                pr = PRNonTrade.objects.get(id=pr_id, requestor=user)
+            except PRNonTrade.DoesNotExist:
+                return Response({'detail': 'PR Non-Trade record not found.'}, status=status.HTTP_404_NOT_FOUND)
+        else:
+            pr = PRNonTrade(requestor=user)
+
+        if not pr.transaction_id:
+            pr.transaction_id = PRNonTrade.generate_transaction_id(code_name=code_name)
+
+        pr.requestor_name = user.get_full_name() or user.username
+        pr.requester_department = request.data.get('requester_department') or dept
+        pr.requester_company = request.data.get('requester_company') or comp
+        pr.purpose = request.data.get('purpose', '')
+        pr.goods_service_type = request.data.get('goods_service_type', 'not_lumpsum')
+        pr.purchase_type = request.data.get('purchase_type', 'non_asset')
+        pr.car_tbr_no = request.data.get('car_tbr_no', '')
+        pr.asset_type = request.data.get('asset_type', 'non_wbs')
+        pr.asset_no = request.data.get('asset_no', '')
+        pr.wbs_no = request.data.get('wbs_no', '')
+        pr.equipment_name = request.data.get('equipment_name', '')
+        pr.submission_remark = request.data.get('submission_remark', '')
+        pr.status = 'SUBMITTED'
+        pr.save()
+        pr.refresh_from_db()
+
+        # Update items
+        items_data = request.data.get('items', [])
+        pr.items.all().delete()
+        items_list = []
+        for idx, item in enumerate(items_data, 1):
+            item_obj = PRNonTradeItem.objects.create(
+                pr_non_trade=pr,
+                item_order=idx,
+                goods_code=item.get('goods_code', ''),
+                goods_name=item.get('goods_name', ''),
+                unit=item.get('unit', 'PCS'),
+                quantity=item.get('quantity', 1.0),
+                remark=item.get('remark', '')
+            )
+            items_list.append({
+                'goods_code': item_obj.goods_code,
+                'goods_name': item_obj.goods_name,
+                'unit': item_obj.unit,
+                'quantity': float(item_obj.quantity),
+                'remark': item_obj.remark
+            })
+
+        # Ensure Module PR_NON_TRADE exists
+        module, _ = Module.objects.get_or_create(
+            code='PR_NON_TRADE',
+            defaults={
+                'name': 'PR Non-Trade',
+                'description': 'Purchase Request Non-Trade Module',
+                'is_active': True,
+                'icon': 'file-text',
+                'color': '#6366F1'
+            }
+        )
+
+        # Ensure WorkflowDefinition with ID 10 exists
+        wf_def = WorkflowDefinition.objects.filter(id=10).first()
+        if not wf_def:
+            wf_def = WorkflowDefinition.objects.create(
+                id=10,
+                module=module,
+                name='PR Non Trade Approval Workflow',
+                description='Approval workflow for Non-Trade Purchase Requests',
+                total_steps=2,
+                is_active=True
+            )
+            if not wf_def.steps.exists():
+                spv_role = Role.objects.filter(code='SPV').first() or Role.objects.first()
+                if not spv_role:
+                    spv_role = Role.objects.create(name='Supervisor', code='SPV')
+                mgr_role = Role.objects.filter(code='MGR').first() or Role.objects.filter(code='SPV').first() or spv_role
+                if not mgr_role:
+                    mgr_role = Role.objects.create(name='Manager', code='MGR')
+                WorkflowStepDefinition.objects.create(
+                    workflow=wf_def,
+                    step_order=1,
+                    name='Department Head Review',
+                    approver_type=WorkflowStepDefinition.ApproverType.REQ_DEPT_HEAD,
+                    role_required=spv_role
+                )
+                WorkflowStepDefinition.objects.create(
+                    workflow=wf_def,
+                    step_order=2,
+                    name='Finance / Manager Approval',
+                    approver_type=WorkflowStepDefinition.ApproverType.ROLE,
+                    role_required=mgr_role
+                )
+
+        # Submit request into Centralized Approval Workflow Engine
+        payload = {
+            'transaction_id': pr.transaction_id,
+            'transaction_date': str(pr.transaction_date),
+            'requestor_name': pr.requestor_name,
+            'requester_department': pr.requester_department,
+            'requester_company': pr.requester_company,
+            'purpose': pr.purpose,
+            'goods_service_type': pr.goods_service_type,
+            'purchase_type': pr.purchase_type,
+            'car_tbr_no': pr.car_tbr_no,
+            'asset_type': pr.asset_type,
+            'asset_no': pr.asset_no,
+            'wbs_no': pr.wbs_no,
+            'equipment_name': pr.equipment_name,
+            'submission_remark': pr.submission_remark,
+            'items': items_list
+        }
+
+        if pr.approval_request:
+            approval_request = pr.approval_request
+            approval_request.payload = payload
+            approval_request.description = pr.purpose
+            approval_request.title = f"PR Non Trade - {pr.transaction_id}"
+            approval_request.status = ApprovalRequest.Status.IN_PROGRESS
+            approval_request.current_step = 1
+            approval_request.save(update_fields=['payload', 'description', 'title', 'status', 'current_step', 'updated_at'])
+
+            # Reset steps back to step 1 waiting
+            steps = approval_request.steps.all().order_by('step_order')
+            for s in steps:
+                if s.step_order == 1:
+                    s.status = ApprovalStep.StepStatus.WAITING
+                else:
+                    s.status = ApprovalStep.StepStatus.PENDING
+                s.comments = ''
+                s.acted_at = None
+                s.save(update_fields=['status', 'comments', 'acted_at'])
+
+            # Add AuditLog
+            AuditLog.objects.create(
+                request=approval_request,
+                actor=user,
+                action=AuditLog.Action.SUBMITTED,
+                details=f"PR Form telah direvisi dan disubmit ulang oleh pemohon ({user.get_full_name() or user.username}).",
+                ip_address=_get_client_ip(request),
+                payload_snapshot=approval_request.payload,
+            )
+
+            step1 = steps.filter(step_order=1).first()
+            if step1:
+                transaction.on_commit(lambda: email_service.send_step_notification(step1))
+        else:
+            approval_request = WorkflowEngine.submit_request(
+                module_code='PR_NON_TRADE',
+                workflow_id=10,
+                requester=user,
+                title=f"PR Non Trade - {pr.transaction_id}",
+                payload=payload,
+                description=pr.purpose,
+                priority='MEDIUM',
+                reference_id=pr.transaction_id,
+                ip_address=_get_client_ip(request),
+            )
+            pr.approval_request = approval_request
+            pr.save(update_fields=['approval_request'])
+
+        return Response({
+            'success': True,
+            'message': f'PR Non-Trade submitted successfully with Reference ID: {pr.transaction_id}',
+            'data': PRNonTradeSerializer(pr).data,
+            'approval_request_id': approval_request.id
+        }, status=status.HTTP_200_OK)
+
+
+class MasterAssetViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = MasterAsset.objects.filter(is_active=True)
+    serializer_class = MasterAssetSerializer
+    permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend, SearchFilter]
+    search_fields = ['code', 'name', 'category', 'description']
+
+
+class MasterWBSViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = MasterWBS.objects.filter(is_active=True)
+    serializer_class = MasterWBSSerializer
+    permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend, SearchFilter]
+    search_fields = ['code', 'description', 'project_name']
+
+
+class MasterEquipmentViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = MasterEquipment.objects.filter(is_active=True)
+    serializer_class = MasterEquipmentSerializer
+    permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend, SearchFilter]
+    search_fields = ['code', 'name', 'category']
+
+
+class MasterGoodsViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = MasterGoods.objects.filter(is_active=True)
+    serializer_class = MasterGoodsSerializer
+    permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend, SearchFilter]
+    search_fields = ['code', 'name', 'category', 'unit']
+
 
 
 

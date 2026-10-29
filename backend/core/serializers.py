@@ -8,7 +8,8 @@ from core.models import (
     Module, Role, User, WorkflowDefinition, WorkflowStepDefinition,
     ApprovalRequest, ApprovalStep, AuditLog, Division, Department, RequestFeedback,
     Company, OrganizationStructure, Brand, UserBrand, MasterWorkflowCriteria, RequestWatcher, ModuleVariable,
-    UserRole, CCEmailConfig
+    UserRole, CCEmailConfig, MasterAsset, MasterWBS, MasterEquipment, MasterGoods,
+    PRNonTrade, PRNonTradeItem, PRNonTradeSequence
 )
 
 
@@ -49,12 +50,55 @@ class OrganizationStructureSerializer(serializers.ModelSerializer):
 
 
 class DepartmentSerializer(serializers.ModelSerializer):
-    """Serializer for Department model."""
+    """Serializer for Department model with tiered approvers and members."""
+    company_name = serializers.CharField(source='company.name', read_only=True)
+    company_code = serializers.CharField(source='company.code', read_only=True)
     dept_head_name = serializers.CharField(source='dept_head.get_full_name', read_only=True)
+    approver_1_name = serializers.SerializerMethodField()
+    approver_2_name = serializers.SerializerMethodField()
+    approver_3_name = serializers.SerializerMethodField()
+    members_count = serializers.SerializerMethodField()
+    members = serializers.SerializerMethodField()
+
     class Meta:
         model = Department
-        fields = ['id', 'name', 'code', 'dept_head', 'dept_head_name', 'description', 'created_at', 'updated_at']
+        fields = [
+            'id', 'company', 'company_name', 'company_code',
+            'name', 'code', 'description',
+            'approver_1', 'approver_1_name',
+            'approver_2', 'approver_2_name',
+            'approver_3', 'approver_3_name',
+            'dept_head', 'dept_head_name',
+            'members_count', 'members',
+            'created_at', 'updated_at'
+        ]
         read_only_fields = ['created_at', 'updated_at']
+
+    def get_approver_1_name(self, obj):
+        return obj.approver_1.get_full_name() or obj.approver_1.username if obj.approver_1 else None
+
+    def get_approver_2_name(self, obj):
+        return obj.approver_2.get_full_name() or obj.approver_2.username if obj.approver_2 else None
+
+    def get_approver_3_name(self, obj):
+        return obj.approver_3.get_full_name() or obj.approver_3.username if obj.approver_3 else None
+
+    def get_members_count(self, obj):
+        return obj.org_structures.count()
+
+    def get_members(self, obj):
+        return [
+            {
+                'id': m.user.id,
+                'org_id': m.id,
+                'username': m.user.username,
+                'full_name': m.user.get_full_name() or m.user.username,
+                'email': m.user.email,
+                'position_title': m.position_title
+            }
+            for m in obj.org_structures.select_related('user').all()
+        ]
+
 
 
 class DivisionSerializer(serializers.ModelSerializer):
@@ -116,12 +160,16 @@ class UserListSerializer(serializers.ModelSerializer):
     role_name = serializers.SerializerMethodField()
     role_code = serializers.SerializerMethodField()
     division_name = serializers.SerializerMethodField()
+    company = serializers.SerializerMethodField()
+    company_id = serializers.SerializerMethodField()
+    company_code = serializers.SerializerMethodField()
 
     class Meta:
         model = User
         fields = [
             'id', 'username', 'email', 'first_name', 'last_name',
-            'role', 'role_name', 'role_code', 'division', 'division_name', 'department', 'is_approver', 'is_active',
+            'role', 'role_name', 'role_code', 'division', 'division_name', 'department', 'department_id',
+            'company', 'company_id', 'company_code', 'is_approver', 'is_active',
             'is_superuser', 'is_staff',
         ]
 
@@ -161,12 +209,42 @@ class UserListSerializer(serializers.ModelSerializer):
                 return str(obj.division)
         return None
 
+    def _get_user_company_obj(self, obj):
+        try:
+            if hasattr(obj, 'company_ref') and obj.company_ref:
+                return obj.company_ref
+            org = obj.org_positions.select_related('company', 'department__company').first()
+            if org:
+                if org.company:
+                    return org.company
+                if org.department and org.department.company:
+                    return org.department.company
+        except Exception:
+            pass
+        return None
+
+    def get_company(self, obj):
+        comp = self._get_user_company_obj(obj)
+        return comp.name if comp else (getattr(obj, 'company', '') or '')
+
+    def get_company_id(self, obj):
+        comp = self._get_user_company_obj(obj)
+        return comp.id if comp else getattr(obj, 'company_id', None)
+
+    def get_company_code(self, obj):
+        comp = self._get_user_company_obj(obj)
+        return comp.code if comp else (getattr(obj, 'company_code', '') or '')
+
 
 class UserDetailSerializer(serializers.ModelSerializer):
     """Full user serializer for detail/create/update views."""
     role = serializers.IntegerField(write_only=True, required=False, allow_null=True)
     role_details = serializers.SerializerMethodField()
     division_details = serializers.SerializerMethodField()
+    company = serializers.SerializerMethodField()
+    company_id = serializers.SerializerMethodField()
+    company_code = serializers.SerializerMethodField()
+    company_details = serializers.SerializerMethodField()
     role_name = serializers.SerializerMethodField()
     role_code = serializers.SerializerMethodField()
     roles = serializers.SerializerMethodField()
@@ -176,7 +254,8 @@ class UserDetailSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             'id', 'username', 'email', 'first_name', 'last_name',
-            'role', 'role_name', 'role_code', 'role_details', 'roles', 'division', 'division_details', 'department', 'phone',
+            'role', 'role_name', 'role_code', 'role_details', 'roles', 'division', 'division_details',
+            'department', 'department_id', 'company', 'company_id', 'company_code', 'company_details', 'phone',
             'is_approver', 'is_active', 'is_superuser', 'is_staff', 'password', 'date_joined',
         ]
         read_only_fields = ['date_joined']
@@ -253,6 +332,36 @@ class UserDetailSerializer(serializers.ModelSerializer):
             except Exception:
                 return {"code": obj.division, "name": str(obj.division)}
         return None
+
+    def _get_user_company_obj(self, obj):
+        try:
+            if hasattr(obj, 'company_ref') and obj.company_ref:
+                return obj.company_ref
+            org = obj.org_positions.select_related('company', 'department__company').first()
+            if org:
+                if org.company:
+                    return org.company
+                if org.department and org.department.company:
+                    return org.department.company
+        except Exception:
+            pass
+        return None
+
+    def get_company(self, obj):
+        comp = self._get_user_company_obj(obj)
+        return comp.name if comp else (getattr(obj, 'company', '') or '')
+
+    def get_company_id(self, obj):
+        comp = self._get_user_company_obj(obj)
+        return comp.id if comp else getattr(obj, 'company_id', None)
+
+    def get_company_code(self, obj):
+        comp = self._get_user_company_obj(obj)
+        return comp.code if comp else (getattr(obj, 'company_code', '') or '')
+
+    def get_company_details(self, obj):
+        comp = self._get_user_company_obj(obj)
+        return CompanySerializer(comp).data if comp else None
 
     def create(self, validated_data):
         password = validated_data.pop('password', None)
@@ -331,6 +440,12 @@ class WorkflowStepDefinitionSerializer(serializers.ModelSerializer):
             'is_brand_conditional', 'master_workflow_criteria', 'master_workflow_criteria_key_param_json', 
             'is_optional', 'conditions', 'role_users'
         ]
+
+    def to_internal_value(self, data):
+        if 'approver_type' in data and isinstance(data['approver_type'], str):
+            data = data.copy() if hasattr(data, 'copy') else dict(data)
+            data['approver_type'] = data['approver_type'].upper()
+        return super().to_internal_value(data)
 
     def get_user_name(self, obj):
         if obj.user_required:
@@ -485,6 +600,7 @@ class ApprovalRequestListSerializer(serializers.ModelSerializer):
     module_color = serializers.CharField(source='module.color', read_only=True)
     module_icon = serializers.CharField(source='module.icon', read_only=True)
     requester_name = serializers.SerializerMethodField()
+    requester_email = serializers.CharField(source='requester.email', read_only=True)
     division_name = serializers.CharField(source='division.name', read_only=True)
     current_step_name = serializers.SerializerMethodField()
 
@@ -493,7 +609,7 @@ class ApprovalRequestListSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'reference_id', 'module', 'module_name', 'module_code',
             'module_color', 'module_icon', 'title', 'status', 'priority',
-            'current_step', 'current_step_name', 'requester', 'requester_name',
+            'current_step', 'current_step_name', 'requester', 'requester_name', 'requester_email',
             'division', 'division_name', 'created_at', 'updated_at',
         ]
 
@@ -522,6 +638,7 @@ class ApprovalRequestDetailSerializer(serializers.ModelSerializer):
     module_icon = serializers.CharField(source='module.icon', read_only=True)
     workflow_name = serializers.CharField(source='workflow.name', read_only=True)
     requester_name = serializers.SerializerMethodField()
+    requester_email = serializers.CharField(source='requester.email', read_only=True)
     steps = ApprovalStepSerializer(many=True, read_only=True)
     division_details = serializers.SerializerMethodField()
     audit_logs = AuditLogSerializer(many=True, read_only=True)
@@ -533,7 +650,7 @@ class ApprovalRequestDetailSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'reference_id', 'module', 'module_name', 'module_code',
             'module_color', 'module_icon', 'workflow', 'workflow_name',
-            'requester', 'requester_name', 'title', 'description',
+            'requester', 'requester_name', 'requester_email', 'title', 'description',
             'payload', 'status', 'current_step', 'priority', 'division', 'division_details',
             'steps', 'audit_logs', 'feedbacks', 'watchers', 'created_at', 'updated_at',
         ]
@@ -580,7 +697,9 @@ class ActionSerializer(serializers.Serializer):
     dlv_date = serializers.CharField(required=False, default='', allow_blank=True, allow_null=True)
     step_data = serializers.JSONField(required=False, default=dict)
     po_number = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-    quotation = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    pr_number = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    quotation = serializers.JSONField(required=False, allow_null=True)
+    approval_quotation = serializers.JSONField(required=False, allow_null=True)
 
 
 class DelegateRequestSerializer(serializers.Serializer):
@@ -607,4 +726,116 @@ class CCEmailConfigSerializer(serializers.ModelSerializer):
         if obj.created_by:
             return obj.created_by.get_full_name() or obj.created_by.username
         return None
+
+
+class MasterAssetSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MasterAsset
+        fields = ['id', 'code', 'name', 'category', 'description', 'is_active', 'created_at']
+
+
+class MasterWBSSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MasterWBS
+        fields = ['id', 'code', 'description', 'project_name', 'is_active', 'created_at']
+
+
+class MasterEquipmentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MasterEquipment
+        fields = ['id', 'code', 'name', 'category', 'is_active', 'created_at']
+
+
+class MasterGoodsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MasterGoods
+        fields = ['id', 'code', 'name', 'unit', 'category', 'is_active', 'created_at']
+
+
+class PRNonTradeItemSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PRNonTradeItem
+        fields = ['id', 'item_order', 'goods_code', 'goods_name', 'unit', 'quantity', 'remark']
+
+
+class PRNonTradeSerializer(serializers.ModelSerializer):
+    items = PRNonTradeItemSerializer(many=True, required=False)
+    transaction_date = serializers.SerializerMethodField()
+    status = serializers.SerializerMethodField()
+    approval_status = serializers.SerializerMethodField()
+
+    class Meta:
+        model = PRNonTrade
+        fields = [
+            'id', 'transaction_id', 'transaction_date', 'requestor', 'requestor_name',
+            'requester_department', 'requester_company', 'purpose', 'goods_service_type',
+            'purchase_type', 'car_tbr_no', 'asset_type', 'asset_no', 'wbs_no',
+            'equipment_name', 'submission_remark', 'status', 'approval_status', 'approval_request',
+            'created_at', 'updated_at', 'items'
+        ]
+        read_only_fields = ['id', 'requestor', 'status', 'approval_status', 'approval_request', 'created_at', 'updated_at']
+
+    def get_transaction_date(self, obj):
+        if not obj.transaction_date:
+            return None
+        if hasattr(obj.transaction_date, 'strftime'):
+            return obj.transaction_date.strftime('%Y-%m-%d')
+        return str(obj.transaction_date).split('T')[0]
+
+    def get_approval_status(self, obj):
+        """
+        Dapatkan status approval (IN_PROGRESS, APPROVED, REJECTED, dll.)
+        dari tabel aw_approval_request berdasarkan relasi reference_id.
+        """
+        # 1. Cek via foreign key jika reference_id cocok dan sudah di-load/cache
+        if obj.approval_request_id:
+            try:
+                ar = obj.approval_request
+                if ar and (not obj.transaction_id or ar.reference_id == obj.transaction_id):
+                    return ar.status
+            except Exception:
+                pass
+
+        # 2. Query ke tabel aw_approval_request via reference_id = transaction_id
+        if obj.transaction_id:
+            ar = ApprovalRequest.objects.filter(reference_id=obj.transaction_id).only('status').first()
+            if ar:
+                return ar.status
+
+        return None
+
+    def get_status(self, obj):
+        """
+        Jika form masih DRAFT atau CANCELLED, kembalikan status tersebut.
+        Jika sudah diajukan (SUBMITTED), dapatkan status terkini dari
+        tabel aw_approval_request (misal: IN_PROGRESS, APPROVED, REJECTED).
+        """
+        if obj.status in ('DRAFT', 'CANCELLED'):
+            return obj.status
+
+        approval_status = self.get_approval_status(obj)
+        if approval_status:
+            return approval_status
+
+        return obj.status
+
+    def create(self, validated_data):
+        items_data = validated_data.pop('items', [])
+        pr = PRNonTrade.objects.create(**validated_data)
+        for order, item_data in enumerate(items_data, 1):
+            PRNonTradeItem.objects.create(pr_non_trade=pr, item_order=order, **item_data)
+        return pr
+
+    def update(self, instance, validated_data):
+        items_data = validated_data.pop('items', None)
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+
+        if items_data is not None:
+            instance.items.all().delete()
+            for order, item_data in enumerate(items_data, 1):
+                PRNonTradeItem.objects.create(pr_non_trade=instance, item_order=order, **item_data)
+        return instance
+
 

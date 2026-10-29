@@ -11,7 +11,7 @@ const api = axios.create({
     },
 });
 
-const getCookie = (name: string) => {
+export const getCookie = (name: string) => {
     const nameEQ = name + "=";
     const ca = document.cookie.split(';');
     for (let i = 0; i < ca.length; i++) {
