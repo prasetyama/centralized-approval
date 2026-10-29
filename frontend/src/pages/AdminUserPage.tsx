@@ -1,9 +1,10 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { Users, UserPlus, Shield, Building, Edit2, Trash2, Search, Filter, ArrowLeft } from 'lucide-react';
 import api from '@/services/api';
 import { Card } from '@/components/atoms/Card';
 import { Button } from '@/components/atoms/Button';
 import { Badge } from '@/components/atoms/Badge';
+import { Pagination } from '@/components/atoms/Pagination';
 import {
     Table,
     TableBody,
@@ -18,6 +19,8 @@ import { UserForm } from '@/components/organisms/UserForm';
 export const AdminUserPage = () => {
     const [search, setSearch] = useState('');
     const [debouncedSearch, setDebouncedSearch] = useState('');
+    const [page, setPage] = useState(1);
+    const [pageSize, setPageSize] = useState(10);
 
     const [isAdding, setIsAdding] = useState(false);
     const [editingUser, setEditingUser] = useState<any>(null);
@@ -26,13 +29,15 @@ export const AdminUserPage = () => {
     useEffect(() => {
         const timer = setTimeout(() => {
             setDebouncedSearch(search);
+            setPage(1);
         }, 500);
         return () => clearTimeout(timer);
     }, [search]);
 
-    const { data: users, isLoading: usersLoading } = useQuery({
-        queryKey: ['admin-users', debouncedSearch],
-        queryFn: () => api.get('/admin/users', { params: { search: debouncedSearch, page_size: 1000 } }) as Promise<any>,
+    const { data: users, isLoading: usersLoading, isFetching: usersFetching } = useQuery({
+        queryKey: ['admin-users', debouncedSearch, page, pageSize],
+        queryFn: () => api.get('/admin/users', { params: { search: debouncedSearch, page, page_size: pageSize } }) as Promise<any>,
+        placeholderData: keepPreviousData,
     });
 
     if (usersLoading) {
@@ -106,6 +111,7 @@ export const AdminUserPage = () => {
                 <Table>
                     <TableHeader>
                         <TableRow>
+                            <TableHead>No</TableHead>
                             <TableHead>User</TableHead>
                             <TableHead>Email</TableHead>
                             <TableHead>Role</TableHead>
@@ -115,13 +121,14 @@ export const AdminUserPage = () => {
                             <TableHead className="text-right">Action</TableHead>
                         </TableRow>
                     </TableHeader>
-                    <TableBody>
-                        {(users?.results || []).map((user: any) => {
+                    <TableBody className={usersFetching ? 'opacity-60 transition-opacity' : 'transition-opacity'}>
+                        {(users?.results || []).map((user: any, index: number) => {
                             const initial = (user.first_name?.[0] || user.username?.[0] || 'U').toUpperCase();
                             const fullName = `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.username || 'User';
 
                             return (
                                 <TableRow key={user.id}>
+                                    <TableCell>{((page - 1) * pageSize) + index + 1}</TableCell>
                                     <TableCell>
                                         <div className="flex items-center gap-3">
                                             <div className="h-10 w-10 rounded-full bg-slate-100 flex items-center justify-center font-bold text-slate-600 border border-slate-200">
@@ -172,8 +179,29 @@ export const AdminUserPage = () => {
                                 </TableRow>
                             );
                         })}
+                        {(!users?.results || users.results.length === 0) && (
+                            <TableRow>
+                                <TableCell colSpan={7} className="h-48 text-center">
+                                    <div className="flex flex-col items-center justify-center text-slate-400">
+                                        <Users className="h-10 w-10 opacity-20 mb-2" />
+                                        <p className="text-base font-medium">No users found</p>
+                                        <p className="text-xs text-slate-400">Try adjusting your search criteria</p>
+                                    </div>
+                                </TableCell>
+                            </TableRow>
+                        )}
                     </TableBody>
                 </Table>
+
+                {users?.count !== undefined && users.count > 0 && (
+                    <Pagination
+                        currentPage={page}
+                        pageSize={pageSize}
+                        totalCount={users.count}
+                        onPageChange={setPage}
+                        onPageSizeChange={setPageSize}
+                    />
+                )}
             </Card>
         </div>
     );
