@@ -173,7 +173,7 @@ export const PayloadRenderer = ({ moduleCode, payload }: PayloadRendererProps) =
                     <tbody className="divide-y divide-slate-100">
                         {(payload.items || []).map((item: any, i: number) => (
                             <tr key={i} className="hover:bg-slate-50/50">
-                                <td className="px-4 py-3 font-medium text-slate-800">{item.goods_name}</td>
+                                <td className="px-4 py-3 font-medium text-slate-800">{item.description}</td>
                                 <td className="px-4 py-3 text-right text-slate-600">{item.quantity} {item.unit}</td>
                                 <td className="px-4 py-3 text-right text-slate-600">{item.remark}</td>
                             </tr>

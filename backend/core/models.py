@@ -1088,18 +1088,21 @@ class MasterEquipment(models.Model):
 class MasterGoods(models.Model):
     """Master Goods data table for Goods Code lookup."""
     code = models.CharField(max_length=50, unique=True, help_text="Goods Code")
-    name = models.CharField(max_length=255, help_text="Goods Name")
+    description = models.TextField(blank=True, default='')
     unit = models.CharField(max_length=50, default='PCS')
-    category = models.CharField(max_length=100, blank=True, default='')
-    is_active = models.BooleanField(default=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-
+    created_at = models.DateTimeField(auto_now_add=True, null=True, blank=True)
+    active_status = models.CharField(max_length=5, blank=True, null=True)
+    dtfractstatus = models.CharField(max_length=25, blank=True, null=True)
+    plant = models.CharField(max_length=10, blank=True, null=True)
+    sloc = models.CharField(max_length=10, blank=True, null=True)
+    company_id = models.IntegerField(null=True, blank=True)
+    
     class Meta:
         db_table = 'aw_master_goods'
-        ordering = ['name']
+        ordering = ['code']
 
     def __str__(self):
-        return f"{self.code} - {self.name} ({self.unit})"
+        return f"{self.code} - {self.description} ({self.unit})"
 
 
 # ─────────────────────────────────────────────
@@ -1238,7 +1241,7 @@ class PRNonTradeItem(models.Model):
     )
     item_order = models.PositiveIntegerField(default=1)
     goods_code = models.CharField(max_length=100)
-    goods_name = models.CharField(max_length=255)
+    description = models.CharField(max_length=255)
     unit = models.CharField(max_length=50, default='PCS')
     quantity = models.IntegerField(default=1)
     remark = models.TextField(blank=True, default='')
@@ -1248,7 +1251,7 @@ class PRNonTradeItem(models.Model):
         ordering = ['item_order', 'id']
 
     def __str__(self):
-        return f"[{self.goods_code}] {self.goods_name} x {self.quantity} {self.unit}"
+        return f"[{self.goods_code}] {self.description} x {self.quantity} {self.unit}"
 
 
 

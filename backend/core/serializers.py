@@ -756,13 +756,13 @@ class MasterEquipmentSerializer(serializers.ModelSerializer):
 class MasterGoodsSerializer(serializers.ModelSerializer):
     class Meta:
         model = MasterGoods
-        fields = ['id', 'code', 'name', 'unit', 'category', 'is_active', 'created_at']
+        fields = ['id', 'code', 'description', 'unit', 'sloc', 'created_at']
 
 
 class PRNonTradeItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = PRNonTradeItem
-        fields = ['id', 'item_order', 'goods_code', 'goods_name', 'unit', 'quantity', 'remark']
+        fields = ['id', 'item_order', 'goods_code', 'description', 'unit', 'quantity', 'remark']
 
 
 class PRNonTradeSerializer(serializers.ModelSerializer):

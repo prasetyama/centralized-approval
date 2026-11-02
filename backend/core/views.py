@@ -1275,7 +1275,7 @@ class PRNonTradeViewSet(viewsets.ModelViewSet):
                 pr_non_trade=pr,
                 item_order=idx,
                 goods_code=item.get('goods_code', ''),
-                goods_name=item.get('goods_name', ''),
+                description=item.get('description', ''),
                 unit=item.get('unit', 'PCS'),
                 quantity=item.get('quantity', 1.0),
                 remark=item.get('remark', '')
@@ -1337,14 +1337,14 @@ class PRNonTradeViewSet(viewsets.ModelViewSet):
                 pr_non_trade=pr,
                 item_order=idx,
                 goods_code=item.get('goods_code', ''),
-                goods_name=item.get('goods_name', ''),
+                description=item.get('description', ''),
                 unit=item.get('unit', 'PCS'),
                 quantity=item.get('quantity', 1.0),
                 remark=item.get('remark', '')
             )
             items_list.append({
                 'goods_code': item_obj.goods_code,
-                'goods_name': item_obj.goods_name,
+                'description': item_obj.description,
                 'unit': item_obj.unit,
                 'quantity': float(item_obj.quantity),
                 'remark': item_obj.remark
@@ -1495,11 +1495,11 @@ class MasterEquipmentViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 class MasterGoodsViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = MasterGoods.objects.filter(is_active=True)
+    queryset = MasterGoods.objects.all()
     serializer_class = MasterGoodsSerializer
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, SearchFilter]
-    search_fields = ['code', 'name', 'category', 'unit']
+    search_fields = ['code', 'description', 'unit']
 
 
 class MasterCarNumberViewSet(viewsets.ReadOnlyModelViewSet):
