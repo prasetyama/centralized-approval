@@ -1054,20 +1054,35 @@ class MasterWBS(models.Model):
         return f"{self.code} - {self.description}"
 
 
+class MasterCarNumber(models.Model):
+    """Master CAR / TBR Number data table for CAR/TBR lookup."""
+    code = models.CharField(max_length=50, unique=True, help_text="CAR / TBR Code")
+    description = models.CharField(max_length=255, blank=True, default='', help_text="CAR / TBR Description")
+    company_id = models.IntegerField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, null=True, blank=True)
+
+    class Meta:
+        db_table = 'aw_master_car_number'
+        ordering = ['code']
+
+    def __str__(self):
+        return f"{self.code} - {self.description}"
+
+
 class MasterEquipment(models.Model):
     """Master Equipment data table for Equipment Name lookup."""
     code = models.CharField(max_length=50, unique=True, help_text="Equipment Code")
-    name = models.CharField(max_length=255, help_text="Equipment Name")
-    category = models.CharField(max_length=100, blank=True, default='')
-    is_active = models.BooleanField(default=True)
-    created_at = models.DateTimeField(auto_now_add=True)
+    plant = models.CharField(max_length=50, help_text="Plant")
+    company_id = models.IntegerField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, null=True, blank=True)
+    description = models.TextField(blank=True, default='')
 
     class Meta:
         db_table = 'aw_master_equipment'
-        ordering = ['name']
+        ordering = ['code']
 
     def __str__(self):
-        return f"{self.code} - {self.name}"
+        return f"{self.code} - {self.plant}"
 
 
 class MasterGoods(models.Model):

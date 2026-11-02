@@ -28,6 +28,7 @@ from core.models import (
     ApprovalRequest, ApprovalStep, AuditLog, Division, Department, RequestFeedback,
     Company, OrganizationStructure, Brand, UserBrand, MasterWorkflowCriteria, RequestWatcher, ModuleVariable,
     CCEmailConfig, MasterAsset, MasterWBS, MasterEquipment, MasterGoods,
+    MasterCarNumber,
     PRNonTrade, PRNonTradeItem, PRNonTradeSequence
 )
 from core.serializers import (
@@ -41,6 +42,7 @@ from core.serializers import (
     BrandSerializer, UserBrandSerializer, MasterWorkflowCriteriaSerializer,
     RequestWatcherSerializer, ModuleVariableSerializer, CCEmailConfigSerializer,
     MasterAssetSerializer, MasterWBSSerializer, MasterEquipmentSerializer, MasterGoodsSerializer,
+    MasterCarNumberSerializer,
     PRNonTradeSerializer, PRNonTradeItemSerializer
 )
 from core.engine import WorkflowEngine
@@ -1485,11 +1487,11 @@ class MasterWBSViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 class MasterEquipmentViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = MasterEquipment.objects.filter(is_active=True)
+    queryset = MasterEquipment.objects.all()
     serializer_class = MasterEquipmentSerializer
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, SearchFilter]
-    search_fields = ['code', 'name', 'category']
+    search_fields = ['code', 'plant', 'company_id']
 
 
 class MasterGoodsViewSet(viewsets.ReadOnlyModelViewSet):
@@ -1498,6 +1500,15 @@ class MasterGoodsViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, SearchFilter]
     search_fields = ['code', 'name', 'category', 'unit']
+
+
+class MasterCarNumberViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = MasterCarNumber.objects.all()
+    serializer_class = MasterCarNumberSerializer
+    permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend, SearchFilter]
+    search_fields = ['code', 'description']
+    filterset_fields = ['company_id']
 
 
 

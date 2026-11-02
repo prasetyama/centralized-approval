@@ -17,7 +17,7 @@ from core.views import (
     BrandViewSet, UserBrandViewSet, MasterWorkflowCriteriaViewSet,
     ModuleVariableViewSet, CCEmailConfigViewSet, system_logs,
     PRNonTradeViewSet, MasterAssetViewSet, MasterWBSViewSet,
-    MasterEquipmentViewSet, MasterGoodsViewSet
+    MasterEquipmentViewSet, MasterGoodsViewSet, MasterCarNumberViewSet
 )
 
 router = DefaultRouter()
@@ -41,6 +41,7 @@ router.register(r'master/assets', MasterAssetViewSet, basename='master-asset')
 router.register(r'master/wbs', MasterWBSViewSet, basename='master-wbs')
 router.register(r'master/equipments', MasterEquipmentViewSet, basename='master-equipment')
 router.register(r'master/goods', MasterGoodsViewSet, basename='master-goods')
+router.register(r'master/car-numbers', MasterCarNumberViewSet, basename='master-car-number')
 
 urlpatterns = [
     # Module Variables (Direct access as per spec)

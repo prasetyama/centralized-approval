@@ -9,6 +9,7 @@ from core.models import (
     ApprovalRequest, ApprovalStep, AuditLog, Division, Department, RequestFeedback,
     Company, OrganizationStructure, Brand, UserBrand, MasterWorkflowCriteria, RequestWatcher, ModuleVariable,
     UserRole, CCEmailConfig, MasterAsset, MasterWBS, MasterEquipment, MasterGoods,
+    MasterCarNumber,
     PRNonTrade, PRNonTradeItem, PRNonTradeSequence
 )
 
@@ -740,10 +741,16 @@ class MasterWBSSerializer(serializers.ModelSerializer):
         fields = ['id', 'code', 'description', 'created_at', 'company_id']
 
 
+class MasterCarNumberSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MasterCarNumber
+        fields = ['id', 'code', 'description', 'created_at', 'company_id']
+
+
 class MasterEquipmentSerializer(serializers.ModelSerializer):
     class Meta:
         model = MasterEquipment
-        fields = ['id', 'code', 'name', 'category', 'is_active', 'created_at']
+        fields = ['id', 'code', 'plant', 'company_id', 'description', 'created_at']
 
 
 class MasterGoodsSerializer(serializers.ModelSerializer):

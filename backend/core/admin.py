@@ -7,7 +7,7 @@ from django.contrib import admin
 from core.models import (
     Module, Role, User, WorkflowDefinition, WorkflowStepDefinition,
     ApprovalRequest, ApprovalStep, AuditLog, Division, Brand, UserBrand, MasterWorkflowCriteria, ModuleVariable,
-    UserRole, APIAuditLog, Company, Department, OrganizationStructure
+    UserRole, APIAuditLog, Company, Department, OrganizationStructure, MasterCarNumber
 )
 
 
@@ -137,4 +137,11 @@ class APIAuditLogAdmin(admin.ModelAdmin):
 
     def has_change_permission(self, request, obj=None):
         return False
+
+
+@admin.register(MasterCarNumber)
+class MasterCarNumberAdmin(admin.ModelAdmin):
+    list_display = ['code', 'description', 'company_id', 'created_at']
+    search_fields = ['code', 'description']
+    list_filter = ['company_id']
 
