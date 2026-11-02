@@ -731,13 +731,13 @@ class CCEmailConfigSerializer(serializers.ModelSerializer):
 class MasterAssetSerializer(serializers.ModelSerializer):
     class Meta:
         model = MasterAsset
-        fields = ['id', 'code', 'name', 'category', 'description', 'is_active', 'created_at']
+        fields = ['id', 'code', 'category', 'description', 'sno', 'company_id', 'created_at']
 
 
 class MasterWBSSerializer(serializers.ModelSerializer):
     class Meta:
         model = MasterWBS
-        fields = ['id', 'code', 'description', 'project_name', 'is_active', 'created_at']
+        fields = ['id', 'code', 'description', 'created_at', 'company_id']
 
 
 class MasterEquipmentSerializer(serializers.ModelSerializer):

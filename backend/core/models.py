@@ -1025,11 +1025,11 @@ class CCEmailConfig(models.Model):
 class MasterAsset(models.Model):
     """Master Asset data table for Asset No lookup."""
     code = models.CharField(max_length=50, unique=True, help_text="Asset Code / Tag Number")
-    name = models.CharField(max_length=255, help_text="Asset Name / Description")
     category = models.CharField(max_length=100, blank=True, default='')
     description = models.TextField(blank=True, default='')
-    is_active = models.BooleanField(default=True)
-    created_at = models.DateTimeField(auto_now_add=True)
+    company_id = models.IntegerField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, null=True, blank=True)
+    sno = models.CharField(max_length=50, blank=True, default='')
 
     class Meta:
         db_table = 'aw_master_asset'
@@ -1043,9 +1043,8 @@ class MasterWBS(models.Model):
     """Master WBS data table for WBS No lookup."""
     code = models.CharField(max_length=50, unique=True, help_text="WBS Element Code")
     description = models.CharField(max_length=255, help_text="WBS Description")
-    project_name = models.CharField(max_length=255, blank=True, default='')
-    is_active = models.BooleanField(default=True)
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(auto_now_add=True, null=True, blank=True)
+    company_id = models.IntegerField(null=True, blank=True)
 
     class Meta:
         db_table = 'aw_master_wbs'

@@ -1469,7 +1469,7 @@ class PRNonTradeViewSet(viewsets.ModelViewSet):
 
 
 class MasterAssetViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = MasterAsset.objects.filter(is_active=True)
+    queryset = MasterAsset.objects.all()
     serializer_class = MasterAssetSerializer
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, SearchFilter]
@@ -1477,11 +1477,11 @@ class MasterAssetViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 class MasterWBSViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = MasterWBS.objects.filter(is_active=True)
+    queryset = MasterWBS.objects.all()
     serializer_class = MasterWBSSerializer
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, SearchFilter]
-    search_fields = ['code', 'description', 'project_name']
+    search_fields = ['code', 'description']
 
 
 class MasterEquipmentViewSet(viewsets.ReadOnlyModelViewSet):

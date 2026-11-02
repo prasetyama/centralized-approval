@@ -364,7 +364,8 @@ export const ApprovalDetailPage = () => {
     const canRevise = Boolean(
         isApprover &&
         detail?.status === 'IN_PROGRESS' &&
-        activeStep
+        activeStep &&
+        detail.workflow !== 4 && detail.workflow !== 5
     );
 
     const lastRevisedLog = detail?.audit_logs?.find((log: any) => log.action === 'REVISED');
