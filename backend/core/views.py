@@ -1362,8 +1362,13 @@ class PRNonTradeViewSet(viewsets.ModelViewSet):
             }
         )
 
+        if request.data.get('requester_company') == 'PT Nirwana Lestari':
+            workflow_id = 11
+        else :
+            workflow_id = 10
+
         # Ensure WorkflowDefinition with ID 10 exists
-        wf_def = WorkflowDefinition.objects.filter(id=10).first()
+        wf_def = WorkflowDefinition.objects.filter(id=workflow_id).first()
         if not wf_def:
             wf_def = WorkflowDefinition.objects.create(
                 id=10,
@@ -1450,7 +1455,7 @@ class PRNonTradeViewSet(viewsets.ModelViewSet):
         else:
             approval_request = WorkflowEngine.submit_request(
                 module_code='PR_NON_TRADE',
-                workflow_id=10,
+                workflow_id=workflow_id,
                 requester=user,
                 title=f"PR Non Trade - {pr.transaction_id}",
                 payload=payload,
