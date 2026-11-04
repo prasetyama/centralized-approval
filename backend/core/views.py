@@ -126,7 +126,7 @@ class SendEorderCCNotificationView(generics.GenericAPIView):
             )
 
         try:
-            approval_request = WorkflowEngine.send_eorder_info_cc_notification(payload=payload)
+            approval_request = WorkflowEngine.send_eorder_info_cc_notification(payload=payload, user=request.user)
             return Response(
                 {
                     'success': True,

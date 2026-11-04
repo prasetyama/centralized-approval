@@ -688,11 +688,11 @@ class WorkflowEngine:
         return approval_request
 
     @staticmethod
-    def send_eorder_info_cc_notification(payload):
+    def send_eorder_info_cc_notification(payload, user=None):
         """
         Send eOrder Information CC email notification for a given reference_id.
         """
-        return transaction.on_commit(lambda: email_service.send_eorder_info_cc_notification(payload))
+        return transaction.on_commit(lambda: email_service.send_eorder_info_cc_notification(payload, user=user))
         
 
 

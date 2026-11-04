@@ -146,9 +146,22 @@ export const AdminUserPage = () => {
                                         </div>
                                     </TableCell>
                                     <TableCell>
-                                        <Badge variant="secondary" className="font-bold tracking-tight">
-                                            {user.role_name || 'No Role'}
-                                        </Badge>
+                                        <div className="flex flex-wrap items-center gap-1.5">
+                                            {user.role_name && user.role_code?.toUpperCase() !== 'SIT' ? (
+                                                <Badge variant="secondary" className="font-bold tracking-tight">
+                                                    {user.role_name}
+                                                </Badge>
+                                            ) : !user.is_sit ? (
+                                                <Badge variant="secondary" className="font-bold tracking-tight">
+                                                    {user.role_name || 'No Role'}
+                                                </Badge>
+                                            ) : null}
+                                            {(user.is_sit || user.role_code?.toUpperCase() === 'SIT') && (
+                                                <Badge variant="warning" className="font-bold tracking-tight">
+                                                    SIT
+                                                </Badge>
+                                            )}
+                                        </div>
                                     </TableCell>
                                     <TableCell>
                                         <div className="flex items-center gap-1.5 text-slate-600">

@@ -674,4 +674,230 @@ class CCEmailConfigTest(TestCase):
         self.assertTrue(CCEmailConfig.objects.filter(ship_to='0001005678', email='user4@test.com').exists())
 
 
+class SITRoleEmailRedirectTest(TestCase):
+    """
+    Tests for the SIT role and email redirection to prasetyama.hidayat@nirwanalestari.com
+    whenever a testing user (role SIT) is involved.
+    """
+    def setUp(self):
+        from core.models import Role, UserRole, CCEmailConfig
+
+        self.sit_role, _ = Role.objects.get_or_create(
+            code='SIT',
+            defaults={'name': 'SIT', 'description': 'Role untuk user testing (SIT)'}
+        )
+        self.mgr_role, _ = Role.objects.get_or_create(
+            code='MGR',
+            defaults={'name': 'Manager', 'description': 'Manager role'}
+        )
+
+        # SIT testing requester
+        self.sit_requester = User.objects.create_user(
+            username='sit_requester',
+            email='sit_requester@customer.com',
+            password='password123',
+            first_name='SIT',
+            last_name='Tester'
+        )
+        UserRole.objects.create(user=self.sit_requester, role=self.sit_role, dept='Testing')
+
+        # Production requester
+        self.prod_requester = User.objects.create_user(
+            username='prod_requester',
+            email='prod_requester@customer.com',
+            password='password123',
+            first_name='Prod',
+            last_name='User'
+        )
+
+        # Production approver
+        self.prod_approver = User.objects.create_user(
+            username='prod_approver',
+            email='prod_approver@company.com',
+            password='password123',
+            is_approver=True
+        )
+        UserRole.objects.create(user=self.prod_approver, role=self.mgr_role, dept='Sales')
+
+        # SIT testing approver
+        self.sit_approver = User.objects.create_user(
+            username='sit_approver',
+            email='sit_approver@company.com',
+            password='password123',
+            is_approver=True
+        )
+        UserRole.objects.create(user=self.sit_approver, role=self.mgr_role, dept='Sales')
+        UserRole.objects.create(user=self.sit_approver, role=self.sit_role, dept='Sales')
+
+        self.module = Module.objects.create(code='EORDER_SIT_TEST', name='E-Order')
+        self.workflow = WorkflowDefinition.objects.create(
+            name='Standard Order Workflow',
+            module=self.module,
+            is_active=True
+        )
+        WorkflowStepDefinition.objects.create(
+            workflow=self.workflow,
+            step_order=1,
+            name='Manager Approval',
+            approver_type='USER',
+            user_required=self.prod_approver
+        )
+
+        CCEmailConfig.objects.create(
+            email='real_distributor@production.com',
+            subject='eorder information',
+            ship_to='99999',
+            is_active=True
+        )
+
+    def test_is_sit_user_helper(self):
+        from core.email_service import is_sit_user
+        self.assertTrue(is_sit_user(self.sit_requester))
+        self.assertTrue(is_sit_user('sit_requester'))
+        self.assertTrue(is_sit_user('sit_requester@customer.com'))
+        self.assertTrue(is_sit_user(self.sit_approver))
+        self.assertFalse(is_sit_user(self.prod_requester))
+        self.assertFalse(is_sit_user(self.prod_approver))
+        self.assertFalse(is_sit_user('prod_approver@company.com'))
+
+    def test_step_and_final_and_reject_and_revise_emails_redirect_for_sit_requester(self):
+        from unittest.mock import patch
+        from core import email_service
+
+        req = WorkflowEngine.submit_request(
+            module_code='EORDER_SIT_TEST',
+            workflow_id=self.workflow.id,
+            requester=self.sit_requester,
+            title='SIT Order #001',
+            payload={'reference_id': 'SIT-001'}
+        )
+        step = req.steps.first()
+
+        # Call underlying synchronous functions (unwrap @run_in_thread) with mocked EmailMultiAlternatives
+        with patch('core.email_service.EmailMultiAlternatives') as mock_email_cls:
+            # 1. Step notification (approver is prod_approver, but requester is SIT -> redirect to prasetyama)
+            email_service.send_step_notification.__wrapped__(step)
+            self.assertTrue(mock_email_cls.called)
+            self.assertEqual(
+                mock_email_cls.call_args.kwargs['to'],
+                ['prasetyama.hidayat@nirwanalestari.com']
+            )
+
+            mock_email_cls.reset_mock()
+
+            # 2. Final approved notification
+            email_service.send_final_approved_notification.__wrapped__(req)
+            self.assertTrue(mock_email_cls.called)
+            self.assertEqual(
+                mock_email_cls.call_args.kwargs['to'],
+                ['prasetyama.hidayat@nirwanalestari.com']
+            )
+
+            mock_email_cls.reset_mock()
+
+            # 3. Rejected notification
+            email_service.send_rejected_notification.__wrapped__(req, step)
+            self.assertTrue(mock_email_cls.called)
+            self.assertEqual(
+                mock_email_cls.call_args.kwargs['to'],
+                ['prasetyama.hidayat@nirwanalestari.com']
+            )
+
+            mock_email_cls.reset_mock()
+
+            # 4. Revised notification
+            email_service.send_revised_to_requester_notification.__wrapped__(req, step, revisor=self.prod_approver, comments='Revise')
+            self.assertTrue(mock_email_cls.called)
+            self.assertEqual(
+                mock_email_cls.call_args.kwargs['to'],
+                ['prasetyama.hidayat@nirwanalestari.com']
+            )
+
+    def test_step_notification_redirects_when_approver_is_sit_user(self):
+        from unittest.mock import patch
+        from core import email_service
+
+        req = WorkflowEngine.submit_request(
+            module_code='EORDER_SIT_TEST',
+            workflow_id=self.workflow.id,
+            requester=self.prod_requester,
+            title='Order Assigned to SIT Approver',
+            payload={'reference_id': 'SIT-002'}
+        )
+        step = req.steps.first()
+        step.assigned_to = self.sit_approver
+        step.user_required = self.sit_approver
+        step.save()
+
+        with patch('core.email_service.EmailMultiAlternatives') as mock_email_cls:
+            email_service.send_step_notification.__wrapped__(step)
+            self.assertTrue(mock_email_cls.called)
+            self.assertEqual(
+                mock_email_cls.call_args.kwargs['to'],
+                ['prasetyama.hidayat@nirwanalestari.com']
+            )
+
+    def test_production_users_still_receive_normal_emails(self):
+        from unittest.mock import patch
+        from core import email_service
+
+        req = WorkflowEngine.submit_request(
+            module_code='EORDER_SIT_TEST',
+            workflow_id=self.workflow.id,
+            requester=self.prod_requester,
+            title='Prod Order #001',
+            payload={'reference_id': 'PROD-001'}
+        )
+        step = req.steps.first()
+
+        with patch('core.email_service.EmailMultiAlternatives') as mock_email_cls:
+            email_service.send_step_notification.__wrapped__(step)
+            self.assertEqual(
+                mock_email_cls.call_args.kwargs['to'],
+                ['prod_approver@company.com']
+            )
+
+            mock_email_cls.reset_mock()
+            email_service.send_final_approved_notification.__wrapped__(req)
+            self.assertEqual(
+                mock_email_cls.call_args.kwargs['to'],
+                ['prod_requester@customer.com']
+            )
+
+    def test_eorder_cc_notification_redirects_for_sit_user(self):
+        from unittest.mock import patch
+        from core import email_service
+
+        payload_sit = {
+            'reference_id': 'ORD-SIT-999',
+            'ship_to': '99999',
+            'subject': 'eorder information',
+            'distributor': 'PT Testing',
+            'inserted_by': 'sit_requester@customer.com',
+        }
+        with patch('core.email_service.EmailMultiAlternatives') as mock_email_cls:
+            email_service.send_eorder_info_cc_notification.__wrapped__(payload_sit, user=self.sit_requester)
+            self.assertTrue(mock_email_cls.called)
+            self.assertEqual(
+                mock_email_cls.call_args.kwargs['to'],
+                ['prasetyama.hidayat@nirwanalestari.com']
+            )
+
+        payload_prod = {
+            'reference_id': 'ORD-PROD-999',
+            'ship_to': '99999',
+            'subject': 'eorder information',
+            'distributor': 'PT Production',
+            'inserted_by': 'prod_requester@customer.com',
+        }
+        with patch('core.email_service.EmailMultiAlternatives') as mock_email_cls:
+            email_service.send_eorder_info_cc_notification.__wrapped__(payload_prod, user=self.prod_requester)
+            self.assertTrue(mock_email_cls.called)
+            self.assertEqual(
+                mock_email_cls.call_args.kwargs['to'],
+                ['real_distributor@production.com']
+            )
+
+
+
 

@@ -160,6 +160,13 @@ class User(AbstractUser):
         return f"{self.get_full_name() or self.username}"
 
     @property
+    def is_sit(self) -> bool:
+        """Return True if this user has the SIT testing role."""
+        return self.user_roles.filter(
+            models.Q(role__code__iexact='SIT') | models.Q(role_id__in=['SIT', 'sit'])
+        ).exists()
+
+    @property
     def department(self):
         org = self.org_positions.select_related('department').first()
         return org.department.name if org and org.department else ''
