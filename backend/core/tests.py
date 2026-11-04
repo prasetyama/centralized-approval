@@ -898,6 +898,126 @@ class SITRoleEmailRedirectTest(TestCase):
                 ['real_distributor@production.com']
             )
 
+    def test_is_test_auto_flag_and_sit_data_cleanup(self):
+        from core.models import PRNonTrade, PRNonTradeItem, PRNonTradeSequence, ApprovalRequest
+        from datetime import date
+
+        # 1. Production user submits a request & PR Non-Trade (#1)
+        prod_req = WorkflowEngine.submit_request(
+            module_code='EORDER_SIT_TEST',
+            workflow_id=self.workflow.id,
+            requester=self.prod_requester,
+            title='Prod Request #1',
+            payload={'reference_id': 'PROD-REQ-1'}
+        )
+        self.assertFalse(prod_req.is_test)
+
+        prod_pr = PRNonTrade.objects.create(
+            transaction_id=PRNonTrade.generate_transaction_id('NL', date(2026, 4, 11)),
+            transaction_date=date(2026, 4, 11),
+            requestor=self.prod_requester,
+            requestor_name='Prod User',
+            requester_department='IT',
+            requester_company='NL',
+            approval_request=prod_req,
+            status='SUBMITTED',
+            is_test=False,
+        )
+        self.assertEqual(prod_pr.transaction_id, 'PR/NL/NT/2026/000001')
+
+        # 2. SIT user submits a request & PR Non-Trade (#2)
+        sit_req = WorkflowEngine.submit_request(
+            module_code='EORDER_SIT_TEST',
+            workflow_id=self.workflow.id,
+            requester=self.sit_requester,
+            title='SIT Test Request #1',
+            payload={'reference_id': 'SIT-REQ-1'}
+        )
+        self.assertTrue(sit_req.is_test)
+
+        sit_pr = PRNonTrade.objects.create(
+            transaction_id=PRNonTrade.generate_transaction_id('NL', date(2026, 4, 11)),
+            transaction_date=date(2026, 4, 11),
+            requestor=self.sit_requester,
+            requestor_name='SIT Tester',
+            requester_department='Testing',
+            requester_company='NL',
+            approval_request=sit_req,
+            status='SUBMITTED',
+            is_test=True,
+        )
+        self.assertEqual(sit_pr.transaction_id, 'PR/NL/NT/2026/000002')
+        seq = PRNonTradeSequence.objects.get(code_name='NL', year=2026)
+        self.assertEqual(seq.last_number, 2)
+
+        # 3. Dry-run cleanup
+        preview = WorkflowEngine.cleanup_sit_data(
+            user_id=self.sit_requester.id,
+            remove_sit_role=True,
+            reset_sequences=True,
+            dry_run=True
+        )
+        self.assertEqual(preview['approval_requests_deleted'], 1)
+        self.assertEqual(preview['pr_non_trade_deleted'], 1)
+        self.assertTrue(ApprovalRequest.objects.filter(id=sit_req.id).exists())
+
+        # 4. Execute actual cleanup & transition user to Go-Live
+        result = WorkflowEngine.cleanup_sit_data(
+            user_id=self.sit_requester.id,
+            remove_sit_role=True,
+            reset_sequences=True,
+            dry_run=False
+        )
+        self.assertEqual(result['approval_requests_deleted'], 1)
+        self.assertEqual(result['pr_non_trade_deleted'], 1)
+        self.assertEqual(result['sit_roles_removed'], 1)
+
+        # Verify SIT transactions are purged while Production transactions & User record remain intact
+        self.assertFalse(ApprovalRequest.objects.filter(id=sit_req.id).exists())
+        self.assertFalse(PRNonTrade.objects.filter(id=sit_pr.id).exists())
+        self.assertTrue(ApprovalRequest.objects.filter(id=prod_req.id).exists())
+        self.assertTrue(PRNonTrade.objects.filter(id=prod_pr.id).exists())
+        self.assertTrue(User.objects.filter(id=self.sit_requester.id).exists())
+        self.assertFalse(self.sit_requester.is_sit)
+
+        # Verify PR sequence was rolled back from 2 -> 1 (highest remaining production PR)
+        seq.refresh_from_db()
+        self.assertEqual(seq.last_number, 1)
+
+    def test_cleanup_sit_api_endpoint(self):
+        from rest_framework.test import APIClient
+        from core.models import ApprovalRequest
+
+        sit_req = WorkflowEngine.submit_request(
+            module_code='EORDER_SIT_TEST',
+            workflow_id=self.workflow.id,
+            requester=self.sit_requester,
+            title='SIT API Cleanup Test',
+            payload={'reference_id': 'SIT-API-1'}
+        )
+        self.assertTrue(sit_req.is_test)
+
+        client = APIClient()
+        admin_user = User.objects.create_user(
+            username='admin_cleanup',
+            email='admin_cleanup@company.com',
+            password='password',
+            is_staff=True,
+            is_superuser=True
+        )
+        client.force_authenticate(user=admin_user)
+
+        res = client.post(
+            '/api/v1/admin/users/cleanup-sit/',
+            {'user_id': self.sit_requester.id, 'remove_sit_role': True, 'dry_run': False},
+            format='json'
+        )
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.data['data']['approval_requests_deleted'], 1)
+        self.assertFalse(ApprovalRequest.objects.filter(id=sit_req.id).exists())
+        self.assertFalse(self.sit_requester.is_sit)
+
+
 
 
 

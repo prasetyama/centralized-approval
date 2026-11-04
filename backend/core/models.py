@@ -620,6 +620,11 @@ class ApprovalRequest(models.Model):
         choices=[('LOW', 'Low'), ('MEDIUM', 'Medium'), ('HIGH', 'High'), ('URGENT', 'Urgent')],
         default='MEDIUM'
     )
+    is_test = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text="True if this approval request was created by a SIT testing user"
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -1209,6 +1214,11 @@ class PRNonTrade(models.Model):
         null=True,
         blank=True,
         related_name='pr_non_trade_headers'
+    )
+    is_test = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text="True if this PR Non-Trade record was created by a SIT testing user"
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

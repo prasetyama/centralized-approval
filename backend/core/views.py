@@ -937,6 +937,39 @@ class UserViewSet(viewsets.ModelViewSet):
             return UserListSerializer
         return UserDetailSerializer
 
+    @action(detail=False, methods=['post'], url_path='cleanup-sit')
+    def cleanup_sit(self, request):
+        """
+        POST /api/v1/admin/users/cleanup-sit/
+        Purge SIT testing transactions (ApprovalRequest, PRNonTrade, AuditLog, ApprovalStep),
+        recalculate PRNonTradeSequence running numbers, and optionally remove the SIT role
+        from the user(s) so they are ready for production (Go-Live).
+        """
+        user_id = request.data.get('user_id')
+        username_or_email = request.data.get('username_or_email')
+        remove_sit_role = bool(request.data.get('remove_sit_role', False))
+        reset_sequences = bool(request.data.get('reset_sequences', True))
+        dry_run = bool(request.data.get('dry_run', False))
+
+        summary = WorkflowEngine.cleanup_sit_data(
+            user_id=user_id,
+            username_or_email=username_or_email,
+            remove_sit_role=remove_sit_role,
+            reset_sequences=reset_sequences,
+            dry_run=dry_run,
+        )
+
+        return Response({
+            'success': True,
+            'message': (
+                'Preview pembersihan data SIT berhasil dihitung.'
+                if dry_run else
+                f"Pembersihan data SIT berhasil: {summary['approval_requests_deleted']} Approval Request dan "
+                f"{summary['pr_non_trade_deleted']} PR Non-Trade dihapus."
+            ),
+            'data': summary,
+        })
+
 
 class WorkflowDefinitionViewSet(viewsets.ModelViewSet):
     """CRUD for WorkflowDefinitions (Admin)."""
@@ -1223,6 +1256,7 @@ class PRNonTradeViewSet(viewsets.ModelViewSet):
             requestor_name=user.get_full_name() or user.username,
             requester_department=serializer.validated_data.get('requester_department') or dept,
             requester_company=serializer.validated_data.get('requester_company') or comp,
+            is_test=email_service.is_sit_user(user),
         )
 
     @action(detail=False, methods=['post'], url_path='save-draft')
@@ -1263,6 +1297,7 @@ class PRNonTradeViewSet(viewsets.ModelViewSet):
         pr.wbs_no = request.data.get('wbs_no', '')
         pr.equipment_name = request.data.get('equipment_name', '')
         pr.submission_remark = request.data.get('submission_remark', '')
+        pr.is_test = bool(pr.is_test or email_service.is_sit_user(user))
         pr.status = 'DRAFT'
         pr.save()
         pr.refresh_from_db()
@@ -1324,6 +1359,7 @@ class PRNonTradeViewSet(viewsets.ModelViewSet):
         pr.wbs_no = request.data.get('wbs_no', '')
         pr.equipment_name = request.data.get('equipment_name', '')
         pr.submission_remark = request.data.get('submission_remark', '')
+        pr.is_test = bool(pr.is_test or email_service.is_sit_user(user))
         pr.status = 'SUBMITTED'
         pr.save()
         pr.refresh_from_db()
@@ -1426,7 +1462,8 @@ class PRNonTradeViewSet(viewsets.ModelViewSet):
             approval_request.title = f"PR Non Trade - {pr.transaction_id}"
             approval_request.status = ApprovalRequest.Status.IN_PROGRESS
             approval_request.current_step = 1
-            approval_request.save(update_fields=['payload', 'description', 'title', 'status', 'current_step', 'updated_at'])
+            approval_request.is_test = bool(approval_request.is_test or pr.is_test)
+            approval_request.save(update_fields=['payload', 'description', 'title', 'status', 'current_step', 'is_test', 'updated_at'])
 
             # Reset steps back to step 1 waiting
             steps = approval_request.steps.all().order_by('step_order')

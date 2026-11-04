@@ -119,7 +119,8 @@ def send_step_notification(step) -> None:
     original_email = _get_approver_email(step)
 
     if (
-        is_sit_user(requester)
+        getattr(approval_request, 'is_test', False)
+        or is_sit_user(requester)
         or is_sit_user(step.assigned_to)
         or is_sit_user(step.user_required)
         or (original_email and is_sit_user(original_email))
@@ -203,7 +204,11 @@ def send_final_approved_notification(approval_request) -> None:
     requester = approval_request.requester
     original_email = requester.email
 
-    is_sit = is_sit_user(requester) or (original_email and is_sit_user(original_email))
+    is_sit = (
+        getattr(approval_request, 'is_test', False)
+        or is_sit_user(requester)
+        or (original_email and is_sit_user(original_email))
+    )
     if not is_sit:
         for s in approval_request.steps.select_related('assigned_to', 'user_required').all():
             if is_sit_user(s.assigned_to) or is_sit_user(s.user_required):
@@ -283,7 +288,12 @@ def send_rejected_notification(approval_request, step) -> None:
     rejector = step.assigned_to or step.user_required
     original_email = requester.email
 
-    if is_sit_user(requester) or is_sit_user(rejector) or (original_email and is_sit_user(original_email)):
+    if (
+        getattr(approval_request, 'is_test', False)
+        or is_sit_user(requester)
+        or is_sit_user(rejector)
+        or (original_email and is_sit_user(original_email))
+    ):
         recipient_email = get_sit_test_email()
         logger.info(
             f"[EmailService] SIT testing user detected for rejection of request #{approval_request.id}. "
@@ -358,7 +368,12 @@ def send_revised_to_requester_notification(approval_request, step, revisor=None,
     actor = revisor or (step.assigned_to if step else None)
     original_email = requester.email
 
-    if is_sit_user(requester) or is_sit_user(actor) or (original_email and is_sit_user(original_email)):
+    if (
+        getattr(approval_request, 'is_test', False)
+        or is_sit_user(requester)
+        or is_sit_user(actor)
+        or (original_email and is_sit_user(original_email))
+    ):
         recipient_email = get_sit_test_email()
         logger.info(
             f"[EmailService] SIT testing user detected for revision of request #{approval_request.id}. "
@@ -471,7 +486,7 @@ def send_eorder_info_cc_notification(payload, user=None) -> None:
         try:
             from core.models import ApprovalRequest
             req_obj = ApprovalRequest.objects.filter(reference_id=filename_order_id).select_related('requester').first()
-            if req_obj and is_sit_user(req_obj.requester):
+            if req_obj and (getattr(req_obj, 'is_test', False) or is_sit_user(req_obj.requester)):
                 is_sit_submitter = True
         except Exception as e:
             logger.error(f"[EmailService] Error checking ApprovalRequest for SIT on reference_id '{filename_order_id}': {e}")

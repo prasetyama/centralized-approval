@@ -671,7 +671,7 @@ class ApprovalRequestListSerializer(serializers.ModelSerializer):
         model = ApprovalRequest
         fields = [
             'id', 'reference_id', 'module', 'module_name', 'module_code',
-            'module_color', 'module_icon', 'title', 'status', 'priority',
+            'module_color', 'module_icon', 'title', 'status', 'priority', 'is_test',
             'current_step', 'current_step_name', 'requester', 'requester_name', 'requester_email',
             'division', 'division_name', 'created_at', 'updated_at',
         ]
@@ -714,7 +714,7 @@ class ApprovalRequestDetailSerializer(serializers.ModelSerializer):
             'id', 'reference_id', 'module', 'module_name', 'module_code',
             'module_color', 'module_icon', 'workflow', 'workflow_name',
             'requester', 'requester_name', 'requester_email', 'title', 'description',
-            'payload', 'status', 'current_step', 'priority', 'division', 'division_details',
+            'payload', 'status', 'current_step', 'priority', 'is_test', 'division', 'division_details',
             'steps', 'audit_logs', 'feedbacks', 'watchers', 'created_at', 'updated_at',
         ]
 
@@ -840,9 +840,9 @@ class PRNonTradeSerializer(serializers.ModelSerializer):
             'requester_department', 'requester_company', 'purpose', 'goods_service_type',
             'purchase_type', 'car_tbr_no', 'asset_type', 'asset_no', 'wbs_no',
             'equipment_name', 'submission_remark', 'status', 'approval_status', 'approval_request',
-            'created_at', 'updated_at', 'items'
+            'is_test', 'created_at', 'updated_at', 'items'
         ]
-        read_only_fields = ['id', 'requestor', 'status', 'approval_status', 'approval_request', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'requestor', 'status', 'approval_status', 'approval_request', 'is_test', 'created_at', 'updated_at']
 
     def get_transaction_date(self, obj):
         if not obj.transaction_date:
