@@ -5,21 +5,47 @@ import {
 } from 'lucide-react';
 import { prNonTradeService, PRNonTradeData } from '../services/prNonTradeService';
 import { useToast } from '../context/ToastContext';
+import { Pagination } from '../components/atoms/Pagination';
 
 export const PRNonTradeListPage: React.FC = () => {
     const navigate = useNavigate();
     const toast = useToast();
 
     const [items, setItems] = useState<PRNonTradeData[]>([]);
+    const [totalCount, setTotalCount] = useState<number>(0);
+    const [isServerPaginated, setIsServerPaginated] = useState<boolean>(false);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
+    const [debouncedSearch, setDebouncedSearch] = useState('');
+    const [currentPage, setCurrentPage] = useState(1);
+    const [limit, setLimit] = useState<number>(10);
+
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setDebouncedSearch(searchQuery);
+            setCurrentPage(1);
+        }, 300);
+        return () => clearTimeout(timer);
+    }, [searchQuery]);
 
     const loadData = async () => {
         setLoading(true);
         try {
-            const res = await prNonTradeService.getList();
-            const list = Array.isArray(res) ? res : res.results || [];
-            setItems(list);
+            const res = await prNonTradeService.getList({
+                page: currentPage,
+                limit,
+                search: debouncedSearch || undefined,
+            });
+            if (Array.isArray(res)) {
+                setItems(res);
+                setTotalCount(res.length);
+                setIsServerPaginated(false);
+            } else {
+                const list = res.results || [];
+                setItems(list);
+                setTotalCount(typeof res.count === 'number' ? res.count : list.length);
+                setIsServerPaginated(typeof res.count === 'number');
+            }
         } catch (err: any) {
             toast.error('Gagal memuat daftar PR Non-Trade.');
         } finally {
@@ -29,7 +55,7 @@ export const PRNonTradeListPage: React.FC = () => {
 
     useEffect(() => {
         loadData();
-    }, []);
+    }, [currentPage, limit, debouncedSearch]);
 
     const handleDeleteDraft = async (id: number) => {
         if (!window.confirm('Apakah Anda yakin ingin menghapus draft ini?')) return;
@@ -51,6 +77,10 @@ export const PRNonTradeListPage: React.FC = () => {
             (item.status || '').toLowerCase().includes(q)
         );
     });
+
+    const totalItems = isServerPaginated ? totalCount : filteredItems.length;
+    const startIndex = (currentPage - 1) * limit;
+    const paginatedItems = isServerPaginated ? filteredItems : filteredItems.slice(startIndex, startIndex + limit);
 
     return (
         <div className="max-w-7xl mx-auto py-6 px-4 space-y-6 font-poppins">
@@ -89,7 +119,7 @@ export const PRNonTradeListPage: React.FC = () => {
                 </div>
 
                 <div className="text-sm text-slate-600 font-medium">
-                    Total: <span className="font-bold text-slate-900">{filteredItems.length}</span> pengajuan
+                    Total: <span className="font-bold text-slate-900">{totalItems}</span> pengajuan
                 </div>
             </div>
 
@@ -109,21 +139,22 @@ export const PRNonTradeListPage: React.FC = () => {
                         </p>
                     </div>
                 ) : (
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-left text-sm text-slate-700">
-                            <thead className="bg-slate-100 text-slate-700 font-semibold border-b border-slate-200 uppercase text-xs tracking-wider">
-                                <tr>
-                                    <th className="py-3.5 px-4">Transaction ID</th>
-                                    <th className="py-3.5 px-4">Tanggal</th>
-                                    <th className="py-3.5 px-4">Requestor</th>
-                                    <th className="py-3.5 px-4">Purpose</th>
-                                    <th className="py-3.5 px-4 text-center">Status</th>
-                                    <th className="py-3.5 px-4 text-center">Total Item</th>
-                                    <th className="py-3.5 px-4 text-center w-28">Aksi</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-200">
-                                {filteredItems.map((item) => (
+                    <>
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left text-sm text-slate-700">
+                                <thead className="bg-slate-100 text-slate-700 font-semibold border-b border-slate-200 uppercase text-xs tracking-wider">
+                                    <tr>
+                                        <th className="py-3.5 px-4">Transaction ID</th>
+                                        <th className="py-3.5 px-4">Tanggal</th>
+                                        <th className="py-3.5 px-4">Requestor</th>
+                                        <th className="py-3.5 px-4">Purpose</th>
+                                        <th className="py-3.5 px-4 text-center">Status</th>
+                                        <th className="py-3.5 px-4 text-center">Total Item</th>
+                                        <th className="py-3.5 px-4 text-center w-28">Aksi</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-200">
+                                    {paginatedItems.map((item) => (
                                     <tr key={item.id} className="hover:bg-slate-50 transition-colors">
                                         <td className="py-3.5 px-4 font-mono font-bold text-blue-700 text-sm">
                                             {item.transaction_id || <span className="text-slate-400 italic font-normal">Draft (Belum diset)</span>}
@@ -214,7 +245,17 @@ export const PRNonTradeListPage: React.FC = () => {
                                 ))}
                             </tbody>
                         </table>
-                    </div>
+                        </div>
+
+                        <Pagination
+                            currentPage={currentPage}
+                            pageSize={limit}
+                            totalCount={totalItems}
+                            onPageChange={setCurrentPage}
+                            onPageSizeChange={setLimit}
+                            pageSizeOptions={[10, 30, 50]}
+                        />
+                    </>
                 )}
             </div>
         </div>
