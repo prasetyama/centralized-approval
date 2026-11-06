@@ -44,9 +44,26 @@ export interface MasterItem {
     project_name?: string;
 }
 
+export interface PRNonTradeListParams {
+    page?: number;
+    limit?: number;
+    search?: string;
+    status?: string;
+}
+
+export interface PRNonTradeListResponse {
+    count?: number;
+    next?: string | null;
+    previous?: string | null;
+    results?: PRNonTradeData[];
+    total_all?: number;
+    draft_count?: number;
+    submitted_count?: number;
+}
+
 export const prNonTradeService = {
-    getList: async (): Promise<{ results?: PRNonTradeData[] } | PRNonTradeData[]> => {
-        return api.get('/pr-non-trade/');
+    getList: async (params?: PRNonTradeListParams): Promise<PRNonTradeListResponse | PRNonTradeData[]> => {
+        return api.get('/pr-non-trade/', { params });
     },
 
     getDetail: async (id: number | string): Promise<PRNonTradeData> => {

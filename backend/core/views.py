@@ -23,6 +23,23 @@ class StandardResultsSetPagination(PageNumberPagination):
     page_size_query_param = 'page_size'
     max_page_size = 1000
 
+
+class PRNonTradePagination(PageNumberPagination):
+    page_size = 10
+    page_size_query_param = 'limit'
+    max_page_size = 1000
+
+    def get_page_size(self, request):
+        for param in ('limit', 'page_size'):
+            if param in request.query_params:
+                try:
+                    val = int(request.query_params[param])
+                    if val > 0:
+                        return min(val, self.max_page_size)
+                except (KeyError, ValueError, TypeError):
+                    pass
+        return self.page_size
+
 from core.models import (
     Module, Role, User, WorkflowDefinition, WorkflowStepDefinition,
     ApprovalRequest, ApprovalStep, AuditLog, Division, Department, RequestFeedback,
@@ -1239,12 +1256,61 @@ class PRNonTradeViewSet(viewsets.ModelViewSet):
     """
     serializer_class = PRNonTradeSerializer
     permission_classes = [IsAuthenticated]
+    pagination_class = PRNonTradePagination
 
-    def get_queryset(self):
+    def get_base_queryset(self):
         user = self.request.user
         if user.is_staff or user.is_superuser:
             return PRNonTrade.objects.all().select_related('approval_request').prefetch_related('items')
         return PRNonTrade.objects.filter(requestor=user).select_related('approval_request').prefetch_related('items')
+
+    def get_queryset(self):
+        qs = self.get_base_queryset()
+
+        status_param = self.request.query_params.get('status')
+        if status_param and status_param != 'ALL':
+            if status_param == 'SUBMITTED':
+                qs = qs.filter(
+                    Q(status__in=['SUBMITTED', 'IN_PROGRESS', 'APPROVED', 'REJECTED']) |
+                    Q(approval_request__status__in=['SUBMITTED', 'IN_PROGRESS', 'APPROVED', 'REJECTED'])
+                ).exclude(
+                    status__in=['DRAFT', 'CANCELLED', 'REVISE', 'REVISED']
+                ).exclude(
+                    approval_request__status__in=['REVISED', 'CANCELLED']
+                )
+            else:
+                qs = qs.filter(
+                    Q(status=status_param) | Q(approval_request__status=status_param)
+                )
+
+        search_param = (self.request.query_params.get('search') or '').strip()
+        if search_param:
+            qs = qs.filter(
+                Q(transaction_id__icontains=search_param) |
+                Q(purpose__icontains=search_param) |
+                Q(requestor_name__icontains=search_param) |
+                Q(requester_department__icontains=search_param) |
+                Q(status__icontains=search_param) |
+                Q(approval_request__status__icontains=search_param)
+            )
+
+        return qs
+
+    def list(self, request, *args, **kwargs):
+        response = super().list(request, *args, **kwargs)
+        if isinstance(response.data, dict):
+            base_qs = self.get_base_queryset()
+            response.data['total_all'] = base_qs.count()
+            response.data['draft_count'] = base_qs.filter(status='DRAFT').count()
+            response.data['submitted_count'] = base_qs.filter(
+                Q(status__in=['SUBMITTED', 'IN_PROGRESS', 'APPROVED', 'REJECTED']) |
+                Q(approval_request__status__in=['SUBMITTED', 'IN_PROGRESS', 'APPROVED', 'REJECTED'])
+            ).exclude(
+                status__in=['DRAFT', 'CANCELLED', 'REVISE', 'REVISED']
+            ).exclude(
+                approval_request__status__in=['REVISED', 'CANCELLED']
+            ).count()
+        return response
 
     def perform_create(self, serializer):
         user = self.request.user
