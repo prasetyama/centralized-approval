@@ -1,7 +1,7 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
-import { AuthGuard } from './components/organisms/AuthGuard';
+import { AuthGuard, NonApproverGuard } from './components/organisms/AuthGuard';
 import { MainLayout } from './components/organisms/MainLayout';
 import { DashboardPage } from './pages/DashboardPage';
 import { InboxPage } from './pages/InboxPage';
@@ -42,10 +42,12 @@ const AppRoutes = () => {
                 <Route path="approval" element={<InboxPage />} />
                 <Route path="history" element={<HistoryPage />} />
                 <Route path="pr-non-trade" element={<PRNonTradeListPage />} />
-                <Route path="pr-non-trade/create" element={<PRNonTradeFormPage />} />
-                <Route path="pr-non-trade/:id/edit" element={<PRNonTradeFormPage />} />
-                <Route path="pr/create" element={<PRNonTradeFormPage />} />
-                <Route path="pr/:id/edit" element={<PRNonTradeFormPage />} />
+                <Route element={<NonApproverGuard />}>
+                    <Route path="pr-non-trade/create" element={<PRNonTradeFormPage />} />
+                    <Route path="pr-non-trade/:id/edit" element={<PRNonTradeFormPage />} />
+                    <Route path="pr/create" element={<PRNonTradeFormPage />} />
+                    <Route path="pr/:id/edit" element={<PRNonTradeFormPage />} />
+                </Route>
                 <Route path="workflow/:id" element={<ApprovalDetailPage />} />
                 <Route path="admin/users" element={<AdminUserPage />} />
                 <Route path="admin/workflows" element={<AdminWorkflowPage />} />
