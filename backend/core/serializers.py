@@ -166,6 +166,7 @@ class UserListSerializer(serializers.ModelSerializer):
     company = serializers.SerializerMethodField()
     company_id = serializers.SerializerMethodField()
     company_code = serializers.SerializerMethodField()
+    is_approver = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -270,6 +271,11 @@ class UserListSerializer(serializers.ModelSerializer):
         comp = self._get_user_company_obj(obj)
         return comp.code if comp else (getattr(obj, 'company_code', '') or '')
 
+    def get_is_approver(self, obj):
+        return not obj.org_positions.exclude(
+            department__code__icontains='DEPT_PURCHASING'
+        ).exists()
+
 
 class UserDetailSerializer(serializers.ModelSerializer):
     """Full user serializer for detail/create/update views."""
@@ -284,6 +290,7 @@ class UserDetailSerializer(serializers.ModelSerializer):
     role_name = serializers.SerializerMethodField()
     role_code = serializers.SerializerMethodField()
     roles = serializers.SerializerMethodField()
+    is_approver = serializers.SerializerMethodField()
     password = serializers.CharField(write_only=True, required=False, min_length=6)
 
     class Meta:
@@ -411,6 +418,11 @@ class UserDetailSerializer(serializers.ModelSerializer):
         comp = self._get_user_company_obj(obj)
         return CompanySerializer(comp).data if comp else None
 
+    def get_is_approver(self, obj):
+        return not obj.org_positions.exclude(
+            department__code__icontains='DEPT_PURCHASING'
+        ).exists()
+      
     def _sync_roles(self, user, role_id, is_sit, role_provided=False):
         from django.db.models import Q
         dept = user.department or ''
