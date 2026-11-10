@@ -557,6 +557,7 @@ class WorkflowStepDefinitionSerializer(serializers.ModelSerializer):
     """Serializer for WorkflowStepDefinition."""
     role_name = serializers.CharField(source='role_required.name', read_only=True)
     user_name = serializers.SerializerMethodField()
+    adhoc_user_name = serializers.SerializerMethodField()
     role_users = serializers.SerializerMethodField()
     target_department_name = serializers.CharField(source='target_department.name', read_only=True)
     master_workflow_criteria_key_param_json = serializers.CharField(source='master_workflow_criteria.key_param_json', read_only=True)
@@ -568,7 +569,7 @@ class WorkflowStepDefinitionSerializer(serializers.ModelSerializer):
             'role_required', 'role_name', 'user_required', 'user_name', 
             'target_department', 'target_department_name', 'required_inputs',
             'is_brand_conditional', 'master_workflow_criteria', 'master_workflow_criteria_key_param_json', 
-            'is_optional', 'allow_adhoc', 'conditions', 'role_users'
+            'is_optional', 'allow_adhoc', 'adhoc_user', 'adhoc_user_name', 'conditions', 'role_users'
         ]
 
     def to_internal_value(self, data):
@@ -580,6 +581,11 @@ class WorkflowStepDefinitionSerializer(serializers.ModelSerializer):
     def get_user_name(self, obj):
         if obj.user_required:
             return obj.user_required.get_full_name() or obj.user_required.username
+        return None
+
+    def get_adhoc_user_name(self, obj):
+        if obj.adhoc_user:
+            return obj.adhoc_user.get_full_name() or obj.adhoc_user.username
         return None
 
     def get_role_users(self, obj):
@@ -637,7 +643,15 @@ class WorkflowDefinitionWriteSerializer(serializers.ModelSerializer):
             instance.total_steps = len(steps_data)
             instance.steps.all().delete()
             for step_data in steps_data:
-                WorkflowStepDefinition.objects.create(workflow=instance, **step_data)
+                step_def = WorkflowStepDefinition.objects.create(workflow=instance, **step_data)
+                ApprovalStep.objects.filter(
+                    request__workflow=instance,
+                    name=step_def.name,
+                    is_adhoc=False,
+                ).update(
+                    allow_adhoc=step_def.allow_adhoc,
+                    adhoc_user=step_def.adhoc_user if step_def.allow_adhoc else None,
+                )
         instance.save()
         return instance
 
@@ -650,6 +664,8 @@ class ApprovalStepSerializer(serializers.ModelSerializer):
     user_required_name = serializers.SerializerMethodField()
     user_required_email = serializers.CharField(source='user_required.email', read_only=True)
     target_department_name = serializers.CharField(source='target_department.name', read_only=True)
+    adhoc_user = serializers.SerializerMethodField()
+    adhoc_user_name = serializers.SerializerMethodField()
     adhoc_created_by_name = serializers.SerializerMethodField()
 
     class Meta:
@@ -658,7 +674,7 @@ class ApprovalStepSerializer(serializers.ModelSerializer):
             'id', 'step_order', 'name', 'approver_type', 'assigned_to', 'assigned_to_name', 'assigned_to_email',
             'role_required', 'role_name', 'user_required', 'user_required_name', 'user_required_email',
             'target_department', 'target_department_name', 'required_inputs', 'step_data',
-            'allow_adhoc', 'is_adhoc', 'adhoc_created_by', 'adhoc_created_by_name',
+            'allow_adhoc', 'adhoc_user', 'adhoc_user_name', 'is_adhoc', 'adhoc_created_by', 'adhoc_created_by_name',
             'status', 'comments', 'acted_at',
         ]
  
@@ -671,6 +687,30 @@ class ApprovalStepSerializer(serializers.ModelSerializer):
     def get_user_required_name(self, obj):
         if obj.user_required:
             return obj.user_required.get_full_name() or obj.user_required.username
+        return None
+
+    def _resolve_adhoc_user(self, obj):
+        if obj.adhoc_user:
+            return obj.adhoc_user
+        if obj.allow_adhoc and obj.request_id:
+            try:
+                step_def = obj.request.workflow.steps.filter(
+                    allow_adhoc=True, adhoc_user__isnull=False
+                ).select_related('adhoc_user').first()
+                if step_def:
+                    return step_def.adhoc_user
+            except Exception:
+                pass
+        return None
+
+    def get_adhoc_user(self, obj):
+        u = self._resolve_adhoc_user(obj)
+        return u.id if u else None
+
+    def get_adhoc_user_name(self, obj):
+        u = self._resolve_adhoc_user(obj)
+        if u:
+            return u.get_full_name() or u.username
         return None
 
     def get_adhoc_created_by_name(self, obj):
@@ -837,6 +877,7 @@ class ActionSerializer(serializers.Serializer):
     pr_number = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     quotation = serializers.JSONField(required=False, allow_null=True)
     approval_quotation = serializers.JSONField(required=False, allow_null=True)
+    use_adhoc = serializers.BooleanField(required=False, default=False)
     adhoc_approver_id = serializers.IntegerField(required=False, allow_null=True)
     adhoc_step_name = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     adhoc_notes = serializers.CharField(required=False, allow_blank=True, allow_null=True)

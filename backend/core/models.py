@@ -535,6 +535,14 @@ class WorkflowStepDefinition(models.Model):
         default=False,
         help_text="If true, approver at this step can optionally insert an ad-hoc approval step after this step"
     )
+    adhoc_user = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='adhoc_step_definitions',
+        help_text="Predetermined user for optional ad-hoc approval configured in Admin Workflow"
+    )
     conditions = models.JSONField(
         default=list, 
         blank=True, 
@@ -775,6 +783,14 @@ class ApprovalStep(models.Model):
     allow_adhoc = models.BooleanField(
         default=False,
         help_text="If true, approver at this step can optionally insert an ad-hoc approval step after this step"
+    )
+    adhoc_user = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='adhoc_approval_steps',
+        help_text="Predetermined ad-hoc approver copied from step definition"
     )
     is_adhoc = models.BooleanField(
         default=False,
