@@ -1,6 +1,6 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Trash2, ArrowUp, ArrowDown, Save, X, Tag, XCircle } from 'lucide-react';
+import { Plus, Trash2, ArrowUp, ArrowDown, Save, X, Tag, XCircle, Search, Loader2, User as UserIcon } from 'lucide-react';
 import api from '@/services/api';
 import { Card } from '@/components/atoms/Card';
 import { Button } from '@/components/atoms/Button';
@@ -8,6 +8,167 @@ import { Input } from '@/components/atoms/Input';
 import { Select } from '@/components/atoms/Select';
 import { Textarea } from '@/components/atoms/Textarea';
 import { CriteriaRuleBuilder } from '@/components/molecules/CriteriaRuleBuilder';
+
+/** Komponen pencarian user berdasarkan keyword tanpa pre-load data di awal */
+const UserSearchSelect: React.FC<{
+    label: string;
+    value?: number | null;
+    selectedName?: string | null;
+    onChange: (userId: number | null, userName: string) => void;
+    placeholder?: string;
+    required?: boolean;
+}> = ({ label, value, selectedName, onChange, placeholder = 'Cari nama / username...', required = false }) => {
+    const [keyword, setKeyword] = useState('');
+    const [debouncedKeyword, setDebouncedKeyword] = useState('');
+    const [isOpen, setIsOpen] = useState(false);
+    const [localLabel, setLocalLabel] = useState<string>('');
+    const containerRef = useRef<HTMLDivElement>(null);
+    const inputRef = useRef<HTMLInputElement>(null);
+
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setDebouncedKeyword(keyword.trim());
+        }, 300);
+        return () => clearTimeout(timer);
+    }, [keyword]);
+
+    useEffect(() => {
+        const handleClickOutside = (e: MouseEvent) => {
+            if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+                setIsOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const { data: searchData, isFetching } = useQuery<any>({
+        queryKey: ['admin-users-keyword', debouncedKeyword],
+        queryFn: () => api.get(`/admin/users?search=${encodeURIComponent(debouncedKeyword)}`),
+        enabled: isOpen && debouncedKeyword.length > 0,
+    });
+
+    const results = (searchData as any)?.results || (Array.isArray(searchData) ? searchData : []);
+    const displayLabel = selectedName || localLabel || (value ? `User #${value}` : '');
+
+    return (
+        <div ref={containerRef} className="w-full space-y-1.5 relative">
+            <label className="text-sm font-medium text-slate-700 block">
+                {label} {required && <span className="text-red-500">*</span>}
+            </label>
+
+            {value && !isOpen ? (
+                <div className="flex h-10 w-full items-center justify-between rounded-md border border-slate-200 bg-white px-3 py-2 text-sm">
+                    <button
+                        type="button"
+                        onClick={() => {
+                            setIsOpen(true);
+                            setTimeout(() => inputRef.current?.focus(), 0);
+                        }}
+                        className="flex items-center gap-2 text-left flex-1 truncate text-slate-800 font-medium hover:text-blue-600"
+                        title="Klik untuk mengganti user"
+                    >
+                        <UserIcon size={14} className="text-slate-400 shrink-0" />
+                        <span className="truncate">{displayLabel}</span>
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => {
+                            setLocalLabel('');
+                            setKeyword('');
+                            onChange(null, '');
+                        }}
+                        className="ml-2 text-slate-400 hover:text-red-500 transition-colors"
+                        title="Hapus pilihan"
+                    >
+                        <X size={14} />
+                    </button>
+                </div>
+            ) : (
+                <div className="relative">
+                    <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                    <input
+                        ref={inputRef}
+                        type="text"
+                        value={keyword}
+                        onFocus={() => setIsOpen(true)}
+                        onChange={(e) => {
+                            setKeyword(e.target.value);
+                            setIsOpen(true);
+                        }}
+                        placeholder={value ? displayLabel : placeholder}
+                        className="flex h-10 w-full rounded-md border border-slate-200 bg-white pl-9 pr-8 py-2 text-sm ring-offset-white placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 transition-all"
+                    />
+                    {isFetching ? (
+                        <Loader2 size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 animate-spin text-blue-500" />
+                    ) : (keyword || value) ? (
+                        <button
+                            type="button"
+                            onClick={() => {
+                                if (keyword) {
+                                    setKeyword('');
+                                } else {
+                                    setIsOpen(false);
+                                }
+                            }}
+                            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                        >
+                            <X size={14} />
+                        </button>
+                    ) : null}
+                </div>
+            )}
+
+            {required && (
+                <input
+                    type="text"
+                    value={value || ''}
+                    onChange={() => {}}
+                    required
+                    tabIndex={-1}
+                    className="sr-only"
+                />
+            )}
+
+            {isOpen && keyword.trim().length > 0 && (
+                <div className="absolute z-50 mt-1 w-full rounded-lg border border-slate-200 bg-white shadow-lg max-h-56 overflow-y-auto">
+                    {isFetching ? (
+                        <div className="flex items-center gap-2 px-3 py-3 text-xs text-slate-500">
+                            <Loader2 size={14} className="animate-spin text-blue-500" />
+                            Mencari user...
+                        </div>
+                    ) : results.length === 0 ? (
+                        <div className="px-3 py-3 text-xs text-slate-400 italic">
+                            Tidak ada user ditemukan untuk "{keyword}"
+                        </div>
+                    ) : (
+                        results.map((u: any) => {
+                            const fullName = `${u.first_name || ''} ${u.last_name || ''}`.trim() || u.username;
+                            return (
+                                <button
+                                    key={u.id}
+                                    type="button"
+                                    onClick={() => {
+                                        setLocalLabel(fullName);
+                                        onChange(u.id, fullName);
+                                        setKeyword('');
+                                        setIsOpen(false);
+                                    }}
+                                    className="w-full text-left px-3 py-2 text-xs hover:bg-blue-50 transition-colors border-b border-slate-50 last:border-b-0 flex flex-col"
+                                >
+                                    <span className="font-bold text-slate-800">{fullName}</span>
+                                    <span className="text-[11px] text-slate-400">
+                                        @{u.username}{u.department ? ` • ${u.department}` : ''}
+                                    </span>
+                                </button>
+                            );
+                        })
+                    )}
+                </div>
+            )}
+        </div>
+    );
+};
 
 /** Preset pilihan required_inputs yang umum digunakan */
 const PRESET_REQUIRED_INPUTS: { key: string; label: string }[] = [
@@ -176,11 +337,6 @@ export const WorkflowForm: React.FC<WorkflowFormProps> = ({ initialData, onClose
         queryFn: () => api.get('/admin/roles'),
     });
 
-    const { data: users } = useQuery<any>({
-        queryKey: ['admin-users'],
-        queryFn: () => api.get('/admin/users?is_approver=true'),
-    });
-
     const mutation = useMutation({
         mutationFn: (data: any) => {
             if (isEdit) {
@@ -278,10 +434,6 @@ export const WorkflowForm: React.FC<WorkflowFormProps> = ({ initialData, onClose
     const moduleOptions = ((modules as any)?.results || []).map((m: any) => ({ value: m.id, label: m.name }));
     const roleOptions = ((roles as any)?.results || []).map((r: any) => ({ value: r.id, label: r.name }));
     const departmentOptions = ((departments as any)?.results || []).map((d: any) => ({ value: d.id, label: d.name }));
-    const userOptions = ((users as any)?.results || []).map((u: any) => ({
-        value: u.id,
-        label: `${u.first_name} ${u.last_name}`.trim() || u.username
-    }));
 
     return (
         <form onSubmit={handleSubmit} className="space-y-6 animate-in zoom-in-95 duration-300">
@@ -402,7 +554,8 @@ export const WorkflowForm: React.FC<WorkflowFormProps> = ({ initialData, onClose
                                                         updates.user_required = null;
                                                         updates.target_department = null;
                                                     } else if (type === 'USER') {
-                                                        updates.user_required = (users as any)?.results?.[0]?.id || null;
+                                                        updates.user_required = null;
+                                                        updates.user_name = '';
                                                         updates.role_required = null;
                                                         updates.target_department = null;
                                                     } else if (type === 'REQUESTOR') {
@@ -427,11 +580,17 @@ export const WorkflowForm: React.FC<WorkflowFormProps> = ({ initialData, onClose
                                                     required
                                                 />
                                             ) : step.approver_type === 'USER' ? (
-                                                <Select
+                                                <UserSearchSelect
                                                     label="User Required"
-                                                    options={userOptions}
-                                                    value={step.user_required || ''}
-                                                    onChange={(e) => handleStepChange(index, { user_required: parseInt(e.target.value) })}
+                                                    value={step.user_required}
+                                                    selectedName={step.user_name}
+                                                    onChange={(userId, userName) =>
+                                                        handleStepChange(index, {
+                                                            user_required: userId,
+                                                            user_name: userName,
+                                                        })
+                                                    }
+                                                    placeholder="Cari nama / username..."
                                                     required
                                                 />
                                             ) : step.approver_type === 'TARGET_DEPT_ROLE' ? (
@@ -527,9 +686,8 @@ export const WorkflowForm: React.FC<WorkflowFormProps> = ({ initialData, onClose
                                                     onChange={(e) =>
                                                         handleStepChange(index, {
                                                             allow_adhoc: e.target.checked,
-                                                            adhoc_user: e.target.checked
-                                                                ? (step.adhoc_user || (users as any)?.results?.[0]?.id || null)
-                                                                : null,
+                                                            adhoc_user: e.target.checked ? (step.adhoc_user || null) : null,
+                                                            adhoc_user_name: e.target.checked ? (step.adhoc_user_name || '') : '',
                                                         })
                                                     }
                                                     className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
@@ -539,16 +697,18 @@ export const WorkflowForm: React.FC<WorkflowFormProps> = ({ initialData, onClose
                                                 </label>
                                             </div>
                                             {step.allow_adhoc && (
-                                                <div className="w-full md:w-64">
-                                                    <Select
+                                                <div className="w-full md:w-72">
+                                                    <UserSearchSelect
                                                         label="Ad-Hoc User (Ditentukan Admin)"
-                                                        options={[{ value: '', label: '-- Pilih Ad-Hoc User --' }, ...userOptions]}
-                                                        value={step.adhoc_user || ''}
-                                                        onChange={(e) =>
+                                                        value={step.adhoc_user}
+                                                        selectedName={step.adhoc_user_name}
+                                                        onChange={(userId, userName) =>
                                                             handleStepChange(index, {
-                                                                adhoc_user: e.target.value ? parseInt(e.target.value) : null,
+                                                                adhoc_user: userId,
+                                                                adhoc_user_name: userName,
                                                             })
                                                         }
+                                                        placeholder="Cari nama / username ad-hoc..."
                                                         required
                                                     />
                                                 </div>
