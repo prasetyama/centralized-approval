@@ -15,6 +15,9 @@ export interface TimelineStep {
     step_data?: Record<string, any>;
     approver_type?: string;
     target_department_name?: string;
+    allow_adhoc?: boolean;
+    is_adhoc?: boolean;
+    adhoc_created_by_name?: string;
 }
 
 interface TimelineProps {
@@ -114,12 +117,19 @@ export const Timeline = ({ steps, currentStep }: TimelineProps) => {
                         {/* Content */}
                         <div className="flex-1 pt-1">
                             <div className="flex items-center justify-between">
-                                <p className={cn(
-                                    "font-semibold text-sm",
-                                    isCurrent ? "text-blue-600" : isAdditional ? "text-blue-600" : "text-slate-900"
-                                )}>
-                                    {step.name}
-                                </p>
+                                <div className="flex items-center gap-2">
+                                    <p className={cn(
+                                        "font-semibold text-sm",
+                                        isCurrent ? "text-blue-600" : isAdditional ? "text-blue-600" : "text-slate-900"
+                                    )}>
+                                        {step.name}
+                                    </p>
+                                    {step.is_adhoc && (
+                                        <span className="inline-flex items-center rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-bold text-indigo-700 border border-indigo-200 uppercase tracking-wider">
+                                            Ad-Hoc
+                                        </span>
+                                    )}
+                                </div>
                                 {step.acted_at && (
                                     <span className="text-xs text-slate-400">
                                         {step.status.toString().replace('_', ' ').toLowerCase() + ' at ' + formatDate(step.acted_at)}
@@ -146,6 +156,13 @@ export const Timeline = ({ steps, currentStep }: TimelineProps) => {
                                     </>
                                 )}
                             </p>
+
+                            {step.is_adhoc && step.adhoc_created_by_name && (
+                                <p className="text-[11px] text-indigo-600 font-medium mt-0.5">
+                                    Ditambahkan oleh: {step.adhoc_created_by_name}
+                                    {step.step_data?.adhoc_notes ? ` — "${step.step_data.adhoc_notes}"` : ''}
+                                </p>
+                            )}
 
                             {/* Additional Step Metadata (PR Number / PO Number / Quotation No / Approved Quotation) */}
                             {(prNumber || poNumber || quotationText || approvedQuotation) && (

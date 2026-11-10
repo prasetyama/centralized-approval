@@ -239,6 +239,14 @@ class WorkflowApproveView(generics.GenericAPIView):
             step_data['quotation'] = serializer.validated_data['quotation']
         if serializer.validated_data.get('approval_quotation'):
             step_data['approval_quotation'] = serializer.validated_data['approval_quotation']
+        if serializer.validated_data.get('use_adhoc'):
+            step_data['use_adhoc'] = serializer.validated_data['use_adhoc']
+        if serializer.validated_data.get('adhoc_approver_id'):
+            step_data['adhoc_approver_id'] = serializer.validated_data['adhoc_approver_id']
+        if serializer.validated_data.get('adhoc_step_name'):
+            step_data['adhoc_step_name'] = serializer.validated_data['adhoc_step_name']
+        if serializer.validated_data.get('adhoc_notes'):
+            step_data['adhoc_notes'] = serializer.validated_data['adhoc_notes']
 
         try:
             approval_request = WorkflowEngine.approve_step(
