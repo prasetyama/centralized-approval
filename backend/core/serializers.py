@@ -3,6 +3,7 @@ Core Serializers
 ================
 DRF serializers for all core models.
 """
+from django.db.models import Q
 from rest_framework import serializers
 from core.models import (
     Module, Role, User, WorkflowDefinition, WorkflowStepDefinition,
@@ -163,6 +164,8 @@ class UserListSerializer(serializers.ModelSerializer):
     roles = serializers.SerializerMethodField()
     is_sit = serializers.SerializerMethodField()
     division_name = serializers.SerializerMethodField()
+    department = serializers.SerializerMethodField()
+    department_id = serializers.SerializerMethodField()
     company = serializers.SerializerMethodField()
     company_id = serializers.SerializerMethodField()
     company_code = serializers.SerializerMethodField()
@@ -271,6 +274,31 @@ class UserListSerializer(serializers.ModelSerializer):
         comp = self._get_user_company_obj(obj)
         return comp.code if comp else (getattr(obj, 'company_code', '') or '')
 
+    def _get_user_department_obj(self, obj):
+        try:
+            if self.get_is_approver(obj):
+                dept = Department.objects.filter(
+                    Q(approver_1=obj) |
+                    Q(approver_2=obj) |
+                    Q(approver_3=obj) |
+                    Q(dept_head=obj)
+                ).first()
+                if dept:
+                    return dept
+                return Department.objects.filter(org_structures__user=obj).first()
+            org = obj.org_positions.select_related('department').first()
+            return org.department if org else None
+        except Exception:
+            return None
+
+    def get_department(self, obj):
+        dept = self._get_user_department_obj(obj)
+        return dept.name if dept else ''
+
+    def get_department_id(self, obj):
+        dept = self._get_user_department_obj(obj)
+        return dept.id if dept else None
+
     def get_is_approver(self, obj):
         return not obj.org_positions.exclude(
             department__code__icontains='DEPT_PURCHASING'
@@ -283,6 +311,8 @@ class UserDetailSerializer(serializers.ModelSerializer):
     is_sit = serializers.BooleanField(required=False)
     role_details = serializers.SerializerMethodField()
     division_details = serializers.SerializerMethodField()
+    department = serializers.SerializerMethodField()
+    department_id = serializers.SerializerMethodField()
     company = serializers.SerializerMethodField()
     company_id = serializers.SerializerMethodField()
     company_code = serializers.SerializerMethodField()
@@ -417,6 +447,31 @@ class UserDetailSerializer(serializers.ModelSerializer):
     def get_company_details(self, obj):
         comp = self._get_user_company_obj(obj)
         return CompanySerializer(comp).data if comp else None
+
+    def _get_user_department_obj(self, obj):
+        try:
+            if self.get_is_approver(obj):
+                dept = Department.objects.filter(
+                    Q(approver_1=obj) |
+                    Q(approver_2=obj) |
+                    Q(approver_3=obj) |
+                    Q(dept_head=obj)
+                ).first()
+                if dept:
+                    return dept
+                return Department.objects.filter(org_structures__user=obj).first()
+            org = obj.org_positions.select_related('department').first()
+            return org.department if org else None
+        except Exception:
+            return None
+
+    def get_department(self, obj):
+        dept = self._get_user_department_obj(obj)
+        return dept.name if dept else ''
+
+    def get_department_id(self, obj):
+        dept = self._get_user_department_obj(obj)
+        return dept.id if dept else None
 
     def get_is_approver(self, obj):
         return not obj.org_positions.exclude(
