@@ -588,6 +588,7 @@ export const ApprovalDetailPage = () => {
                         selectedQuotation={selectedQuotation}
                         initialPrNumber={activeStep?.step_data?.pr_number || detail?.payload?.pr_number || ''}
                         initialPoNumber={activeStep?.step_data?.po_number || detail?.payload?.po_number || ''}
+                        allowAdhoc={Boolean(activeStep?.allow_adhoc && !activeStep?.is_adhoc)}
                     />
 
                     {isWatcher && (

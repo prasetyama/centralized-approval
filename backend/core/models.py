@@ -531,6 +531,10 @@ class WorkflowStepDefinition(models.Model):
         help_text="Criteria to find the brand/owner for conditional approval"
     )
     is_optional = models.BooleanField(default=False, help_text="If true, step can be skipped")
+    allow_adhoc = models.BooleanField(
+        default=False,
+        help_text="If true, approver at this step can optionally insert an ad-hoc approval step after this step"
+    )
     conditions = models.JSONField(
         default=list, 
         blank=True, 
@@ -768,6 +772,22 @@ class ApprovalStep(models.Model):
         choices=StepStatus.choices,
         default=StepStatus.PENDING
     )
+    allow_adhoc = models.BooleanField(
+        default=False,
+        help_text="If true, approver at this step can optionally insert an ad-hoc approval step after this step"
+    )
+    is_adhoc = models.BooleanField(
+        default=False,
+        help_text="True if dynamically inserted as an ad-hoc approval step"
+    )
+    adhoc_created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='created_adhoc_steps',
+        help_text="Approver who inserted this ad-hoc step"
+    )
     comments = models.TextField(blank=True, default='', help_text="Approver comments")
     acted_at = models.DateTimeField(null=True, blank=True)
 
@@ -809,6 +829,7 @@ class AuditLog(models.Model):
         FEEDBACK = 'FEEDBACK', 'Feedback Added'
         WATCHER_ADDED = 'WATCHER_ADDED', 'Watcher Added'
         WATCHER_REMOVED = 'WATCHER_REMOVED', 'Watcher Removed'
+        ADHOC_ADDED = 'ADHOC_ADDED', 'Ad-Hoc Approver Added'
 
     request = models.ForeignKey(
         ApprovalRequest,

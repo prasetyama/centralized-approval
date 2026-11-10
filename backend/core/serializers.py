@@ -568,7 +568,7 @@ class WorkflowStepDefinitionSerializer(serializers.ModelSerializer):
             'role_required', 'role_name', 'user_required', 'user_name', 
             'target_department', 'target_department_name', 'required_inputs',
             'is_brand_conditional', 'master_workflow_criteria', 'master_workflow_criteria_key_param_json', 
-            'is_optional', 'conditions', 'role_users'
+            'is_optional', 'allow_adhoc', 'conditions', 'role_users'
         ]
 
     def to_internal_value(self, data):
@@ -650,6 +650,7 @@ class ApprovalStepSerializer(serializers.ModelSerializer):
     user_required_name = serializers.SerializerMethodField()
     user_required_email = serializers.CharField(source='user_required.email', read_only=True)
     target_department_name = serializers.CharField(source='target_department.name', read_only=True)
+    adhoc_created_by_name = serializers.SerializerMethodField()
 
     class Meta:
         model = ApprovalStep
@@ -657,6 +658,7 @@ class ApprovalStepSerializer(serializers.ModelSerializer):
             'id', 'step_order', 'name', 'approver_type', 'assigned_to', 'assigned_to_name', 'assigned_to_email',
             'role_required', 'role_name', 'user_required', 'user_required_name', 'user_required_email',
             'target_department', 'target_department_name', 'required_inputs', 'step_data',
+            'allow_adhoc', 'is_adhoc', 'adhoc_created_by', 'adhoc_created_by_name',
             'status', 'comments', 'acted_at',
         ]
  
@@ -669,6 +671,11 @@ class ApprovalStepSerializer(serializers.ModelSerializer):
     def get_user_required_name(self, obj):
         if obj.user_required:
             return obj.user_required.get_full_name() or obj.user_required.username
+        return None
+
+    def get_adhoc_created_by_name(self, obj):
+        if obj.adhoc_created_by:
+            return obj.adhoc_created_by.get_full_name() or obj.adhoc_created_by.username
         return None
 
 
@@ -830,6 +837,9 @@ class ActionSerializer(serializers.Serializer):
     pr_number = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     quotation = serializers.JSONField(required=False, allow_null=True)
     approval_quotation = serializers.JSONField(required=False, allow_null=True)
+    adhoc_approver_id = serializers.IntegerField(required=False, allow_null=True)
+    adhoc_step_name = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    adhoc_notes = serializers.CharField(required=False, allow_blank=True, allow_null=True)
 
 
 class DelegateRequestSerializer(serializers.Serializer):
