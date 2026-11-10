@@ -12,7 +12,6 @@ import { useState } from 'react';
 import api from '@/services/api';
 import { Card } from '@/components/atoms/Card';
 import { Button } from '@/components/atoms/Button';
-import { Badge } from '@/components/atoms/Badge';
 import { Pagination } from '@/components/atoms/Pagination';
 import {
     Table,
@@ -46,15 +45,6 @@ export const InboxPage = () => {
             case 'FINANCE': return <Wallet size={16} className="text-emerald-600" />;
             case 'HR': return <Users size={16} className="text-purple-600" />;
             default: return <Inbox size={16} className="text-slate-600" />;
-        }
-    };
-
-    const getPriorityBadge = (priority: string) => {
-        switch (priority) {
-            case 'URGENT': return <Badge variant="error" className="font-bold">URGENT</Badge>;
-            case 'HIGH': return <Badge variant="warning">High</Badge>;
-            case 'MEDIUM': return <Badge variant="info">Medium</Badge>;
-            default: return <Badge variant="secondary">Low</Badge>;
         }
     };
 
@@ -113,7 +103,6 @@ export const InboxPage = () => {
                             <TableHead className="w-[100px]">Module</TableHead>
                             <TableHead>Request Title</TableHead>
                             <TableHead>Requester</TableHead>
-                            <TableHead>Priority</TableHead>
                             <TableHead>Date Received</TableHead>
                             <TableHead className="text-right">Action</TableHead>
                         </TableRow>
@@ -143,9 +132,6 @@ export const InboxPage = () => {
                                         </div>
                                         <span>{item.requester_name}</span>
                                     </div>
-                                </TableCell>
-                                <TableCell>
-                                    {getPriorityBadge(item.priority)}
                                 </TableCell>
                                 <TableCell className="text-slate-500 text-xs">
                                     {formatDate(item.created_at)}
