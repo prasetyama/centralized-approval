@@ -1,7 +1,5 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import { CheckCircle2, XCircle, AlertTriangle, Paperclip, UploadCloud, FileText, Trash2, Eye, RotateCcw, UserPlus } from 'lucide-react';
-import api from '@/services/api';
 import { Button } from '@/components/atoms/Button';
 import { Card } from '@/components/atoms/Card';
 import { cn } from '@/lib/utils';
@@ -35,6 +33,8 @@ interface ActionButtonsProps {
     initialPrNumber?: string;
     initialPoNumber?: string;
     allowAdhoc?: boolean;
+    adhocUserId?: number | null;
+    adhocUserName?: string | null;
 }
 
 const getCleanErrorMessage = (err: any): string => {
@@ -87,6 +87,8 @@ export const ActionButtons = ({
     initialPrNumber = '',
     initialPoNumber = '',
     allowAdhoc = false,
+    adhocUserId = null,
+    adhocUserName = null,
 }: ActionButtonsProps) => {
     const { addToast } = useToast();
     const [showModal, setShowModal] = useState<'APPROVE' | 'REJECT' | 'REVISE' | null>(null);
@@ -97,7 +99,6 @@ export const ActionButtons = ({
     const [quotationFiles, setQuotationFiles] = useState<QuotationFile[]>([]);
     const [selectedQuotId, setSelectedQuotId] = useState<string>('');
     const [useAdhoc, setUseAdhoc] = useState(false);
-    const [adhocApproverId, setAdhocApproverId] = useState<string>('');
     const [adhocNotes, setAdhocNotes] = useState('');
     const [adhocError, setAdhocError] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -108,19 +109,6 @@ export const ActionButtons = ({
     const [quotationSelectionError, setQuotationSelectionError] = useState<string | null>(null);
 
     const { user } = useAuth();
-
-    const { data: usersData } = useQuery<any>({
-        queryKey: ['purchasing-adhoc-users'],
-        queryFn: () => api.get('/admin/users?limit=200'),
-        enabled: Boolean(allowAdhoc && showModal === 'APPROVE'),
-    });
-
-    const purchasingCandidates = ((usersData as any)?.results || (Array.isArray(usersData) ? usersData : [])).filter(
-        (u: any) =>
-            u.is_active !== false &&
-            String(u.id) !== String(user?.id) &&
-            (u.department || '').toLowerCase().includes('purchasing')
-    );
 
     const isPurchasingStep = approverType === 'PURCH_DEPT_HEAD';
     const isDeptHead = isDeptHeadStep || requiredInputs?.length === 0;
@@ -215,8 +203,8 @@ export const ActionButtons = ({
                     hasError = true;
                 }
             }
-            if (allowAdhoc && useAdhoc && !adhocApproverId) {
-                setAdhocError('Silakan pilih user Ad-Hoc Approver dari departemen Purchasing');
+            if (allowAdhoc && useAdhoc && !adhocUserId) {
+                setAdhocError('User Ad-Hoc belum ditentukan pada Admin Workflow');
                 hasError = true;
             }
         }
@@ -236,8 +224,9 @@ export const ActionButtons = ({
             if (requiresPr && prNumber.trim()) stepData.pr_number = prNumber.trim();
             if (requiresPo && poNumber.trim()) stepData.po_number = poNumber.trim();
             if (requiresQuotation && quotationFiles.length > 0) stepData.quotation = quotationFiles;
-            if (allowAdhoc && useAdhoc && adhocApproverId) {
-                stepData.adhoc_approver_id = Number(adhocApproverId);
+            if (allowAdhoc && useAdhoc && adhocUserId) {
+                stepData.use_adhoc = true;
+                stepData.adhoc_approver_id = Number(adhocUserId);
                 if (adhocNotes.trim()) {
                     stepData.adhoc_notes = adhocNotes.trim();
                 }
@@ -293,7 +282,6 @@ export const ActionButtons = ({
             setQuotationFiles([]);
             setSelectedQuotId('');
             setUseAdhoc(false);
-            setAdhocApproverId('');
             setAdhocNotes('');
             setAdhocError(null);
         } catch (err: any) {
@@ -593,7 +581,6 @@ export const ActionButtons = ({
                                             onChange={(e) => {
                                                 setUseAdhoc(e.target.checked);
                                                 if (!e.target.checked) {
-                                                    setAdhocApproverId('');
                                                     setAdhocNotes('');
                                                     setAdhocError(null);
                                                 }
@@ -611,30 +598,20 @@ export const ActionButtons = ({
                                             <div className="space-y-1">
                                                 <div className="flex justify-between items-center">
                                                     <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
-                                                        Pilih Approver (Purchasing) <span className="text-red-500">*</span>
+                                                        Ad-Hoc Approver (Ditentukan Admin Workflow)
                                                     </label>
                                                     {adhocError && (
                                                         <span className="text-[10px] font-bold text-red-500 uppercase">{adhocError}</span>
                                                     )}
                                                 </div>
-                                                <select
-                                                    value={adhocApproverId}
-                                                    onChange={(e) => {
-                                                        setAdhocApproverId(e.target.value);
-                                                        if (e.target.value) setAdhocError(null);
-                                                    }}
+                                                <div
                                                     className={cn(
-                                                        "w-full rounded-xl border p-2.5 text-xs font-medium bg-white focus:outline-none focus:ring-2 focus:ring-indigo-200",
-                                                        adhocError ? "border-red-300" : "border-slate-200"
+                                                        "w-full rounded-xl border p-2.5 text-xs font-semibold bg-slate-100 text-slate-700",
+                                                        adhocError || !adhocUserId ? "border-red-300 text-red-600" : "border-slate-200"
                                                     )}
                                                 >
-                                                    <option value="">-- Pilih User Departemen Purchasing --</option>
-                                                    {purchasingCandidates.map((cand: any) => (
-                                                        <option key={cand.id} value={cand.id}>
-                                                            {`${cand.first_name || ''} ${cand.last_name || ''}`.trim() || cand.username} ({cand.department})
-                                                        </option>
-                                                    ))}
-                                                </select>
+                                                    {adhocUserName || 'Belum ditentukan pada Admin Workflow'}
+                                                </div>
                                             </div>
 
                                             <div className="space-y-1">

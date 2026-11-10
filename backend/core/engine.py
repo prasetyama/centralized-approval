@@ -582,6 +582,7 @@ class WorkflowEngine:
                             user_required=link['user'],
                             required_inputs=req_inputs,
                             allow_adhoc=(step_def.allow_adhoc if idx == len(org_chain) - 1 else False),
+                            adhoc_user=(step_def.adhoc_user if (step_def.allow_adhoc and idx == len(org_chain) - 1) else None),
                             status=step_status,
                         )
                         current_step_order += 1
@@ -631,6 +632,7 @@ class WorkflowEngine:
                         assigned_to=assignee,
                         required_inputs=req_inputs,
                         allow_adhoc=step_def.allow_adhoc,
+                        adhoc_user=step_def.adhoc_user if step_def.allow_adhoc else None,
                         status=step_status,
                     )
                     current_step_order += 1
@@ -687,6 +689,7 @@ class WorkflowEngine:
                     target_department=step_def.target_department,
                     required_inputs=step_def.required_inputs,
                     allow_adhoc=step_def.allow_adhoc,
+                    adhoc_user=step_def.adhoc_user if step_def.allow_adhoc else None,
                     status=step_status,
                 )
                 current_step_order += 1
@@ -871,28 +874,26 @@ class WorkflowEngine:
         acted_step = current_step
 
         step_data = dict(step_data) if step_data else {}
+        use_adhoc = step_data.pop('use_adhoc', False)
         adhoc_approver_id = step_data.pop('adhoc_approver_id', None)
         adhoc_step_name = step_data.pop('adhoc_step_name', None)
         adhoc_notes = step_data.pop('adhoc_notes', None)
 
         adhoc_user = None
-        if adhoc_approver_id:
+        if use_adhoc or adhoc_approver_id:
             if not current_step.allow_adhoc or current_step.is_adhoc:
                 raise ValidationError("Step ini tidak mengizinkan penambahan Ad-Hoc Approver.")
-            adhoc_user = User.objects.filter(id=adhoc_approver_id, is_active=True).first()
+            adhoc_user = current_step.adhoc_user
             if not adhoc_user:
-                raise ValidationError("User Ad-Hoc Approver tidak ditemukan atau tidak aktif.")
-            if adhoc_user.id == approver.id:
-                raise ValidationError("Tidak dapat menunjuk diri sendiri sebagai Ad-Hoc Approver.")
-            is_purchasing_user = (
-                'purchasing' in (adhoc_user.department or '').lower() or
-                adhoc_user.org_positions.filter(
-                    Q(department__code__icontains='PURCHASING') |
-                    Q(department__name__icontains='Purchasing')
-                ).exists()
-            )
-            if not is_purchasing_user:
-                raise ValidationError("Ad-Hoc Approver harus berasal dari departemen Purchasing.")
+                step_def_adhoc = approval_request.workflow.steps.filter(
+                    allow_adhoc=True, adhoc_user__isnull=False
+                ).select_related('adhoc_user').first()
+                if step_def_adhoc:
+                    adhoc_user = step_def_adhoc.adhoc_user
+            if not adhoc_user:
+                raise ValidationError("User Ad-Hoc Approver belum ditentukan pada konfigurasi Admin Workflow.")
+            if not adhoc_user.is_active:
+                raise ValidationError("User Ad-Hoc Approver yang ditentukan pada Admin Workflow sedang tidak aktif.")
 
         if dlvdate or step_data:
             if not isinstance(approval_request.payload, dict):
