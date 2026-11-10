@@ -136,6 +136,9 @@ interface Step {
     is_brand_conditional: boolean;
     master_workflow_criteria?: number | null;
     is_optional: boolean;
+    allow_adhoc?: boolean;
+    adhoc_user?: number | null;
+    adhoc_user_name?: string;
     conditions: any[];
     role_name?: string;
     user_name?: string;
@@ -502,18 +505,54 @@ export const WorkflowForm: React.FC<WorkflowFormProps> = ({ initialData, onClose
                                             )}
                                         </div>
 
-                                        {/* Optional Step */}
-                                        <div className="flex items-center gap-2 pt-3 border-t border-slate-50">
-                                            <input
-                                                type="checkbox"
-                                                id={`optional-${index}`}
-                                                checked={step.is_optional}
-                                                onChange={(e) => handleStepChange(index, { is_optional: e.target.checked })}
-                                                className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                                            />
-                                            <label htmlFor={`optional-${index}`} className="text-xs font-bold text-slate-700 select-none">
-                                                Optional Step
-                                            </label>
+                                        {/* Optional Step & Ad-Hoc Approval */}
+                                        <div className="flex flex-wrap items-center gap-6 pt-3 border-t border-slate-50">
+                                            <div className="flex items-center gap-2">
+                                                <input
+                                                    type="checkbox"
+                                                    id={`optional-${index}`}
+                                                    checked={step.is_optional}
+                                                    onChange={(e) => handleStepChange(index, { is_optional: e.target.checked })}
+                                                    className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                                                />
+                                                <label htmlFor={`optional-${index}`} className="text-xs font-bold text-slate-700 select-none">
+                                                    Optional Step
+                                                </label>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <input
+                                                    type="checkbox"
+                                                    id={`allow-adhoc-${index}`}
+                                                    checked={Boolean(step.allow_adhoc)}
+                                                    onChange={(e) =>
+                                                        handleStepChange(index, {
+                                                            allow_adhoc: e.target.checked,
+                                                            adhoc_user: e.target.checked
+                                                                ? (step.adhoc_user || (users as any)?.results?.[0]?.id || null)
+                                                                : null,
+                                                        })
+                                                    }
+                                                    className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                                                />
+                                                <label htmlFor={`allow-adhoc-${index}`} className="text-xs font-bold text-slate-700 select-none">
+                                                    Allow Optional Ad-Hoc Approval
+                                                </label>
+                                            </div>
+                                            {step.allow_adhoc && (
+                                                <div className="w-full md:w-64">
+                                                    <Select
+                                                        label="Ad-Hoc User (Ditentukan Admin)"
+                                                        options={[{ value: '', label: '-- Pilih Ad-Hoc User --' }, ...userOptions]}
+                                                        value={step.adhoc_user || ''}
+                                                        onChange={(e) =>
+                                                            handleStepChange(index, {
+                                                                adhoc_user: e.target.value ? parseInt(e.target.value) : null,
+                                                            })
+                                                        }
+                                                        required
+                                                    />
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
 

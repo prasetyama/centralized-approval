@@ -78,6 +78,55 @@ class WorkflowEngine:
         return True
 
     @staticmethod
+    def _insert_adhoc_step(approval_request, after_step, adhoc_user, created_by, step_name=None, notes=''):
+        """
+        Insert a 1-level ad-hoc approval step immediately after `after_step`.
+        Shifts all subsequent steps by +1 in descending order to avoid unique_together collisions.
+        """
+        subsequent_steps = list(
+            ApprovalStep.objects.filter(
+                request=approval_request,
+                step_order__gt=after_step.step_order
+            ).order_by('-step_order')
+        )
+        for s in subsequent_steps:
+            s.step_order += 1
+            s.save(update_fields=['step_order'])
+
+        new_order = after_step.step_order + 1
+        user_display = adhoc_user.get_full_name() or adhoc_user.username
+        adhoc_step = ApprovalStep.objects.create(
+            request=approval_request,
+            step_order=new_order,
+            name=(step_name or '').strip() or f"Ad-Hoc Approval ({user_display})",
+            approver_type=WorkflowStepDefinition.ApproverType.USER,
+            assigned_to=adhoc_user,
+            user_required=adhoc_user,
+            status=ApprovalStep.StepStatus.PENDING,
+            allow_adhoc=False,
+            is_adhoc=True,
+            adhoc_created_by=created_by,
+            step_data={'adhoc_notes': notes.strip()} if notes and notes.strip() else {},
+        )
+        return adhoc_step
+
+    @staticmethod
+    def _remove_adhoc_steps(approval_request):
+        """
+        Delete any dynamically inserted ad-hoc steps (is_adhoc=True) and re-index
+        remaining steps sequentially (1, 2, ..., N).
+        """
+        adhoc_qs = ApprovalStep.objects.filter(request=approval_request, is_adhoc=True)
+        if not adhoc_qs.exists():
+            return
+        adhoc_qs.delete()
+        remaining = list(ApprovalStep.objects.filter(request=approval_request).order_by('step_order'))
+        for idx, s in enumerate(remaining, start=1):
+            if s.step_order != idx:
+                s.step_order = idx
+                s.save(update_fields=['step_order'])
+
+    @staticmethod
     def _activate_next_step(approval_request):
         """
         Find and activate the next non-skipped step.
@@ -532,6 +581,8 @@ class WorkflowEngine:
                             assigned_to=link['user'],
                             user_required=link['user'],
                             required_inputs=req_inputs,
+                            allow_adhoc=(step_def.allow_adhoc if idx == len(org_chain) - 1 else False),
+                            adhoc_user=(step_def.adhoc_user if (step_def.allow_adhoc and idx == len(org_chain) - 1) else None),
                             status=step_status,
                         )
                         current_step_order += 1
@@ -580,6 +631,8 @@ class WorkflowEngine:
                         approver_type=step_def.approver_type,
                         assigned_to=assignee,
                         required_inputs=req_inputs,
+                        allow_adhoc=step_def.allow_adhoc,
+                        adhoc_user=step_def.adhoc_user if step_def.allow_adhoc else None,
                         status=step_status,
                     )
                     current_step_order += 1
@@ -635,6 +688,8 @@ class WorkflowEngine:
                     user_required=assignee if step_def.approver_type == WorkflowStepDefinition.ApproverType.REQUESTOR else step_def.user_required,
                     target_department=step_def.target_department,
                     required_inputs=step_def.required_inputs,
+                    allow_adhoc=step_def.allow_adhoc,
+                    adhoc_user=step_def.adhoc_user if step_def.allow_adhoc else None,
                     status=step_status,
                 )
                 current_step_order += 1
@@ -818,6 +873,28 @@ class WorkflowEngine:
 
         acted_step = current_step
 
+        step_data = dict(step_data) if step_data else {}
+        use_adhoc = step_data.pop('use_adhoc', False)
+        adhoc_approver_id = step_data.pop('adhoc_approver_id', None)
+        adhoc_step_name = step_data.pop('adhoc_step_name', None)
+        adhoc_notes = step_data.pop('adhoc_notes', None)
+
+        adhoc_user = None
+        if use_adhoc or adhoc_approver_id:
+            if not current_step.allow_adhoc or current_step.is_adhoc:
+                raise ValidationError("Step ini tidak mengizinkan penambahan Ad-Hoc Approver.")
+            adhoc_user = current_step.adhoc_user
+            if not adhoc_user:
+                step_def_adhoc = approval_request.workflow.steps.filter(
+                    allow_adhoc=True, adhoc_user__isnull=False
+                ).select_related('adhoc_user').first()
+                if step_def_adhoc:
+                    adhoc_user = step_def_adhoc.adhoc_user
+            if not adhoc_user:
+                raise ValidationError("User Ad-Hoc Approver belum ditentukan pada konfigurasi Admin Workflow.")
+            if not adhoc_user.is_active:
+                raise ValidationError("User Ad-Hoc Approver yang ditentukan pada Admin Workflow sedang tidak aktif.")
+
         if dlvdate or step_data:
             if not isinstance(approval_request.payload, dict):
                 approval_request.payload = {}
@@ -836,10 +913,7 @@ class WorkflowEngine:
         current_step.acted_at = timezone.now()
         current_step.save()
 
-        # Activate the next step using the new helper
-        WorkflowEngine._activate_next_step(approval_request)
-
-        # Create audit log
+        # Create audit log for approval
         AuditLog.objects.create(
             request=approval_request,
             step=current_step,
@@ -849,6 +923,33 @@ class WorkflowEngine:
             ip_address=ip_address,
             payload_snapshot=approval_request.payload,
         )
+
+        # Optional 1-level Ad-Hoc step insertion
+        if adhoc_user:
+            adhoc_step = WorkflowEngine._insert_adhoc_step(
+                approval_request=approval_request,
+                after_step=current_step,
+                adhoc_user=adhoc_user,
+                created_by=approver,
+                step_name=adhoc_step_name,
+                notes=adhoc_notes or '',
+            )
+            AuditLog.objects.create(
+                request=approval_request,
+                step=adhoc_step,
+                actor=approver,
+                action=AuditLog.Action.ADHOC_ADDED,
+                details=(
+                    f"Ad-Hoc Approval ({adhoc_step.name}) ditambahkan pada Step {adhoc_step.step_order} "
+                    f"untuk {adhoc_user.get_full_name() or adhoc_user.username}."
+                    f"{f' Catatan: {adhoc_notes}' if adhoc_notes else ''}"
+                ),
+                ip_address=ip_address,
+                payload_snapshot=approval_request.payload,
+            )
+
+        # Activate the next step using the new helper
+        WorkflowEngine._activate_next_step(approval_request)
 
         # Notify external system after commit
         _captured_dlvdate = dlvdate
@@ -1087,6 +1188,10 @@ class WorkflowEngine:
 
         if quotation_step:
             # === ALUR A: Revisi Quotation (Setelah Upload Quotation) ===
+            rev_step_order = current_step.step_order
+            rev_step_name = current_step.name
+            audit_step_ref = None if current_step.is_adhoc else current_step
+
             # Record comments on current step before resetting
             current_step.comments = comments.strip()
             current_step.save(update_fields=['comments'])
@@ -1094,7 +1199,8 @@ class WorkflowEngine:
             # Reset intermediate and current steps back to PENDING
             steps_to_reset = approval_request.steps.filter(
                 step_order__gt=quotation_step.step_order,
-                step_order__lte=current_step.step_order
+                step_order__lte=current_step.step_order,
+                is_adhoc=False,
             )
             for s in steps_to_reset:
                 s.status = ApprovalStep.StepStatus.PENDING
@@ -1107,13 +1213,18 @@ class WorkflowEngine:
 
             # Ensure all subsequent steps remain PENDING
             approval_request.steps.filter(
-                step_order__gt=current_step.step_order
+                step_order__gt=current_step.step_order,
+                is_adhoc=False,
             ).exclude(
                 status=ApprovalStep.StepStatus.SKIPPED
             ).update(
                 status=ApprovalStep.StepStatus.PENDING,
                 acted_at=None
             )
+
+            # Remove any dynamically added ad-hoc steps and re-index remaining steps
+            WorkflowEngine._remove_adhoc_steps(approval_request)
+            quotation_step.refresh_from_db()
 
             # Set quotation upload step to WAITING
             quotation_step.status = ApprovalStep.StepStatus.WAITING
@@ -1129,10 +1240,10 @@ class WorkflowEngine:
                 approval_request.save(update_fields=['current_step', 'updated_at'])
 
             # Create AuditLog entry
-            log_details = f"Step {current_step.step_order} ({current_step.name}) direvisi oleh {approver.get_full_name() or approver.username} kembali ke Step {quotation_step.step_order} ({quotation_step.name}). Alasan: {comments.strip()}"
+            log_details = f"Step {rev_step_order} ({rev_step_name}) direvisi oleh {approver.get_full_name() or approver.username} kembali ke Step {quotation_step.step_order} ({quotation_step.name}). Alasan: {comments.strip()}"
             AuditLog.objects.create(
                 request=approval_request,
-                step=current_step,
+                step=audit_step_ref,
                 actor=approver,
                 action=AuditLog.Action.REVISED,
                 details=log_details,
@@ -1141,7 +1252,7 @@ class WorkflowEngine:
             )
 
             # Notify external system and email
-            _captured_current_step = current_step
+            _captured_current_step = audit_step_ref or quotation_step
             _captured_target_step = quotation_step
             _captured_approver = approver
             transaction.on_commit(lambda: WorkflowEngine.notify_external_system(
@@ -1153,6 +1264,10 @@ class WorkflowEngine:
 
         else:
             # === ALUR B: Revisi PR Form (Sebelum / Pada Saat Upload Quotation) ===
+            rev_step_order = current_step.step_order
+            rev_step_name = current_step.name
+            audit_step_ref = None if current_step.is_adhoc else current_step
+
             current_step.comments = comments.strip()
             current_step.save(update_fields=['comments'])
 
@@ -1167,6 +1282,9 @@ class WorkflowEngine:
             if pr:
                 pr.status = 'REVISE'
                 pr.save(update_fields=['status', 'updated_at'])
+
+            # Remove any dynamically added ad-hoc steps and re-index remaining steps
+            WorkflowEngine._remove_adhoc_steps(approval_request)
 
             # Reset steps: all steps become PENDING
             for s in approval_request.steps.all().exclude(status=ApprovalStep.StepStatus.SKIPPED):
@@ -1190,13 +1308,13 @@ class WorkflowEngine:
             # Create AuditLog entry
             requester_name = approval_request.requester.get_full_name() or approval_request.requester.username
             log_details = (
-                f"Step {current_step.step_order} ({current_step.name}) direvisi oleh "
+                f"Step {rev_step_order} ({rev_step_name}) direvisi oleh "
                 f"{approver.get_full_name() or approver.username}. Alasan: {comments.strip()}. "
                 f"Status PR Form diubah menjadi REVISE untuk diedit kembali oleh pemohon ({requester_name})."
             )
             AuditLog.objects.create(
                 request=approval_request,
-                step=current_step,
+                step=audit_step_ref,
                 actor=approver,
                 action=AuditLog.Action.REVISED,
                 details=log_details,
@@ -1261,6 +1379,9 @@ class WorkflowEngine:
         # Transition: REJECTED → REVISED → PENDING
         approval_request.status = ApprovalRequest.Status.REVISED
         approval_request.save(update_fields=['status', 'payload', 'updated_at'])
+
+        # Remove any dynamically added ad-hoc steps and re-index remaining steps
+        WorkflowEngine._remove_adhoc_steps(approval_request)
 
         # Reset all steps and re-evaluate conditions
         step_definitions = {

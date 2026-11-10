@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { CheckCircle2, XCircle, AlertTriangle, Paperclip, UploadCloud, FileText, Trash2, Eye, RotateCcw } from 'lucide-react';
+import { CheckCircle2, XCircle, AlertTriangle, Paperclip, UploadCloud, FileText, Trash2, Eye, RotateCcw, UserPlus } from 'lucide-react';
 import { Button } from '@/components/atoms/Button';
 import { Card } from '@/components/atoms/Card';
 import { cn } from '@/lib/utils';
@@ -32,6 +32,9 @@ interface ActionButtonsProps {
     selectedQuotation?: any;
     initialPrNumber?: string;
     initialPoNumber?: string;
+    allowAdhoc?: boolean;
+    adhocUserId?: number | null;
+    adhocUserName?: string | null;
 }
 
 const getCleanErrorMessage = (err: any): string => {
@@ -83,6 +86,9 @@ export const ActionButtons = ({
     selectedQuotation,
     initialPrNumber = '',
     initialPoNumber = '',
+    allowAdhoc = false,
+    adhocUserId = null,
+    adhocUserName = null,
 }: ActionButtonsProps) => {
     const { addToast } = useToast();
     const [showModal, setShowModal] = useState<'APPROVE' | 'REJECT' | 'REVISE' | null>(null);
@@ -92,6 +98,9 @@ export const ActionButtons = ({
     const [prNumber, setPrNumber] = useState(initialPrNumber);
     const [quotationFiles, setQuotationFiles] = useState<QuotationFile[]>([]);
     const [selectedQuotId, setSelectedQuotId] = useState<string>('');
+    const [useAdhoc, setUseAdhoc] = useState(false);
+    const [adhocNotes, setAdhocNotes] = useState('');
+    const [adhocError, setAdhocError] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [dlvDateError, setDlvDateError] = useState<string | null>(null);
     const [poError, setPoError] = useState<string | null>(null);
@@ -194,6 +203,10 @@ export const ActionButtons = ({
                     hasError = true;
                 }
             }
+            if (allowAdhoc && useAdhoc && !adhocUserId) {
+                setAdhocError('User Ad-Hoc belum ditentukan pada Admin Workflow');
+                hasError = true;
+            }
         }
 
         if (hasError) return;
@@ -205,11 +218,19 @@ export const ActionButtons = ({
             setPrError(null);
             setQuotationError(null);
             setQuotationSelectionError(null);
+            setAdhocError(null);
 
             const stepData: Record<string, any> = {};
             if (requiresPr && prNumber.trim()) stepData.pr_number = prNumber.trim();
             if (requiresPo && poNumber.trim()) stepData.po_number = poNumber.trim();
             if (requiresQuotation && quotationFiles.length > 0) stepData.quotation = quotationFiles;
+            if (allowAdhoc && useAdhoc && adhocUserId) {
+                stepData.use_adhoc = true;
+                stepData.adhoc_approver_id = Number(adhocUserId);
+                if (adhocNotes.trim()) {
+                    stepData.adhoc_notes = adhocNotes.trim();
+                }
+            }
             if (requiresApprovalQuotation) {
                 const effectiveId = selectedQuotId || (availableQuotations?.length === 1 ? availableQuotations[0].id : '');
                 const chosen = availableQuotations?.find((q: any) => String(q.id) === String(effectiveId)) || (availableQuotations?.length === 1 ? availableQuotations[0] : null);
@@ -260,6 +281,9 @@ export const ActionButtons = ({
             setPrNumber('');
             setQuotationFiles([]);
             setSelectedQuotId('');
+            setUseAdhoc(false);
+            setAdhocNotes('');
+            setAdhocError(null);
         } catch (err: any) {
             const errorMessage = getCleanErrorMessage(err);
             addToast(errorMessage, 'error');
@@ -545,6 +569,65 @@ export const ActionButtons = ({
                                             if (e.target.value.trim()) setDlvDateError(null);
                                         }}
                                     />
+                                </div>
+                            )}
+
+                            {showModal === 'APPROVE' && allowAdhoc && (
+                                <div className="rounded-xl border border-indigo-200 bg-indigo-50/40 p-3.5 space-y-3">
+                                    <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                                        <input
+                                            type="checkbox"
+                                            checked={useAdhoc}
+                                            onChange={(e) => {
+                                                setUseAdhoc(e.target.checked);
+                                                if (!e.target.checked) {
+                                                    setAdhocNotes('');
+                                                    setAdhocError(null);
+                                                }
+                                            }}
+                                            className="h-4 w-4 rounded border-indigo-300 text-indigo-600 focus:ring-indigo-500"
+                                        />
+                                        <span className="text-xs font-bold text-indigo-900 flex items-center gap-1.5">
+                                            <UserPlus size={14} className="text-indigo-600" />
+                                            Tambahkan Ad-Hoc Approval (Opsional)
+                                        </span>
+                                    </label>
+
+                                    {useAdhoc && (
+                                        <div className="space-y-2.5 pt-1 border-t border-indigo-100">
+                                            <div className="space-y-1">
+                                                <div className="flex justify-between items-center">
+                                                    <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                                                        Ad-Hoc Approver (Ditentukan Admin Workflow)
+                                                    </label>
+                                                    {adhocError && (
+                                                        <span className="text-[10px] font-bold text-red-500 uppercase">{adhocError}</span>
+                                                    )}
+                                                </div>
+                                                <div
+                                                    className={cn(
+                                                        "w-full rounded-xl border p-2.5 text-xs font-semibold bg-slate-100 text-slate-700",
+                                                        adhocError || !adhocUserId ? "border-red-300 text-red-600" : "border-slate-200"
+                                                    )}
+                                                >
+                                                    {adhocUserName || 'Belum ditentukan pada Admin Workflow'}
+                                                </div>
+                                            </div>
+
+                                            <div className="space-y-1">
+                                                <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">
+                                                    Catatan / Instruksi Ad-Hoc (Opsional)
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    placeholder="Contoh: Mohon verifikasi ulang harga negosiasi akhir"
+                                                    value={adhocNotes}
+                                                    onChange={(e) => setAdhocNotes(e.target.value)}
+                                                    className="w-full rounded-xl border border-slate-200 bg-white p-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                                                />
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             )}
 
