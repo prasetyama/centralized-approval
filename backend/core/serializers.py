@@ -161,6 +161,8 @@ class UserListSerializer(serializers.ModelSerializer):
     role = serializers.SerializerMethodField()
     role_name = serializers.SerializerMethodField()
     role_code = serializers.SerializerMethodField()
+    roles = serializers.SerializerMethodField()
+    is_sit = serializers.SerializerMethodField()
     division_name = serializers.SerializerMethodField()
     department = serializers.SerializerMethodField()
     department_id = serializers.SerializerMethodField()
@@ -173,7 +175,8 @@ class UserListSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             'id', 'username', 'email', 'first_name', 'last_name',
-            'role', 'role_name', 'role_code', 'division', 'division_name', 'department', 'department_id',
+            'role', 'role_name', 'role_code', 'roles', 'is_sit',
+            'division', 'division_name', 'department', 'department_id',
             'company', 'company_id', 'company_code', 'is_approver', 'is_active',
             'is_superuser', 'is_staff',
         ]
@@ -183,17 +186,26 @@ class UserListSerializer(serializers.ModelSerializer):
         Safely fetch the primary user role info, catching Role.DoesNotExist if
         the UserRole title/code does not exist in the Role table.
         """
+        fallback = (None, None, None)
         try:
             for ur in obj.user_roles.all():
                 try:
                     if ur.role:
-                        return (ur.role.id, ur.role.name, ur.role.code)
+                        t = (ur.role.id, ur.role.name, ur.role.code)
+                        if ur.role.code.upper() != 'SIT':
+                            return t
+                        if fallback == (None, None, None):
+                            fallback = t
                 except Exception:
                     role_str = getattr(ur, 'role_id', None) or 'Unknown'
-                    return (None, str(role_str), str(role_str))
+                    t = (None, str(role_str), str(role_str))
+                    if str(role_str).upper() != 'SIT':
+                        return t
+                    if fallback == (None, None, None):
+                        fallback = t
         except Exception:
             pass
-        return (None, None, None)
+        return fallback
 
     def get_role(self, obj):
         return self._get_user_role_tuple(obj)[0]
@@ -203,6 +215,28 @@ class UserListSerializer(serializers.ModelSerializer):
 
     def get_role_code(self, obj):
         return self._get_user_role_tuple(obj)[2]
+
+    def get_roles(self, obj):
+        roles = []
+        seen = set()
+        try:
+            for ur in obj.user_roles.all():
+                try:
+                    r = ur.role
+                    if r and r.code not in seen:
+                        seen.add(r.code)
+                        roles.append({"id": r.id, "name": r.name, "code": r.code})
+                except Exception:
+                    role_str = getattr(ur, 'role_id', None)
+                    if role_str and str(role_str) not in seen:
+                        seen.add(str(role_str))
+                        roles.append({"id": None, "name": str(role_str), "code": str(role_str)})
+        except Exception:
+            pass
+        return roles
+
+    def get_is_sit(self, obj):
+        return any((r.get('code') or '').upper() == 'SIT' for r in self.get_roles(obj))
 
     def get_division_name(self, obj):
         """Look up division name by its code string safely."""
@@ -274,6 +308,7 @@ class UserListSerializer(serializers.ModelSerializer):
 class UserDetailSerializer(serializers.ModelSerializer):
     """Full user serializer for detail/create/update views."""
     role = serializers.IntegerField(write_only=True, required=False, allow_null=True)
+    is_sit = serializers.BooleanField(required=False)
     role_details = serializers.SerializerMethodField()
     division_details = serializers.SerializerMethodField()
     department = serializers.SerializerMethodField()
@@ -292,23 +327,27 @@ class UserDetailSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             'id', 'username', 'email', 'first_name', 'last_name',
-            'role', 'role_name', 'role_code', 'role_details', 'roles', 'division', 'division_details',
+            'role', 'role_name', 'role_code', 'role_details', 'roles', 'is_sit', 'division', 'division_details',
             'department', 'department_id', 'company', 'company_id', 'company_code', 'company_details', 'phone',
             'is_approver', 'is_active', 'is_superuser', 'is_staff', 'password', 'date_joined',
         ]
         read_only_fields = ['date_joined']
 
     def _get_user_role_obj(self, obj):
+        fallback = None
         try:
             for ur in obj.user_roles.all():
                 try:
                     if ur.role:
-                        return ur.role
+                        if ur.role.code.upper() != 'SIT':
+                            return ur.role
+                        if fallback is None:
+                            fallback = ur.role
                 except Exception:
                     pass
         except Exception:
             pass
-        return None
+        return fallback
 
     def get_role_details(self, obj):
         role = self._get_user_role_obj(obj)
@@ -337,11 +376,13 @@ class UserDetailSerializer(serializers.ModelSerializer):
 
     def get_roles(self, obj):
         roles = []
+        seen = set()
         try:
             for ur in obj.user_roles.all():
                 try:
                     r = ur.role
-                    if r:
+                    if r and r.code not in seen:
+                        seen.add(r.code)
                         roles.append({
                             "id": r.id,
                             "name": r.name,
@@ -349,7 +390,8 @@ class UserDetailSerializer(serializers.ModelSerializer):
                         })
                 except Exception:
                     role_str = getattr(ur, 'role_id', None)
-                    if role_str:
+                    if role_str and str(role_str) not in seen:
+                        seen.add(str(role_str))
                         roles.append({
                             "id": None,
                             "name": str(role_str),
@@ -358,6 +400,11 @@ class UserDetailSerializer(serializers.ModelSerializer):
         except Exception:
             pass
         return roles
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        data['is_sit'] = any((r.get('code') or '').upper() == 'SIT' for r in data.get('roles', []))
+        return data
 
     def get_division_details(self, obj):
         """Look up full division details by its code string safely."""
@@ -430,45 +477,60 @@ class UserDetailSerializer(serializers.ModelSerializer):
         return not obj.org_positions.exclude(
             department__code__icontains='DEPT_PURCHASING'
         ).exists()
+      
+    def _sync_roles(self, user, role_id, is_sit, role_provided=False):
+        from django.db.models import Q
+        dept = user.department or ''
+        selected_role = Role.objects.filter(id=role_id).first() if role_id else None
+
+        if role_provided:
+            if selected_role and selected_role.code.upper() == 'SIT':
+                user.user_roles.all().delete()
+                UserRole.objects.create(user=user, role=selected_role, dept=dept)
+                return
+            else:
+                user.user_roles.exclude(Q(role__code__iexact='SIT') | Q(role_id__in=['SIT', 'sit'])).delete()
+                if selected_role:
+                    UserRole.objects.create(user=user, role=selected_role, dept=dept)
+
+        if is_sit is True:
+            sit_role, _ = Role.objects.get_or_create(
+                code='SIT',
+                defaults={'name': 'SIT', 'description': 'Role untuk user testing (SIT)'}
+            )
+            if not user.user_roles.filter(Q(role__code__iexact='SIT') | Q(role_id__in=['SIT', 'sit'])).exists():
+                UserRole.objects.create(user=user, role=sit_role, dept=dept)
+        elif is_sit is False:
+            if not (selected_role and selected_role.code.upper() == 'SIT'):
+                user.user_roles.filter(Q(role__code__iexact='SIT') | Q(role_id__in=['SIT', 'sit'])).delete()
 
     def create(self, validated_data):
         password = validated_data.pop('password', None)
+        role_provided = 'role' in validated_data
         role_id = validated_data.pop('role', None)
+        is_sit = validated_data.pop('is_sit', None)
         user = User(**validated_data)
         if password:
             user.set_password(password)
         else:
             user.set_unusable_password()
         user.save()
-        
-        if role_id:
-            try:
-                role = Role.objects.get(id=role_id)
-                UserRole.objects.create(user=user, role=role, dept=user.department)
-            except Role.DoesNotExist:
-                pass
-                
+
+        self._sync_roles(user, role_id, is_sit, role_provided=role_provided)
         return user
 
     def update(self, instance, validated_data):
         password = validated_data.pop('password', None)
+        role_provided = 'role' in validated_data
         role_id = validated_data.pop('role', None)
+        is_sit = validated_data.pop('is_sit', None)
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         if password:
             instance.set_password(password)
         instance.save()
-        
-        if role_id is not None:
-            try:
-                role = Role.objects.get(id=role_id)
-                # For backwards compatibility with single role expectation, 
-                # we clear old roles and set the new one
-                instance.user_roles.all().delete()
-                UserRole.objects.create(user=instance, role=role, dept=instance.department)
-            except Role.DoesNotExist:
-                pass
 
+        self._sync_roles(instance, role_id, is_sit, role_provided=role_provided)
         return instance
 
 
@@ -723,7 +785,7 @@ class ApprovalRequestListSerializer(serializers.ModelSerializer):
         model = ApprovalRequest
         fields = [
             'id', 'reference_id', 'module', 'module_name', 'module_code',
-            'module_color', 'module_icon', 'title', 'status', 'priority',
+            'module_color', 'module_icon', 'title', 'status', 'priority', 'is_test',
             'current_step', 'current_step_name', 'requester', 'requester_name', 'requester_email',
             'division', 'division_name', 'created_at', 'updated_at',
         ]
@@ -766,7 +828,7 @@ class ApprovalRequestDetailSerializer(serializers.ModelSerializer):
             'id', 'reference_id', 'module', 'module_name', 'module_code',
             'module_color', 'module_icon', 'workflow', 'workflow_name',
             'requester', 'requester_name', 'requester_email', 'title', 'description',
-            'payload', 'status', 'current_step', 'priority', 'division', 'division_details',
+            'payload', 'status', 'current_step', 'priority', 'is_test', 'division', 'division_details',
             'steps', 'audit_logs', 'feedbacks', 'watchers', 'created_at', 'updated_at',
         ]
 
@@ -896,9 +958,9 @@ class PRNonTradeSerializer(serializers.ModelSerializer):
             'requester_department', 'requester_company', 'purpose', 'goods_service_type',
             'purchase_type', 'car_tbr_no', 'asset_type', 'asset_no', 'wbs_no',
             'equipment_name', 'submission_remark', 'status', 'approval_status', 'approval_request',
-            'created_at', 'updated_at', 'items'
+            'is_test', 'created_at', 'updated_at', 'items'
         ]
-        read_only_fields = ['id', 'requestor', 'status', 'approval_status', 'approval_request', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'requestor', 'status', 'approval_status', 'approval_request', 'is_test', 'created_at', 'updated_at']
 
     def get_transaction_date(self, obj):
         if not obj.transaction_date:

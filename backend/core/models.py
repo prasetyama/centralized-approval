@@ -160,6 +160,13 @@ class User(AbstractUser):
         return f"{self.get_full_name() or self.username}"
 
     @property
+    def is_sit(self) -> bool:
+        """Return True if this user has the SIT testing role."""
+        return self.user_roles.filter(
+            models.Q(role__code__iexact='SIT') | models.Q(role_id__in=['SIT', 'sit'])
+        ).exists()
+
+    @property
     def department(self):
         dept = self.department_ref
         return dept.name if dept else ''
@@ -637,6 +644,11 @@ class ApprovalRequest(models.Model):
         max_length=10,
         choices=[('LOW', 'Low'), ('MEDIUM', 'Medium'), ('HIGH', 'High'), ('URGENT', 'Urgent')],
         default='MEDIUM'
+    )
+    is_test = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text="True if this approval request was created by a SIT testing user"
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -1252,6 +1264,11 @@ class PRNonTrade(models.Model):
         null=True,
         blank=True,
         related_name='pr_non_trade_headers'
+    )
+    is_test = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text="True if this PR Non-Trade record was created by a SIT testing user"
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

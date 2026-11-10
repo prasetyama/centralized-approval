@@ -521,6 +521,10 @@ class WorkflowEngine:
             raise ValidationError("Workflow has no step definitions configured.")
 
         # Create the approval request
+        is_test_req = bool(
+            email_service.is_sit_user(requester)
+            or (isinstance(payload, dict) and payload.get('is_test'))
+        )
         approval_request = ApprovalRequest.objects.create(
             reference_id=reference_id or f"{module_code}-{timezone.now().strftime('%Y%m%d%H%M%S')}",
             module=module,
@@ -533,6 +537,7 @@ class WorkflowEngine:
             current_step=1,
             priority=priority,
             division=division_id,
+            is_test=is_test_req,
         )
 
         current_step_order = 1
@@ -743,11 +748,11 @@ class WorkflowEngine:
         return approval_request
 
     @staticmethod
-    def send_eorder_info_cc_notification(payload):
+    def send_eorder_info_cc_notification(payload, user=None):
         """
         Send eOrder Information CC email notification for a given reference_id.
         """
-        return transaction.on_commit(lambda: email_service.send_eorder_info_cc_notification(payload))
+        return transaction.on_commit(lambda: email_service.send_eorder_info_cc_notification(payload, user=user))
         
 
 
@@ -1424,3 +1429,126 @@ class WorkflowEngine:
         )
 
         return approval_request
+
+    @staticmethod
+    def cleanup_sit_data(user_id=None, username_or_email=None, remove_sit_role=False, reset_sequences=True, dry_run=False):
+        """
+        Purge SIT testing transactions (ApprovalRequest, ApprovalStep, AuditLog,
+        RequestFeedback, RequestWatcher, PRNonTrade, PRNonTradeItem), recalculate
+        PRNonTradeSequence running numbers from remaining production records, and
+        optionally remove the SIT role from affected user(s) when transitioning to Go-Live.
+        """
+        from core.models import (
+            PRNonTrade, PRNonTradeItem, PRNonTradeSequence,
+            RequestFeedback, UserRole
+        )
+
+        target_users_qs = User.objects.none()
+        if user_id is not None:
+            target_users_qs = User.objects.filter(id=user_id)
+            if not target_users_qs.exists():
+                raise ValidationError(f"User with ID {user_id} not found.")
+        elif username_or_email:
+            val = str(username_or_email).strip()
+            target_users_qs = User.objects.filter(Q(username__iexact=val) | Q(email__iexact=val))
+            if not target_users_qs.exists():
+                raise ValidationError(f"User '{val}' not found.")
+        else:
+            target_users_qs = User.objects.filter(
+                Q(user_roles__role__code__iexact='SIT') | Q(user_roles__role_id__in=['SIT', 'sit'])
+            ).distinct()
+
+        target_user_ids = list(target_users_qs.values_list('id', flat=True))
+        target_usernames = list(target_users_qs.values_list('username', flat=True))
+
+        if user_id is not None or username_or_email:
+            pr_qs = PRNonTrade.objects.filter(requestor_id__in=target_user_ids)
+            pr_req_ids = list(pr_qs.exclude(approval_request_id__isnull=True).values_list('approval_request_id', flat=True))
+            req_qs = ApprovalRequest.objects.filter(
+                Q(requester_id__in=target_user_ids) | Q(id__in=pr_req_ids)
+            )
+            req_ids = list(req_qs.values_list('id', flat=True))
+            pr_qs = PRNonTrade.objects.filter(
+                Q(requestor_id__in=target_user_ids) | Q(approval_request_id__in=req_ids)
+            )
+        else:
+            pr_qs = PRNonTrade.objects.filter(
+                Q(is_test=True) | Q(requestor_id__in=target_user_ids)
+            )
+            pr_req_ids = list(pr_qs.exclude(approval_request_id__isnull=True).values_list('approval_request_id', flat=True))
+            req_qs = ApprovalRequest.objects.filter(
+                Q(is_test=True) | Q(requester_id__in=target_user_ids) | Q(id__in=pr_req_ids)
+            )
+            req_ids = list(req_qs.values_list('id', flat=True))
+            pr_qs = PRNonTrade.objects.filter(
+                Q(is_test=True) | Q(requestor_id__in=target_user_ids) | Q(approval_request_id__in=req_ids)
+            )
+
+        pr_ids = list(pr_qs.values_list('id', flat=True))
+
+        summary = {
+            'dry_run': dry_run,
+            'affected_users': target_usernames,
+            'approval_requests_deleted': len(req_ids),
+            'approval_steps_deleted': ApprovalStep.objects.filter(request_id__in=req_ids).count(),
+            'audit_logs_deleted': AuditLog.objects.filter(request_id__in=req_ids).count(),
+            'pr_non_trade_deleted': len(pr_ids),
+            'pr_non_trade_items_deleted': PRNonTradeItem.objects.filter(pr_non_trade_id__in=pr_ids).count(),
+            'sit_roles_removed': 0,
+            'sequences_reset': [],
+        }
+
+        if dry_run:
+            if remove_sit_role and target_user_ids:
+                summary['sit_roles_removed'] = UserRole.objects.filter(
+                    user__id__in=target_user_ids
+                ).filter(
+                    Q(role__code__iexact='SIT') | Q(role_id__in=['SIT', 'sit'])
+                ).count()
+            return summary
+
+        with transaction.atomic():
+            if pr_ids:
+                PRNonTradeItem.objects.filter(pr_non_trade_id__in=pr_ids).delete()
+                PRNonTrade.objects.filter(id__in=pr_ids).delete()
+
+            if req_ids:
+                AuditLog.objects.filter(request_id__in=req_ids).delete()
+                RequestFeedback.objects.filter(request_id__in=req_ids).delete()
+                RequestWatcher.objects.filter(request_id__in=req_ids).delete()
+                ApprovalStep.objects.filter(request_id__in=req_ids).delete()
+                ApprovalRequest.objects.filter(id__in=req_ids).delete()
+
+            if reset_sequences:
+                for seq in PRNonTradeSequence.objects.select_for_update().all():
+                    prefix = f"PR/{seq.code_name}/NT/{seq.year}/"
+                    remaining_tx_ids = PRNonTrade.objects.filter(
+                        transaction_id__istartswith=prefix
+                    ).values_list('transaction_id', flat=True)
+                    max_num = 0
+                    for tx_id in remaining_tx_ids:
+                        if not tx_id:
+                            continue
+                        tail = str(tx_id).rsplit('/', 1)[-1]
+                        if tail.isdigit():
+                            max_num = max(max_num, int(tail))
+                    if seq.last_number != max_num:
+                        old_num = seq.last_number
+                        seq.last_number = max_num
+                        seq.save(update_fields=['last_number'])
+                        summary['sequences_reset'].append({
+                            'code_name': seq.code_name,
+                            'year': seq.year,
+                            'old_last_number': old_num,
+                            'new_last_number': max_num,
+                        })
+
+            if remove_sit_role and target_user_ids:
+                deleted_roles_count, _ = UserRole.objects.filter(
+                    user__id__in=target_user_ids
+                ).filter(
+                    Q(role__code__iexact='SIT') | Q(role_id__in=['SIT', 'sit'])
+                ).delete()
+                summary['sit_roles_removed'] = deleted_roles_count
+
+        return summary

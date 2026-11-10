@@ -1,6 +1,7 @@
-import { useQuery, keepPreviousData } from '@tanstack/react-query';
-import { Users, UserPlus, Shield, Building, Edit2, Trash2, Search, Filter, ArrowLeft } from 'lucide-react';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
+import { Users, UserPlus, Shield, Building, Edit2, Trash2, Search, Filter, ArrowLeft, RotateCcw, X, AlertTriangle } from 'lucide-react';
 import api from '@/services/api';
+import { useToast } from '@/context/ToastContext';
 import { Card } from '@/components/atoms/Card';
 import { Button } from '@/components/atoms/Button';
 import { Badge } from '@/components/atoms/Badge';
@@ -17,6 +18,9 @@ import { useState, useEffect } from 'react';
 import { UserForm } from '@/components/organisms/UserForm';
 
 export const AdminUserPage = () => {
+    const queryClient = useQueryClient();
+    const { addToast } = useToast();
+
     const [search, setSearch] = useState('');
     const [debouncedSearch, setDebouncedSearch] = useState('');
     const [page, setPage] = useState(1);
@@ -24,6 +28,55 @@ export const AdminUserPage = () => {
 
     const [isAdding, setIsAdding] = useState(false);
     const [editingUser, setEditingUser] = useState<any>(null);
+
+    // SIT Cleanup Modal state
+    const [sitCleanupModalOpen, setSitCleanupModalOpen] = useState(false);
+    const [sitTargetUser, setSitTargetUser] = useState<any>(null);
+    const [removeSitRole, setRemoveSitRole] = useState(true);
+    const [resetSequences, setResetSequences] = useState(true);
+    const [sitPreview, setSitPreview] = useState<any>(null);
+    const [sitPreviewLoading, setSitPreviewLoading] = useState(false);
+
+    const openSitCleanupModal = async (targetUser: any = null) => {
+        setSitTargetUser(targetUser);
+        setRemoveSitRole(true);
+        setResetSequences(true);
+        setSitCleanupModalOpen(true);
+        setSitPreviewLoading(true);
+        try {
+            const res: any = await api.post('/admin/users/cleanup-sit/', {
+                user_id: targetUser?.id || null,
+                remove_sit_role: true,
+                reset_sequences: true,
+                dry_run: true,
+            });
+            setSitPreview(res?.data || res);
+        } catch (err: any) {
+            addToast(typeof err === 'string' ? err : 'Gagal memuat preview data SIT', 'error');
+        } finally {
+            setSitPreviewLoading(false);
+        }
+    };
+
+    const cleanupSitMutation = useMutation({
+        mutationFn: () =>
+            api.post('/admin/users/cleanup-sit/', {
+                user_id: sitTargetUser?.id || null,
+                remove_sit_role: removeSitRole,
+                reset_sequences: resetSequences,
+                dry_run: false,
+            }) as Promise<any>,
+        onSuccess: (res: any) => {
+            queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+            addToast(res?.message || 'Data testing SIT berhasil dibersihkan', 'success');
+            setSitCleanupModalOpen(false);
+            setSitTargetUser(null);
+            setSitPreview(null);
+        },
+        onError: (err: any) => {
+            addToast(typeof err === 'string' ? err : 'Gagal membersihkan data SIT', 'error');
+        },
+    });
 
     // Debounce search input
     useEffect(() => {
@@ -70,6 +123,13 @@ export const AdminUserPage = () => {
                     <p className="mt-1 text-slate-500">Manage system users, roles, and department assignments.</p>
                 </div>
                 <div className="flex gap-3">
+                    <Button
+                        variant="outline"
+                        className="gap-2 border-amber-200 text-amber-700 hover:bg-amber-50"
+                        onClick={() => openSitCleanupModal(null)}
+                    >
+                        <RotateCcw size={16} /> Cleanup SIT Data (Go-Live)
+                    </Button>
                     <Button variant="outline" className="gap-2">
                         <Shield size={16} /> Manage Roles
                     </Button>
@@ -146,9 +206,22 @@ export const AdminUserPage = () => {
                                         </div>
                                     </TableCell>
                                     <TableCell>
-                                        <Badge variant="secondary" className="font-bold tracking-tight">
-                                            {user.role_name || 'No Role'}
-                                        </Badge>
+                                        <div className="flex flex-wrap items-center gap-1.5">
+                                            {user.role_name && user.role_code?.toUpperCase() !== 'SIT' ? (
+                                                <Badge variant="secondary" className="font-bold tracking-tight">
+                                                    {user.role_name}
+                                                </Badge>
+                                            ) : !user.is_sit ? (
+                                                <Badge variant="secondary" className="font-bold tracking-tight">
+                                                    {user.role_name || 'No Role'}
+                                                </Badge>
+                                            ) : null}
+                                            {(user.is_sit || user.role_code?.toUpperCase() === 'SIT') && (
+                                                <Badge variant="warning" className="font-bold tracking-tight">
+                                                    SIT
+                                                </Badge>
+                                            )}
+                                        </div>
                                     </TableCell>
                                     <TableCell>
                                         <div className="flex items-center gap-1.5 text-slate-600">
@@ -168,6 +241,17 @@ export const AdminUserPage = () => {
                                     </TableCell>
                                     <TableCell className="text-right">
                                         <div className="flex justify-end gap-1">
+                                            {(user.is_sit || user.role_code?.toUpperCase() === 'SIT') && (
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    title="Cleanup SIT Data & Siap Go-Live"
+                                                    className="h-8 w-8 text-amber-500 hover:text-amber-700 hover:bg-amber-50"
+                                                    onClick={() => openSitCleanupModal(user)}
+                                                >
+                                                    <RotateCcw size={16} />
+                                                </Button>
+                                            )}
                                             <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-blue-600" onClick={() => { setEditingUser(user); setIsAdding(true); }}>
                                                 <Edit2 size={16} />
                                             </Button>
@@ -203,6 +287,107 @@ export const AdminUserPage = () => {
                     />
                 )}
             </Card>
+
+            {sitCleanupModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4">
+                    <Card className="w-full max-w-lg p-6 space-y-5 bg-white shadow-xl border-slate-200">
+                        <div className="flex items-start justify-between">
+                            <div className="flex items-center gap-3">
+                                <div className="p-2.5 rounded-xl bg-amber-100 text-amber-600">
+                                    <AlertTriangle size={22} />
+                                </div>
+                                <div>
+                                    <h3 className="text-lg font-bold text-slate-900">
+                                        {sitTargetUser ? `Cleanup Data SIT: @${sitTargetUser.username}` : 'Cleanup Semua Data Testing (SIT)'}
+                                    </h3>
+                                    <p className="text-xs text-slate-500">
+                                        Bersihkan data sampah transaksi testing agar akun siap digunakan untuk Go-Live Production.
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => setSitCleanupModalOpen(false)}
+                                className="text-slate-400 hover:text-slate-600"
+                            >
+                                <X size={18} />
+                            </button>
+                        </div>
+
+                        {sitPreviewLoading ? (
+                            <div className="py-6 text-center text-sm text-slate-500 animate-pulse">
+                                Menghitung jumlah transaksi testing SIT...
+                            </div>
+                        ) : sitPreview ? (
+                            <div className="rounded-xl bg-slate-50 border border-slate-200 p-4 space-y-2 text-sm">
+                                <div className="flex justify-between">
+                                    <span className="text-slate-500">User Terdampak:</span>
+                                    <span className="font-semibold text-slate-900">
+                                        {sitPreview.affected_users?.length ? sitPreview.affected_users.join(', ') : '-'}
+                                    </span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-slate-500">Approval Request Dihapus:</span>
+                                    <span className="font-bold text-red-600">{sitPreview.approval_requests_deleted || 0}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-slate-500">PR Non-Trade Dihapus:</span>
+                                    <span className="font-bold text-red-600">{sitPreview.pr_non_trade_deleted || 0}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-slate-500">Approval Step & Audit Log Dihapus:</span>
+                                    <span className="font-semibold text-slate-700">
+                                        {(sitPreview.approval_steps_deleted || 0) + (sitPreview.audit_logs_deleted || 0)}
+                                    </span>
+                                </div>
+                            </div>
+                        ) : null}
+
+                        <div className="space-y-3 pt-1">
+                            <label className="flex items-start gap-2.5 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={resetSequences}
+                                    onChange={(e) => setResetSequences(e.target.checked)}
+                                    className="mt-0.5 h-4 w-4 text-blue-600 border-gray-300 rounded"
+                                />
+                                <span className="text-sm text-slate-700">
+                                    <strong>Reset Nomor Urut PR Non-Trade</strong> kembali mengikuti nomor terakhir transaksi Production.
+                                </span>
+                            </label>
+                            <label className="flex items-start gap-2.5 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={removeSitRole}
+                                    onChange={(e) => setRemoveSitRole(e.target.checked)}
+                                    className="mt-0.5 h-4 w-4 text-amber-600 border-gray-300 rounded"
+                                />
+                                <span className="text-sm text-slate-700">
+                                    <strong>Cabut Role SIT setelah pembersihan</strong> (jadikan user sebagai akun Production / Go-Live).
+                                </span>
+                            </label>
+                        </div>
+
+                        <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => setSitCleanupModalOpen(false)}
+                            >
+                                Batal
+                            </Button>
+                            <Button
+                                type="button"
+                                disabled={cleanupSitMutation.isPending || sitPreviewLoading}
+                                onClick={() => cleanupSitMutation.mutate()}
+                                className="bg-amber-600 hover:bg-amber-700 text-white gap-2"
+                            >
+                                <RotateCcw size={15} />
+                                {cleanupSitMutation.isPending ? 'Membersihkan...' : 'Bersihkan Data SIT Sekarang'}
+                            </Button>
+                        </div>
+                    </Card>
+                </div>
+            )}
         </div>
     );
 };

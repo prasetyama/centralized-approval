@@ -48,25 +48,97 @@ def _get_frontend_url() -> str:
     return getattr(settings, 'FRONTEND_URL')
 
 
+DEFAULT_SIT_TEST_EMAIL = 'prasetyama.hidayat@nirwanalestari.com'
+
+
+def get_sit_test_email() -> str:
+    """Return the configured target email address for SIT (testing) users."""
+    return getattr(settings, 'SIT_TEST_EMAIL', None) or DEFAULT_SIT_TEST_EMAIL
+
+
+def is_sit_user(user_or_identifier) -> bool:
+    """
+    Check whether a User instance, username, or email address has the 'SIT' role.
+    Used to redirect emails involving testing users to the SIT testing email.
+    """
+    if not user_or_identifier:
+        return False
+
+    try:
+        from core.models import User, UserRole
+        from django.db.models import Q
+
+        if isinstance(user_or_identifier, str):
+            val = user_or_identifier.strip()
+            if not val:
+                return False
+            if UserRole.objects.filter(
+                Q(user__email__iexact=val) | Q(user_id=val)
+            ).filter(
+                Q(role__code__iexact='SIT') | Q(role_id__in=['SIT', 'sit'])
+            ).exists():
+                return True
+            return User.objects.filter(
+                Q(email__iexact=val) | Q(username__iexact=val)
+            ).filter(
+                Q(user_roles__role__code__iexact='SIT') | Q(user_roles__role_id__in=['SIT', 'sit'])
+            ).exists()
+
+        # Assume a User model instance
+        if hasattr(user_or_identifier, 'user_roles'):
+            if user_or_identifier.user_roles.filter(
+                Q(role__code__iexact='SIT') | Q(role_id__in=['SIT', 'sit'])
+            ).exists():
+                return True
+        user_email = getattr(user_or_identifier, 'email', None)
+        if user_email and UserRole.objects.filter(
+            Q(user__email__iexact=user_email) | Q(user_id=user_email)
+        ).filter(
+            Q(role__code__iexact='SIT') | Q(role_id__in=['SIT', 'sit'])
+        ).exists():
+            return True
+    except Exception as e:
+        logger.error(f"[EmailService] Error checking SIT role for '{user_or_identifier}': {e}")
+
+    return False
+
+
 @run_in_thread
 def send_step_notification(step) -> None:
     """
     Send an email notification to the approver of the given step.
     Called when a step becomes WAITING (including step 1 after submit).
+    If the requester or the step's approver has the SIT role, redirects the email
+    to prasetyama.hidayat@nirwanalestari.com.
 
     Args:
         step (ApprovalStep): The approval step that needs action.
     """
-    recipient_email = _get_approver_email(step)
+    approval_request = step.request
+    requester = approval_request.requester
+    original_email = _get_approver_email(step)
+
+    if (
+        getattr(approval_request, 'is_test', False)
+        or is_sit_user(requester)
+        or is_sit_user(step.assigned_to)
+        or is_sit_user(step.user_required)
+        or (original_email and is_sit_user(original_email))
+    ):
+        recipient_email = get_sit_test_email()
+        logger.info(
+            f"[EmailService] SIT testing user detected for request #{approval_request.id} step {step.step_order}. "
+            f"Redirecting step notification from '{original_email}' to '{recipient_email}'."
+        )
+    else:
+        recipient_email = original_email
+
     if not recipient_email:
         logger.warning(
             f"[EmailService] Step {step.step_order} of request '{step.request.title}' "
             f"has no assignee email. Skipping notification."
         )
         return
-
-    approval_request = step.request
-    requester = approval_request.requester
 
     context = {
         'approver_name': step.assigned_to.get_full_name() or step.assigned_to.username if step.assigned_to else 'Approver',
@@ -123,12 +195,36 @@ def send_step_notification(step) -> None:
 def send_final_approved_notification(approval_request) -> None:
     """
     Send an email to the requester when all approval steps are completed.
+    If the requester or any approver on the request has the SIT role, redirects the email
+    to prasetyama.hidayat@nirwanalestari.com.
 
     Args:
         approval_request (ApprovalRequest): The fully approved request.
     """
     requester = approval_request.requester
-    if not requester.email:
+    original_email = requester.email
+
+    is_sit = (
+        getattr(approval_request, 'is_test', False)
+        or is_sit_user(requester)
+        or (original_email and is_sit_user(original_email))
+    )
+    if not is_sit:
+        for s in approval_request.steps.select_related('assigned_to', 'user_required').all():
+            if is_sit_user(s.assigned_to) or is_sit_user(s.user_required):
+                is_sit = True
+                break
+
+    if is_sit:
+        recipient_email = get_sit_test_email()
+        logger.info(
+            f"[EmailService] SIT testing user detected for final approval of request #{approval_request.id}. "
+            f"Redirecting email from '{original_email}' to '{recipient_email}'."
+        )
+    else:
+        recipient_email = original_email
+
+    if not recipient_email:
         logger.warning(
             f"[EmailService] Requester {requester.username} has no email. "
             f"Skipping final approval notification for request #{approval_request.id}."
@@ -163,17 +259,17 @@ def send_final_approved_notification(approval_request) -> None:
             subject=subject,
             body=text_body,
             from_email=settings.DEFAULT_FROM_EMAIL,
-            to=[requester.email],
+            to=[recipient_email],
         )
         msg.attach_alternative(html_body, "text/html")
         msg.send(fail_silently=False)
         logger.info(
-            f"[EmailService] Final approval notification sent to {requester.email} "
+            f"[EmailService] Final approval notification sent to {recipient_email} "
             f"for request #{approval_request.id}."
         )
     except Exception as e:
         logger.error(
-            f"[EmailService] Failed to send final approval notification to {requester.email}: {e}"
+            f"[EmailService] Failed to send final approval notification to {recipient_email}: {e}"
         )
 
 
@@ -181,20 +277,38 @@ def send_final_approved_notification(approval_request) -> None:
 def send_rejected_notification(approval_request, step) -> None:
     """
     Send an email to the requester when their request is rejected.
+    If the requester or rejector has the SIT role, redirects the email
+    to prasetyama.hidayat@nirwanalestari.com.
 
     Args:
         approval_request (ApprovalRequest): The rejected request.
         step (ApprovalStep): The step at which the rejection occurred.
     """
     requester = approval_request.requester
-    if not requester.email:
+    rejector = step.assigned_to or step.user_required
+    original_email = requester.email
+
+    if (
+        getattr(approval_request, 'is_test', False)
+        or is_sit_user(requester)
+        or is_sit_user(rejector)
+        or (original_email and is_sit_user(original_email))
+    ):
+        recipient_email = get_sit_test_email()
+        logger.info(
+            f"[EmailService] SIT testing user detected for rejection of request #{approval_request.id}. "
+            f"Redirecting email from '{original_email}' to '{recipient_email}'."
+        )
+    else:
+        recipient_email = original_email
+
+    if not recipient_email:
         logger.warning(
             f"[EmailService] Requester {requester.username} has no email. "
             f"Skipping rejection notification for request #{approval_request.id}."
         )
         return
 
-    rejector = step.assigned_to
     context = {
         'requester_name': requester.get_full_name() or requester.username,
         'request_title': approval_request.title,
@@ -229,17 +343,17 @@ def send_rejected_notification(approval_request, step) -> None:
             subject=subject,
             body=text_body,
             from_email=settings.DEFAULT_FROM_EMAIL,
-            to=[requester.email],
+            to=[recipient_email],
         )
         msg.attach_alternative(html_body, "text/html")
         msg.send(fail_silently=False)
         logger.info(
-            f"[EmailService] Rejection notification sent to {requester.email} "
+            f"[EmailService] Rejection notification sent to {recipient_email} "
             f"for request #{approval_request.id}."
         )
     except Exception as e:
         logger.error(
-            f"[EmailService] Failed to send rejection notification to {requester.email}: {e}"
+            f"[EmailService] Failed to send rejection notification to {recipient_email}: {e}"
         )
 
 
@@ -247,16 +361,34 @@ def send_rejected_notification(approval_request, step) -> None:
 def send_revised_to_requester_notification(approval_request, step, revisor=None, comments: str = '') -> None:
     """
     Send an email notification to requester when their request is returned for revision.
+    If the requester or revisor has the SIT role, redirects the email
+    to prasetyama.hidayat@nirwanalestari.com.
     """
     requester = approval_request.requester
-    if not requester.email:
+    actor = revisor or (step.assigned_to if step else None)
+    original_email = requester.email
+
+    if (
+        getattr(approval_request, 'is_test', False)
+        or is_sit_user(requester)
+        or is_sit_user(actor)
+        or (original_email and is_sit_user(original_email))
+    ):
+        recipient_email = get_sit_test_email()
+        logger.info(
+            f"[EmailService] SIT testing user detected for revision of request #{approval_request.id}. "
+            f"Redirecting email from '{original_email}' to '{recipient_email}'."
+        )
+    else:
+        recipient_email = original_email
+
+    if not recipient_email:
         logger.warning(
             f"[EmailService] Requester {requester.username} has no email. "
             f"Skipping revision notification for request #{approval_request.id}."
         )
         return
 
-    actor = revisor or (step.assigned_to if step else None)
     revisor_name = actor.get_full_name() or actor.username if actor else 'Approver'
     step_name = step.name if step else 'Approval Review'
     step_order = step.step_order if step else 1
@@ -294,17 +426,17 @@ def send_revised_to_requester_notification(approval_request, step, revisor=None,
             subject=subject,
             body=text_body,
             from_email=settings.DEFAULT_FROM_EMAIL,
-            to=[requester.email],
+            to=[recipient_email],
         )
         msg.attach_alternative(html_body, "text/html")
         msg.send(fail_silently=False)
         logger.info(
-            f"[EmailService] Revision notification sent to {requester.email} "
+            f"[EmailService] Revision notification sent to {recipient_email} "
             f"for request #{approval_request.id}."
         )
     except Exception as e:
         logger.error(
-            f"[EmailService] Failed to send revision notification to {requester.email}: {e}"
+            f"[EmailService] Failed to send revision notification to {recipient_email}: {e}"
         )
 
 
@@ -338,19 +470,45 @@ def _get_cc_emails_for_subject(subject_name: str = 'eorder information', ship_to
 
 
 @run_in_thread
-def send_eorder_info_cc_notification(payload) -> None:
+def send_eorder_info_cc_notification(payload, user=None) -> None:
     """
     Send CC notification for eOrder Information to configured CC emails.
+    If the caller/submitter or any recipient has the SIT role, redirects the email
+    to prasetyama.hidayat@nirwanalestari.com.
     """
     ship_to = payload.get('ship_to')
     subject_name = payload.get('subject', 'eorder information')
-    cc_emails = _get_cc_emails_for_subject(subject_name, ship_to=ship_to)
-    if not cc_emails:
-        logger.info(f"[EmailService] No active CC email configs found for subject '{subject_name}' and ship_to '{ship_to}'. Skipping.")
-        return
+    filename_order_id = payload.get('reference_id')
+    inserted_by = payload.get('inserted_by')
+
+    is_sit_submitter = is_sit_user(user) or is_sit_user(inserted_by)
+    if not is_sit_submitter and filename_order_id:
+        try:
+            from core.models import ApprovalRequest
+            req_obj = ApprovalRequest.objects.filter(reference_id=filename_order_id).select_related('requester').first()
+            if req_obj and (getattr(req_obj, 'is_test', False) or is_sit_user(req_obj.requester)):
+                is_sit_submitter = True
+        except Exception as e:
+            logger.error(f"[EmailService] Error checking ApprovalRequest for SIT on reference_id '{filename_order_id}': {e}")
+
+    if is_sit_submitter:
+        cc_emails = [get_sit_test_email()]
+        logger.info(
+            f"[EmailService] SIT testing user detected for eOrder Information CC (reference_id='{filename_order_id}'). "
+            f"Redirecting CC notification to {cc_emails}."
+        )
+    else:
+        raw_cc_emails = _get_cc_emails_for_subject(subject_name, ship_to=ship_to)
+        if not raw_cc_emails:
+            logger.info(f"[EmailService] No active CC email configs found for subject '{subject_name}' and ship_to '{ship_to}'. Skipping.")
+            return
+        cc_emails = []
+        for email_addr in raw_cc_emails:
+            target_addr = get_sit_test_email() if is_sit_user(email_addr) else email_addr
+            if target_addr not in cc_emails:
+                cc_emails.append(target_addr)
 
     # Extract fields from payload with fallbacks
-    filename_order_id = payload.get('reference_id')
     distributor_name = payload.get('distributor')
     city = payload.get('city')
     po_date = payload.get('po_date')
