@@ -168,16 +168,29 @@ class User(AbstractUser):
 
     @property
     def department(self):
-        org = self.org_positions.select_related('department').first()
-        return org.department.name if org and org.department else ''
+        dept = self.department_ref
+        return dept.name if dept else ''
 
     @property
     def department_id(self):
-        org = self.org_positions.select_related('department').first()
-        return org.department.id if org and org.department else None
+        dept = self.department_ref
+        return dept.id if dept else None
 
     @property
     def department_ref(self):
+        is_approver = not self.org_positions.exclude(
+            department__code__icontains='DEPT_PURCHASING'
+        ).exists()
+        if is_approver:
+            dept = Department.objects.filter(
+                models.Q(approver_1=self) |
+                models.Q(approver_2=self) |
+                models.Q(approver_3=self) |
+                models.Q(dept_head=self)
+            ).first()
+            if dept:
+                return dept
+            return Department.objects.filter(org_structures__user=self).first()
         org = self.org_positions.select_related('department').first()
         return org.department if org else None
 

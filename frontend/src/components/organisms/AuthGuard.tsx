@@ -1,4 +1,4 @@
-import { Navigate, useLocation } from 'react-router-dom';
+import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 
 /**
@@ -23,4 +23,18 @@ export const AuthGuard = ({ children }: { children: React.ReactNode }) => {
     }
 
     return <>{children}</>;
+};
+
+export const NonApproverGuard = ({ children }: { children?: React.ReactNode }) => {
+    const { user, loading } = useAuth();
+
+    if (loading) {
+        return null;
+    }
+
+    if (user?.is_approver) {
+        return <Navigate to="/pr-non-trade" replace />;
+    }
+
+    return children ? <>{children}</> : <Outlet />;
 };
