@@ -1246,12 +1246,18 @@ class PRNonTradeViewSet(viewsets.ModelViewSet):
         if status_param and status_param != 'ALL':
             if status_param == 'SUBMITTED':
                 qs = qs.filter(
-                    Q(status__in=['SUBMITTED', 'IN_PROGRESS', 'APPROVED', 'REJECTED']) |
-                    Q(approval_request__status__in=['SUBMITTED', 'IN_PROGRESS', 'APPROVED', 'REJECTED'])
+                    Q(status__in=['SUBMITTED', 'IN_PROGRESS', 'PENDING']) |
+                    Q(approval_request__status__in=['SUBMITTED', 'IN_PROGRESS', 'PENDING'])
                 ).exclude(
-                    status__in=['DRAFT', 'CANCELLED', 'REVISE', 'REVISED']
+                    status__in=['DRAFT', 'CANCELLED', 'REVISE', 'REVISED', 'APPROVED', 'REJECTED']
                 ).exclude(
-                    approval_request__status__in=['REVISED', 'CANCELLED']
+                    approval_request__status__in=['REVISED', 'CANCELLED', 'APPROVED', 'REJECTED']
+                )
+            elif status_param in ('APPROVED', 'REJECTED'):
+                qs = qs.filter(
+                    Q(status=status_param) | Q(approval_request__status=status_param)
+                ).exclude(
+                    status__in=['DRAFT', 'CANCELLED']
                 )
             else:
                 qs = qs.filter(
@@ -1278,13 +1284,19 @@ class PRNonTradeViewSet(viewsets.ModelViewSet):
             response.data['total_all'] = base_qs.count()
             response.data['draft_count'] = base_qs.filter(status='DRAFT').count()
             response.data['submitted_count'] = base_qs.filter(
-                Q(status__in=['SUBMITTED', 'IN_PROGRESS', 'APPROVED', 'REJECTED']) |
-                Q(approval_request__status__in=['SUBMITTED', 'IN_PROGRESS', 'APPROVED', 'REJECTED'])
+                Q(status__in=['SUBMITTED', 'IN_PROGRESS', 'PENDING']) |
+                Q(approval_request__status__in=['SUBMITTED', 'IN_PROGRESS', 'PENDING'])
             ).exclude(
-                status__in=['DRAFT', 'CANCELLED', 'REVISE', 'REVISED']
+                status__in=['DRAFT', 'CANCELLED', 'REVISE', 'REVISED', 'APPROVED', 'REJECTED']
             ).exclude(
-                approval_request__status__in=['REVISED', 'CANCELLED']
+                approval_request__status__in=['REVISED', 'CANCELLED', 'APPROVED', 'REJECTED']
             ).count()
+            response.data['approved_count'] = base_qs.filter(
+                Q(status='APPROVED') | Q(approval_request__status='APPROVED')
+            ).exclude(status__in=['DRAFT', 'CANCELLED']).count()
+            response.data['rejected_count'] = base_qs.filter(
+                Q(status='REJECTED') | Q(approval_request__status='REJECTED')
+            ).exclude(status__in=['DRAFT', 'CANCELLED']).count()
         return response
 
     def perform_create(self, serializer):
