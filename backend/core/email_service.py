@@ -79,7 +79,6 @@ def send_step_notification(step) -> None:
         'step_name': step.name,
         'step_order': step.step_order,
         'total_steps': approval_request.steps.count(),
-        'priority': approval_request.priority,
         'description': approval_request.description,
         'frontend_url': _get_frontend_url(),
         'approval_url': f"{_get_frontend_url()}/workflow/{approval_request.id}",
@@ -141,7 +140,6 @@ def send_final_approved_notification(approval_request) -> None:
         'request_id': approval_request.id,
         'reference_id': approval_request.reference_id,
         'module_name': approval_request.module.name,
-        'priority': approval_request.priority,
         'frontend_url': _get_frontend_url(),
         'detail_url': f"{_get_frontend_url()}/workflow/{approval_request.id}",
     }
@@ -205,7 +203,6 @@ def send_rejected_notification(approval_request, step) -> None:
         'step_order': step.step_order,
         'rejector_name': rejector.get_full_name() or rejector.username if rejector else 'Approver',
         'rejection_reason': step.comments or '(Tidak ada keterangan)',
-        'priority': approval_request.priority,
         'frontend_url': _get_frontend_url(),
         'detail_url': f"{_get_frontend_url()}/workflow/{approval_request.id}",
     }
@@ -285,7 +282,6 @@ def send_revised_to_requester_notification(approval_request, step, revisor=None,
             'step_order': step_order,
             'rejector_name': revisor_name,
             'rejection_reason': comments or '(Wajib direvisi)',
-            'priority': approval_request.priority,
             'frontend_url': _get_frontend_url(),
             'detail_url': f"{_get_frontend_url()}/workflow/{approval_request.id}",
         }
