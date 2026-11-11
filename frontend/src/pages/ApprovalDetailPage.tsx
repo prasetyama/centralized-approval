@@ -14,7 +14,7 @@ import { FeedbackList } from '@/components/molecules/FeedbackList';
 import { FeedbackForm } from '@/components/molecules/FeedbackForm';
 import { useAuth } from '@/context/AuthContext';
 import { formatDate } from '@/lib/utils';
-import { MessageSquare, ListTodo, Eye, Plus, AlertCircle, User } from 'lucide-react';
+import { MessageSquare, ListTodo, Eye, Plus, AlertCircle } from 'lucide-react';
 import { AddWatcherModal } from '@/components/molecules/AddWatcherModal';
 import { ConfirmationModal } from '@/components/molecules/ConfirmationModal';
 import { WatcherAvatarGroup } from '@/components/molecules/WatcherAvatarGroup';
@@ -389,7 +389,7 @@ export const ApprovalDetailPage = () => {
                     </div>
                 </div>
                 <div className="flex items-center gap-6 flex-row">
-                    {(user?.is_superuser || activeStep.assigned_to_email === user?.email || (activeStep.approver_type === 'TARGET_DEPT_ROLE' && isApprover)) && detail.status === 'IN_PROGRESS' && (
+                    {/* {(user?.is_superuser || activeStep.assigned_to_email === user?.email || (activeStep.approver_type === 'TARGET_DEPT_ROLE' && isApprover)) && detail.status === 'IN_PROGRESS' && (
                         <Button
                             variant="outline"
                             className="bg-purple-50 text-purple-600 border-purple-200 hover:bg-purple-100 hover:text-purple-700 font-bold"
@@ -398,7 +398,7 @@ export const ApprovalDetailPage = () => {
                             <User size={18} className="mr-2" />
                             Delegate Task
                         </Button>
-                    )}
+                    )} */}
 
                     {detail.watchers?.length > 0 && (
                         <WatcherAvatarGroup
