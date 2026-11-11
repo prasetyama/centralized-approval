@@ -1244,7 +1244,7 @@ class PRNonTradeViewSet(viewsets.ModelViewSet):
 
         status_param = self.request.query_params.get('status')
         if status_param and status_param != 'ALL':
-            if status_param == 'SUBMITTED':
+            if status_param == 'IN_PROGRESS':
                 qs = qs.filter(
                     Q(status__in=['SUBMITTED', 'IN_PROGRESS', 'PENDING']) |
                     Q(approval_request__status__in=['SUBMITTED', 'IN_PROGRESS', 'PENDING'])
