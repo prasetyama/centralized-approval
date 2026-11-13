@@ -334,10 +334,10 @@ export const AttachmentList: React.FC<AttachmentListProps> = ({
                                         size="sm"
                                         onClick={() => downloadFile(file)}
                                         className="h-8 px-2.5 text-xs text-slate-700 hover:bg-slate-100 font-bold rounded-lg border-slate-200"
-                                        title="Unduh File"
+                                        title="Download File"
                                     >
                                         <Download size={14} className="mr-1" />
-                                        Unduh
+                                        Download
                                     </Button>
                                 </div>
                             </div>
@@ -381,7 +381,7 @@ export const AttachmentList: React.FC<AttachmentListProps> = ({
                                 >
 
                                     <Download size={14} />
-                                    Unduh
+                                    Download
                                 </Button>
                                 <Button
                                     variant="ghost"
@@ -416,7 +416,7 @@ export const AttachmentList: React.FC<AttachmentListProps> = ({
                                     <div>
                                         <h5 className="font-bold text-slate-900 text-base mb-1">{previewFile.name}</h5>
                                         <p className="text-xs text-slate-500">
-                                            Preview langsung tidak tersedia untuk jenis file ini. Silakan buka di tab baru atau unduh file.
+                                            A direct preview is not available for this file type. Please open it in a new tab or download the file.
                                         </p>
                                     </div>
                                     <div className="flex justify-center gap-3 pt-2">
@@ -426,14 +426,14 @@ export const AttachmentList: React.FC<AttachmentListProps> = ({
                                             className="font-bold text-xs"
                                         >
                                             <ExternalLink size={14} className="mr-1.5" />
-                                            Buka Tab Baru
+                                            Open New Tab
                                         </Button>
                                         <Button
                                             onClick={() => downloadFile(previewFile)}
                                             className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs"
                                         >
                                             <Download size={14} className="mr-1.5" />
-                                            Unduh File
+                                            Download File
                                         </Button>
                                     </div>
                                 </div>
