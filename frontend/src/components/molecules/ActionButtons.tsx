@@ -44,7 +44,7 @@ const getCleanErrorMessage = (err: any): string => {
         err?.response?.data?.error ||
         err?.message ||
         (typeof err === 'string' ? err : '') ||
-        'Gagal memproses tindakan persetujuan';
+        'Failed to process approval action';
 
     if (typeof rawMessage === 'object') {
         try {
@@ -185,26 +185,26 @@ export const ActionButtons = ({
 
         if (showModal === 'APPROVE') {
             if (requiresPr && !prNumber.trim()) {
-                setPrError('PR Number wajib diisi');
+                setPrError('PR Number is required');
                 hasError = true;
             }
             if (requiresPo && !poNumber.trim()) {
-                setPoError('PO Number wajib diisi');
+                setPoError('PO Number is required');
                 hasError = true;
             }
             if (requiresQuotation && quotationFiles.length === 0) {
-                setQuotationError('Lampiran file penawaran / quotation wajib diunggah (minimal 1 file)');
+                setQuotationError('Quotation attachment is required (minimum 1 file)');
                 hasError = true;
             }
             if (requiresApprovalQuotation) {
                 const effectiveId = selectedQuotId || (availableQuotations?.length === 1 ? availableQuotations[0].id : '');
                 if (!effectiveId) {
-                    setQuotationSelectionError('Silakan pilih salah satu quotation yang disetujui');
+                    setQuotationSelectionError('Please select an approved quotation');
                     hasError = true;
                 }
             }
             if (allowAdhoc && useAdhoc && !adhocUserId) {
-                setAdhocError('User Ad-Hoc belum ditentukan pada Admin Workflow');
+                setAdhocError('Ad-Hoc User is not determined');
                 hasError = true;
             }
         }
@@ -254,21 +254,21 @@ export const ActionButtons = ({
                     showDlvDateForm ? dlvdate : undefined,
                     Object.keys(stepData).length > 0 ? stepData : undefined
                 );
-                addToast('Pengajuan berhasil disetujui (Approved)', 'success');
+                addToast('Approval request submitted successfully', 'success');
             } else if (showModal === 'REJECT') {
                 await onReject(comments);
-                addToast('Pengajuan berhasil ditolak (Rejected)', 'success');
+                addToast('Approval request submitted successfully', 'success');
             } else if (showModal === 'REVISE') {
                 if (!comments.trim()) {
-                    setError('Alasan revisi wajib diisi');
+                    setError('Revision reason is required');
                     return;
                 }
                 if (onRevise) {
                     await onRevise(comments.trim());
                     addToast(
                         isBeforeQuotationStep
-                            ? 'Pengajuan berhasil dikembalikan ke requestor untuk revisi'
-                            : 'Pengajuan berhasil dikembalikan ke step upload quotation untuk revisi',
+                            ? 'Request is successfully returned to the requestor for revision'
+                            : 'Request is successfully returned to the quotation upload step for revision',
                         'success'
                     );
                 }
@@ -347,8 +347,8 @@ export const ActionButtons = ({
                             <p className="text-sm text-slate-500 font-medium leading-relaxed">
                                 {showModal === 'REVISE'
                                     ? (isBeforeQuotationStep
-                                        ? 'Pengajuan akan dikembalikan ke requestor agar formulir pengajuan dapat direvisi dan disesuaikan.'
-                                        : 'Pengajuan akan dikembalikan ke step upload quotation agar penawaran harga dapat diperbarui.')
+                                        ? 'The submission will be returned to the requestor so that the submission form can be revised and adjusted.'
+                                        : 'The submission will be returned to the quotation upload step so that the quotation can be updated.')
                                     : `You are about to ${showModal.toLowerCase()} this request. Please provide any required information or comments.`}
                             </p>
 
@@ -362,7 +362,7 @@ export const ActionButtons = ({
                                     </div>
                                     <input
                                         type="text"
-                                        placeholder="Contoh: PR-2026/09/00042 atau PR/IT/2026/001"
+                                        placeholder="Example: PR-2026/09/00042 or PR/IT/2026/001"
                                         className={cn(
                                             "w-full rounded-xl border p-3 text-sm transition-all focus:outline-none focus:ring-4",
                                             prError ? "border-red-300 bg-red-50/30" : "border-slate-200 bg-slate-50 focus:bg-white"
@@ -386,7 +386,7 @@ export const ActionButtons = ({
                                     </div>
                                     <input
                                         type="text"
-                                        placeholder="Contoh: PO-2026/09/00142"
+                                        placeholder="Example: PO-2026/09/00142"
                                         className={cn(
                                             "w-full rounded-xl border p-3 text-sm transition-all focus:outline-none focus:ring-4",
                                             poError ? "border-red-300 bg-red-50/30" : "border-slate-200 bg-slate-50 focus:bg-white"
@@ -405,7 +405,7 @@ export const ActionButtons = ({
                                     <div className="flex justify-between items-center">
                                         <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
                                             <Paperclip size={14} className="text-indigo-600" />
-                                            Attachment Quotation / Penawaran <span className="text-red-500">*</span>
+                                            Attachment Quotation <span className="text-red-500">*</span>
                                         </label>
                                         {quotationError && <span className="text-[10px] font-bold text-red-500 uppercase">{quotationError}</span>}
                                     </div>
@@ -413,8 +413,8 @@ export const ActionButtons = ({
                                     {/* Upload Trigger Area */}
                                     <label className="border-2 border-dashed border-slate-200 hover:border-indigo-400 bg-slate-50/50 hover:bg-indigo-50/20 rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer transition-all">
                                         <UploadCloud size={28} className="text-indigo-500 mb-1" />
-                                        <span className="text-xs font-semibold text-slate-700">Klik untuk mengunggah file penawaran</span>
-                                        <span className="text-[11px] text-slate-400 mt-0.5">Bisa milih lebih dari 1 file (PDF, Image, Doc, etc)</span>
+                                        <span className="text-xs font-semibold text-slate-700">Upload Attachment</span>
+                                        <span className="text-[11px] text-slate-400 mt-0.5">Can upload multiple files (PDF, Image, Doc, etc)</span>
                                         <input
                                             type="file"
                                             multiple
@@ -499,7 +499,7 @@ export const ActionButtons = ({
                                                                 }}
                                                                 className="text-xs font-semibold text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-2.5 py-1 rounded-lg shrink-0 transition-colors flex items-center gap-1"
                                                             >
-                                                                <Eye size={12} /> Buka
+                                                                <Eye size={12} /> Open
                                                             </button>
                                                         )}
                                                     </div>
@@ -510,10 +510,10 @@ export const ActionButtons = ({
                                         <div className="p-3.5 rounded-xl border border-amber-200 bg-amber-50 text-amber-800 text-xs space-y-1">
                                             <p className="font-bold flex items-center gap-1.5">
                                                 <AlertTriangle size={14} className="text-amber-600" />
-                                                Belum Ada Berkas Quotation
+                                                No Attachment Found
                                             </p>
                                             <p className="text-amber-700">
-                                                Tidak ditemukan berkas penawaran yang diunggah oleh purchasing di step sebelumnya.
+                                                No attachment found in the previous step.
                                             </p>
                                         </div>
                                     )}
@@ -526,7 +526,7 @@ export const ActionButtons = ({
                                     <div className="flex flex-col gap-1">
                                         <span className="font-bold text-emerald-800 flex items-center gap-1.5 uppercase tracking-wide text-[10px]">
                                             <CheckCircle2 size={13} className="text-emerald-600" />
-                                            Quotation Terpilih
+                                            Selected Quotation
                                         </span>
                                         {(selectedQuotation.url || selectedQuotation.quotation) && (
                                             <AttachmentList
@@ -551,7 +551,7 @@ export const ActionButtons = ({
                                 <div className="space-y-2">
                                     <div className="flex justify-between items-center">
                                         <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-                                            Delivery Date (Tanggal Pengiriman) <span className="text-red-500">*</span>
+                                            Delivery Date <span className="text-red-500">*</span>
                                         </label>
                                         {dlvDateError && <span className="text-[10px] font-bold text-red-500 uppercase animate-pulse">{dlvDateError}</span>}
                                     </div>
@@ -589,7 +589,7 @@ export const ActionButtons = ({
                                         />
                                         <span className="text-xs font-bold text-indigo-900 flex items-center gap-1.5">
                                             <UserPlus size={14} className="text-indigo-600" />
-                                            Tambahkan Ad-Hoc Approval (Opsional)
+                                            Add Ad-Hoc Approval (Optional)
                                         </span>
                                     </label>
 
@@ -598,7 +598,7 @@ export const ActionButtons = ({
                                             <div className="space-y-1">
                                                 <div className="flex justify-between items-center">
                                                     <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
-                                                        Ad-Hoc Approver (Ditentukan Admin Workflow)
+                                                        Ad-Hoc Approver
                                                     </label>
                                                     {adhocError && (
                                                         <span className="text-[10px] font-bold text-red-500 uppercase">{adhocError}</span>
@@ -616,11 +616,11 @@ export const ActionButtons = ({
 
                                             <div className="space-y-1">
                                                 <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">
-                                                    Catatan / Instruksi Ad-Hoc (Opsional)
+                                                    Ad-Hoc Instruction (Optional)
                                                 </label>
                                                 <input
                                                     type="text"
-                                                    placeholder="Contoh: Mohon verifikasi ulang harga negosiasi akhir"
+                                                    placeholder="Example: Please verify the final negotiated price"
                                                     value={adhocNotes}
                                                     onChange={(e) => setAdhocNotes(e.target.value)}
                                                     className="w-full rounded-xl border border-slate-200 bg-white p-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-200"
@@ -635,7 +635,7 @@ export const ActionButtons = ({
                                 <div className="flex justify-between items-center">
                                     <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
                                         {showModal === 'REVISE' ? (
-                                            <>Alasan Revisi <span className="text-red-500">*</span></>
+                                            <>Revision Reason <span className="text-red-500">*</span></>
                                         ) : 'Remark'}
                                     </label>
                                     {error && <span className="text-[10px] font-bold text-red-500 uppercase animate-pulse">{error}</span>}
@@ -689,7 +689,7 @@ export const ActionButtons = ({
                                     onClick={handleAction}
                                     loading={isLoading}
                                 >
-                                    {showModal === 'REVISE' ? 'Kirim Revisi' : `Confirm ${showModal?.toLowerCase()}`}
+                                    {showModal === 'REVISE' ? 'Submit Revision' : `Confirm ${showModal?.toLowerCase()}`}
                                 </Button>
                             </div>
                         </div>
