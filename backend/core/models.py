@@ -189,40 +189,65 @@ class User(AbstractUser):
 
     @property
     def company(self):
-        org = self.org_positions.select_related('company', 'department__company').first()
-        if org:
-            if org.company:
-                return org.company.name
-            if org.department and org.department.company:
-                return org.department.company.name
-        return ''
+        comp = self.company_ref
+        return comp.name if comp else ''
 
     @property
     def company_id(self):
-        org = self.org_positions.select_related('company', 'department__company').first()
-        if org:
-            if org.company_id:
-                return org.company_id
-            if org.department and org.department.company_id:
-                return org.department.company_id
-        return None
+        comp = self.company_ref
+        return comp.id if comp else None
 
     @property
     def company_code(self):
-        org = self.org_positions.select_related('company', 'department__company').first()
-        if org:
-            if org.company:
-                return org.company.code
-            if org.department and org.department.company:
-                return org.department.company.code
-        return ''
+        comp = self.company_ref
+        return comp.code if comp else ''
 
     @property
     def company_ref(self):
+        is_approver = not self.org_positions.exclude(
+            department__code__icontains='DEPT_PURCHASING'
+        ).exists()
+        if is_approver:
+            dept = Department.objects.filter(
+                models.Q(approver_1=self) |
+                models.Q(approver_2=self) |
+                models.Q(approver_3=self) |
+                models.Q(dept_head=self),
+                company__isnull=False
+            ).select_related('company').first()
+            if dept and dept.company:
+                return dept.company
         org = self.org_positions.select_related('company', 'department__company').first()
         if org:
-            return org.company or (org.department.company if org.department else None)
-        return None
+            comp = org.company or (org.department.company if org.department else None)
+            if comp:
+                return comp
+        dept = Department.objects.filter(
+            models.Q(approver_1=self) |
+            models.Q(approver_2=self) |
+            models.Q(approver_3=self) |
+            models.Q(dept_head=self),
+            company__isnull=False
+        ).select_related('company').first()
+        return dept.company if dept else None
+
+    def get_company_ids(self):
+        """Returns a list of company IDs associated with this user from aw_organization_structure and aw_department."""
+        comp_ids = set()
+        for c_id, d_c_id in self.org_positions.values_list('company_id', 'department__company_id'):
+            if c_id:
+                comp_ids.add(c_id)
+            if d_c_id:
+                comp_ids.add(d_c_id)
+        dept_comp_ids = Department.objects.filter(
+            models.Q(approver_1=self) |
+            models.Q(approver_2=self) |
+            models.Q(approver_3=self) |
+            models.Q(dept_head=self),
+            company_id__isnull=False
+        ).values_list('company_id', flat=True)
+        comp_ids.update(dept_comp_ids)
+        return list(comp_ids)
 
     def get_department_ids(self):
         """Returns a list of department IDs associated with this user."""
