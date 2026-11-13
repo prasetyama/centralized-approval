@@ -159,7 +159,7 @@ export const Timeline = ({ steps, currentStep }: TimelineProps) => {
 
                             {step.is_adhoc && step.adhoc_created_by_name && (
                                 <p className="text-[11px] text-indigo-600 font-medium mt-0.5">
-                                    Ditambahkan oleh: {step.adhoc_created_by_name}
+                                    Added by: {step.adhoc_created_by_name}
                                     {step.step_data?.adhoc_notes ? ` — "${step.step_data.adhoc_notes}"` : ''}
                                 </p>
                             )}
@@ -188,7 +188,7 @@ export const Timeline = ({ steps, currentStep }: TimelineProps) => {
                                     {approvedQuotation && (
                                         <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-emerald-50 text-emerald-700 font-medium text-xs border border-emerald-100">
                                             <CheckCircle2 size={12} className="text-emerald-600" />
-                                            Quotation Disetujui: <strong className="font-bold">{approvedQuotation}</strong>
+                                            Selected Quotation: <strong className="font-bold">{approvedQuotation}</strong>
                                         </span>
                                     )}
                                 </div>
