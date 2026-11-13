@@ -258,7 +258,7 @@ export const AttachmentList: React.FC<AttachmentListProps> = ({
                                                 ) : null}
                                                 {selectedMeta?.quotation?.approved_by && (
                                                     <span className="text-emerald-700 font-medium">
-                                                        • Disetujui oleh {selectedMeta.quotation.approved_by}
+                                                        • Approved by {selectedMeta.quotation.approved_by}
                                                     </span>
                                                 )}
                                             </div>
@@ -272,10 +272,10 @@ export const AttachmentList: React.FC<AttachmentListProps> = ({
                                             size="sm"
                                             onClick={() => handlePreview(file)}
                                             className="h-8 px-2.5 text-xs text-emerald-700 hover:text-emerald-800 hover:bg-emerald-100 font-bold rounded-lg"
-                                            title="Lihat File"
+                                            title="View File"
                                         >
                                             <Eye size={14} className="mr-1" />
-                                            Lihat
+                                            View
                                         </Button>
                                         <Button
                                             type="button"
@@ -283,10 +283,10 @@ export const AttachmentList: React.FC<AttachmentListProps> = ({
                                             size="sm"
                                             onClick={() => downloadFile(file)}
                                             className="h-8 px-2.5 text-xs text-white bg-emerald-600 hover:bg-emerald-700 font-bold rounded-lg shadow-xs"
-                                            title="Unduh File"
+                                            title="Download File"
                                         >
                                             <Download size={14} className="mr-1" />
-                                            Unduh
+                                            Download
                                         </Button>
                                     </div>
                                 </div>
@@ -323,10 +323,10 @@ export const AttachmentList: React.FC<AttachmentListProps> = ({
                                         size="sm"
                                         onClick={() => handlePreview(file)}
                                         className="h-8 px-2.5 text-xs text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 font-bold rounded-lg"
-                                        title="Lihat File"
+                                        title="View File"
                                     >
                                         <Eye size={14} className="mr-1" />
-                                        Lihat
+                                        View
                                     </Button>
                                     <Button
                                         type="button"
