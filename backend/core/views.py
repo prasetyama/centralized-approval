@@ -957,6 +957,34 @@ class UserViewSet(viewsets.ModelViewSet):
     search_fields = ['username', 'first_name', 'last_name', 'email']
     filterset_fields = ['user_roles__role', 'division', 'is_active', 'is_approver']
 
+    def get_queryset(self):
+        qs = super().get_queryset()
+        same_company = str(self.request.query_params.get('same_company', '')).lower() in ('true', '1', 'yes')
+        company_id_param = self.request.query_params.get('company_id')
+
+        target_company_ids = []
+        if company_id_param:
+            try:
+                target_company_ids = [int(company_id_param)]
+            except (ValueError, TypeError):
+                target_company_ids = []
+        elif same_company and self.request.user and self.request.user.is_authenticated:
+            target_company_ids = self.request.user.get_company_ids()
+
+        if same_company or company_id_param:
+            if not target_company_ids:
+                return qs.none()
+            qs = qs.filter(
+                Q(org_positions__company_id__in=target_company_ids) |
+                Q(org_positions__department__company_id__in=target_company_ids) |
+                Q(dept_approver_1__company_id__in=target_company_ids) |
+                Q(dept_approver_2__company_id__in=target_company_ids) |
+                Q(dept_approver_3__company_id__in=target_company_ids) |
+                Q(headed_departments__company_id__in=target_company_ids)
+            ).distinct()
+
+        return qs
+
     def get_serializer_class(self):
         if self.action == 'list':
             return UserListSerializer

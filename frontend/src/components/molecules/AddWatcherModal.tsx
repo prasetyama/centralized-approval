@@ -5,6 +5,7 @@ import api from '@/services/api';
 import { Button } from '@/components/atoms/Button';
 import { Card } from '@/components/atoms/Card';
 import { Select } from '@/components/atoms/Select';
+import { useAuth } from '@/context/AuthContext';
 
 interface AddWatcherModalProps {
     isOpen: boolean;
@@ -19,13 +20,14 @@ export const AddWatcherModal = ({
     onSubmit,
     isLoading: isSubmitting
 }: AddWatcherModalProps) => {
+    const { user } = useAuth();
     const [selectedUserId, setSelectedUserId] = useState<string>('');
 
     const { data: usersData, isLoading: isLoadingUsers } = useQuery({
-        queryKey: ['users-list'],
+        queryKey: ['users-list', 'same-company', user?.id],
         queryFn: async () => {
             const response: any = await api.get('/admin/users', {
-                params: { is_active: true, page_size: 1000 }
+                params: { is_active: true, page_size: 1000, same_company: true }
             });
             return response;
         },
