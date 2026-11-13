@@ -610,7 +610,7 @@ export const ActionButtons = ({
                                                         adhocError || !adhocUserId ? "border-red-300 text-red-600" : "border-slate-200"
                                                     )}
                                                 >
-                                                    {adhocUserName || 'Belum ditentukan pada Admin Workflow'}
+                                                    {adhocUserName || 'Not determined'}
                                                 </div>
                                             </div>
 
@@ -650,8 +650,8 @@ export const ActionButtons = ({
                                     placeholder={
                                         showModal === 'REVISE'
                                             ? (isBeforeQuotationStep
-                                                ? "Jelaskan alasan mengapa formulir pengajuan ini perlu direvisi oleh requestor..."
-                                                : "Jelaskan alasan mengapa quotation / pengajuan ini perlu direvisi...")
+                                                ? "Explain why this submission needs to be revised by the requestor..."
+                                                : "Explain why this quotation / submission needs to be revised...")
                                             : "Type your feedback here..."
                                     }
                                     value={comments}
