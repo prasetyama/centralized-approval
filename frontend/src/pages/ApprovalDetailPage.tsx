@@ -1,8 +1,8 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Clock, History, RotateCcw } from 'lucide-react';
-import { useState } from 'react';
-import api from '@/services/api';
+import { ArrowLeft, Clock, History, RotateCcw, Lock, ShieldCheck } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import api, { getCookie } from '@/services/api';
 import { Button } from '@/components/atoms/Button';
 import { Badge } from '@/components/atoms/Badge';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/atoms/Card';
@@ -206,11 +206,99 @@ export const ApprovalDetailPage = () => {
     const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
     const [watcherToRemove, setWatcherToRemove] = useState<{ id: number, name: string } | null>(null);
     const [activeTab, setActiveTab] = useState<'timeline' | 'activity' | 'discussion'>('timeline');
+    const [lockInfo, setLockInfo] = useState<{
+        acquired: boolean;
+        is_locked: boolean;
+        is_locked_by_other: boolean;
+        locked_by: number | null;
+        locked_by_name: string | null;
+        locked_by_email: string | null;
+        locked_at: string | null;
+        lock_expires_at: string | null;
+    } | null>(null);
     const { data: request, isLoading, isError } = useQuery({
         queryKey: ['workflow-detail', id],
         queryFn: () => api.get(`/workflow/${id}`),
         retry: false,
     });
+
+    const detail = request as any;
+    const activeStep = detail?.steps?.find((s: any) => s.step_order === detail.current_step);
+
+    const isApprover = (() => {
+        if (!activeStep || !detail) return false;
+
+        if (detail.status !== 'IN_PROGRESS' && detail.status !== 'WAITING') return false;
+        if (activeStep.status !== 'WAITING') return false;
+
+        if (user?.is_superuser) return true;
+
+        // Use email for matching since user.id is from SSO and activeStep.assigned_to is from local DB
+        if (activeStep.assigned_to_email === user?.email) return true;
+        if (activeStep.approver_type === 'USER' && activeStep.user_required_email === user?.email) return true;
+        if (activeStep.approver_type === 'ROLE' && activeStep.role_required == user?.role) return true;
+        if (activeStep.approver_type === 'REQUESTOR' && (detail?.requester_email === user?.email || activeStep.assigned_to_email === user?.email || detail?.requester === user?.id)) return true;
+        if (activeStep.approver_type === 'TARGET_DEPT_ROLE') {
+            const stepDept = (activeStep.target_department_name || '').trim().toLowerCase();
+            const userDept = (user?.department || '').trim().toLowerCase();
+            if (stepDept && userDept && (stepDept === userDept || stepDept.includes(userDept) || userDept.includes(stepDept))) return true;
+        }
+
+        return false;
+    })();
+
+    useEffect(() => {
+        setLockInfo(null);
+    }, [id, detail?.current_step]);
+
+    useEffect(() => {
+        if (!id || detail?.status !== 'IN_PROGRESS' || !activeStep || activeStep.status !== 'WAITING' || !isApprover) {
+            return;
+        }
+
+        let isMounted = true;
+
+        const syncLock = async () => {
+            try {
+                const res: any = await api.post(`/workflow/${id}/lock`, { action: 'lock' });
+                if (isMounted && res?.data) {
+                    setLockInfo((prev) => {
+                        if (prev?.is_locked_by_other && !res.data.is_locked_by_other) {
+                            queryClient.invalidateQueries({ queryKey: ['workflow-detail', id] });
+                        }
+                        return res.data;
+                    });
+                }
+            } catch {
+                // Ignore transient errors during heartbeat
+            }
+        };
+
+        syncLock();
+        const intervalId = window.setInterval(syncLock, 20000);
+
+        const releaseLock = () => {
+            const token = getCookie('sso_token');
+            fetch(`/api/v1/workflow/${id}/lock`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                },
+                body: JSON.stringify({ action: 'unlock' }),
+                keepalive: true,
+            }).catch(() => { });
+        };
+
+        window.addEventListener('beforeunload', releaseLock);
+
+        return () => {
+            isMounted = false;
+            window.clearInterval(intervalId);
+            window.removeEventListener('beforeunload', releaseLock);
+            releaseLock();
+        };
+    }, [id, detail?.status, detail?.current_step, activeStep?.id, activeStep?.status, isApprover, queryClient]);
 
     const actionMutation = useMutation({
         mutationFn: ({ action, comments, dlvdate, step_data }: { action: string, comments: string, dlvdate?: string, step_data?: Record<string, any> }) =>
@@ -307,36 +395,40 @@ export const ApprovalDetailPage = () => {
         );
     }
 
-    const detail = request as any;
     if (!detail) return null;
 
     const allAttachments = extractAttachmentsFromDetail(detail);
     const availableQuotations = extractAvailableQuotations(detail);
     const selectedQuotation = extractSelectedQuotation(detail);
 
-    const activeStep = detail?.steps?.find((s: any) => s.step_order === detail.current_step);
-
-    const isApprover = (() => {
-        if (!activeStep) return false;
-
-        if (detail.status !== 'IN_PROGRESS' && detail.status !== 'WAITING') return false;
-        if (activeStep.status !== 'WAITING') return false;
-
-        if (user?.is_superuser) return true;
-
-        // Use email for matching since user.id is from SSO and activeStep.assigned_to is from local DB
-        if (activeStep.assigned_to_email === user?.email) return true;
-        if (activeStep.approver_type === 'USER' && activeStep.user_required_email === user?.email) return true;
-        if (activeStep.approver_type === 'ROLE' && activeStep.role_required == user?.role) return true;
-        if (activeStep.approver_type === 'REQUESTOR' && (detail?.requester_email === user?.email || activeStep.assigned_to_email === user?.email || detail?.requester === user?.id)) return true;
-        if (activeStep.approver_type === 'TARGET_DEPT_ROLE') {
-            const stepDept = (activeStep.target_department_name || '').trim().toLowerCase();
-            const userDept = (user?.department || '').trim().toLowerCase();
-            if (stepDept && userDept && (stepDept === userDept || stepDept.includes(userDept) || userDept.includes(stepDept))) return true;
-        }
-
-        return false;
-    })();
+    const stepLockedByName = lockInfo
+        ? lockInfo.locked_by_name
+        : (activeStep?.locked_by_name || null);
+    const stepLockedByEmail = lockInfo
+        ? lockInfo.locked_by_email
+        : (activeStep?.locked_by_email || null);
+    const isLockedByOther = lockInfo
+        ? lockInfo.is_locked_by_other
+        : Boolean(
+            activeStep?.locked_by &&
+            activeStep?.locked_by_email &&
+            user?.email &&
+            activeStep.locked_by_email.toLowerCase() !== user.email.toLowerCase()
+        );
+    const isLockedByMe = lockInfo
+        ? Boolean(lockInfo.acquired && lockInfo.is_locked && !lockInfo.is_locked_by_other)
+        : Boolean(
+            activeStep?.locked_by &&
+            activeStep?.locked_by_email &&
+            user?.email &&
+            activeStep.locked_by_email.toLowerCase() === user.email.toLowerCase()
+        );
+    const isSharedTeamStep = Boolean(
+        activeStep &&
+        (activeStep.approver_type === 'TARGET_DEPT_ROLE' ||
+            activeStep.approver_type === 'PURCH_DEPT_HEAD' ||
+            activeStep.approver_type === 'ROLE')
+    );
 
     // Check watcher using email mapping
     const isWatcher = detail?.watchers?.some((w: any) => w.user_email === user?.email);
@@ -421,6 +513,20 @@ export const ApprovalDetailPage = () => {
                     }
                 </div>
             </div>
+
+            {detail?.status === 'IN_PROGRESS' && isLockedByOther && (
+                <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-900 shadow-sm flex items-start gap-3 animate-in fade-in">
+                    <Lock size={20} className="text-amber-600 shrink-0 mt-0.5" />
+                    <div className="space-y-1">
+                        <p className="text-sm font-bold text-amber-900">
+                            Being opened by {stepLockedByName || stepLockedByEmail || 'User Lain'}
+                        </p>
+                        <p className="text-xs text-amber-800 leading-relaxed">
+                            This request submission is currently being opened by <strong>{stepLockedByName || stepLockedByEmail}</strong>. To prevent double approval, the action button is temporarily locked until this user finishes or closes this page.
+                        </p>
+                    </div>
+                </div>
+            )}
 
             {((detail?.status === 'IN_PROGRESS' && quotationStep && activeStep?.step_order === quotationStep.step_order) || detail?.status === 'REVISED') && lastRevisedLog && (
                 <div className="rounded-xl border border-amber-200 bg-amber-50/80 p-4 text-amber-900 shadow-sm flex items-start gap-3 animate-in fade-in">
@@ -571,13 +677,41 @@ export const ApprovalDetailPage = () => {
                         </CardContent>
                     </Card>
 
+                    {detail?.status === 'IN_PROGRESS' && isLockedByOther && (
+                        <div className="rounded-xl border border-amber-300 bg-amber-50/90 p-4 text-amber-900 shadow-sm flex items-start gap-3 animate-in fade-in">
+                            <Lock size={18} className="text-amber-600 shrink-0 mt-0.5" />
+                            <div className="space-y-1">
+                                <p className="text-sm font-bold text-amber-900">
+                                    Being opened by {stepLockedByName || stepLockedByEmail || 'User Lain'}
+                                </p>
+                                <p className="text-xs text-amber-800 leading-relaxed">
+                                    The action button cannot be used because this document is currently being opened/processed by <strong>{stepLockedByName || stepLockedByEmail}</strong>. The page will automatically reopen once that user has finished or refresh the page manually.
+                                </p>
+                            </div>
+                        </div>
+                    )}
+
+                    {detail?.status === 'IN_PROGRESS' && isApprover && isLockedByMe && isSharedTeamStep && (
+                        <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-3.5 text-emerald-900 shadow-sm flex items-start gap-3 animate-in fade-in">
+                            <ShieldCheck size={18} className="text-emerald-600 shrink-0 mt-0.5" />
+                            <div className="space-y-0.5">
+                                <p className="text-xs font-bold text-emerald-900">
+                                    Locked Temporarily for you
+                                </p>
+                                <p className="text-[11px] text-emerald-800 leading-relaxed">
+                                    Other team members will see that you have this submission open, which prevents duplicate approvals.
+                                </p>
+                            </div>
+                        </div>
+                    )}
+
                     <ActionButtons
                         onApprove={async (comments, dlvdate, step_data) => { await actionMutation.mutateAsync({ action: 'approve', comments, dlvdate, step_data }); }}
                         onReject={async (comments) => { await actionMutation.mutateAsync({ action: 'reject', comments }); }}
                         onRevise={async (comments) => { await actionMutation.mutateAsync({ action: 'revise', comments }); }}
                         isLoading={actionMutation.isPending}
-                        canAction={isApprover === true}
-                        canRevise={canRevise}
+                        canAction={isApprover === true && !isLockedByOther}
+                        canRevise={canRevise && !isLockedByOther}
                         isBeforeQuotationStep={isBeforeQuotationStep}
                         isWatcher={isWatcher}
                         showDlvDateForm={showDlvDateForm}
