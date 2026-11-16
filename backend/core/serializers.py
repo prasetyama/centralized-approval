@@ -605,6 +605,11 @@ class ApprovalStepSerializer(serializers.ModelSerializer):
     adhoc_user = serializers.SerializerMethodField()
     adhoc_user_name = serializers.SerializerMethodField()
     adhoc_created_by_name = serializers.SerializerMethodField()
+    locked_by = serializers.SerializerMethodField()
+    locked_by_name = serializers.SerializerMethodField()
+    locked_by_email = serializers.SerializerMethodField()
+    locked_at = serializers.SerializerMethodField()
+    lock_expires_at = serializers.SerializerMethodField()
 
     class Meta:
         model = ApprovalStep
@@ -613,6 +618,7 @@ class ApprovalStepSerializer(serializers.ModelSerializer):
             'role_required', 'role_name', 'user_required', 'user_required_name', 'user_required_email',
             'target_department', 'target_department_name', 'required_inputs', 'step_data',
             'allow_adhoc', 'adhoc_user', 'adhoc_user_name', 'is_adhoc', 'adhoc_created_by', 'adhoc_created_by_name',
+            'locked_by', 'locked_by_name', 'locked_by_email', 'locked_at', 'lock_expires_at',
             'status', 'comments', 'acted_at',
         ]
  
@@ -654,6 +660,31 @@ class ApprovalStepSerializer(serializers.ModelSerializer):
     def get_adhoc_created_by_name(self, obj):
         if obj.adhoc_created_by:
             return obj.adhoc_created_by.get_full_name() or obj.adhoc_created_by.username
+        return None
+
+    def get_locked_by(self, obj):
+        if obj.is_actively_locked():
+            return obj.locked_by_id
+        return None
+
+    def get_locked_by_name(self, obj):
+        if obj.is_actively_locked() and obj.locked_by:
+            return obj.locked_by.get_full_name() or obj.locked_by.username
+        return None
+
+    def get_locked_by_email(self, obj):
+        if obj.is_actively_locked() and obj.locked_by:
+            return obj.locked_by.email
+        return None
+
+    def get_locked_at(self, obj):
+        if obj.is_actively_locked():
+            return obj.locked_at
+        return None
+
+    def get_lock_expires_at(self, obj):
+        if obj.is_actively_locked():
+            return obj.lock_expires_at
         return None
 
 
@@ -718,13 +749,16 @@ class ApprovalRequestListSerializer(serializers.ModelSerializer):
     requester_email = serializers.CharField(source='requester.email', read_only=True)
     division_name = serializers.CharField(source='division.name', read_only=True)
     current_step_name = serializers.SerializerMethodField()
+    locked_by_name = serializers.SerializerMethodField()
+    locked_by_email = serializers.SerializerMethodField()
 
     class Meta:
         model = ApprovalRequest
         fields = [
             'id', 'reference_id', 'module', 'module_name', 'module_code',
             'module_color', 'module_icon', 'title', 'status', 'priority',
-            'current_step', 'current_step_name', 'requester', 'requester_name', 'requester_email',
+            'current_step', 'current_step_name', 'locked_by_name', 'locked_by_email',
+            'requester', 'requester_name', 'requester_email',
             'division', 'division_name', 'created_at', 'updated_at',
         ]
 
@@ -734,6 +768,18 @@ class ApprovalRequestListSerializer(serializers.ModelSerializer):
     def get_current_step_name(self, obj):
         step = obj.steps.filter(step_order=obj.current_step).first()
         return step.name if step else None
+
+    def get_locked_by_name(self, obj):
+        step = obj.steps.filter(step_order=obj.current_step, status='WAITING').select_related('locked_by').first()
+        if step and step.is_actively_locked() and step.locked_by:
+            return step.locked_by.get_full_name() or step.locked_by.username
+        return None
+
+    def get_locked_by_email(self, obj):
+        step = obj.steps.filter(step_order=obj.current_step, status='WAITING').select_related('locked_by').first()
+        if step and step.is_actively_locked() and step.locked_by:
+            return step.locked_by.email
+        return None
 
     def get_division_name(self, obj):
         """Look up division name by its code."""

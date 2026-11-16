@@ -7,6 +7,7 @@ All approval logic is centralized here — modules should NOT implement their ow
 """
 import json
 import urllib.request
+from datetime import timedelta
 from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
@@ -815,6 +816,69 @@ class WorkflowEngine:
 
     @staticmethod
     @transaction.atomic
+    def acquire_step_lock(request_id, user, ttl_seconds=120):
+        """
+        Acquire or renew a short-lived lease lock (default 120s) on the active WAITING step
+        so other team members (e.g. Purchasing Team) know who is currently viewing/processing it.
+
+        Returns:
+            tuple(bool, ApprovalStep | None): (acquired_by_user, active_step)
+        """
+        try:
+            approval_request = ApprovalRequest.objects.select_for_update().get(id=request_id)
+        except ApprovalRequest.DoesNotExist:
+            raise ValidationError(f"Approval request {request_id} not found.")
+
+        if approval_request.status != ApprovalRequest.Status.IN_PROGRESS:
+            return False, None
+
+        current_step = ApprovalStep.objects.select_for_update().select_related('locked_by').filter(
+            request=approval_request,
+            step_order=approval_request.current_step,
+            status=ApprovalStep.StepStatus.WAITING,
+        ).first()
+        if not current_step:
+            return False, None
+
+        if not WorkflowEngine._is_user_authorized_for_step(user, current_step, approval_request):
+            return False, current_step
+
+        now = timezone.now()
+        if current_step.is_locked_by_other(user, now=now):
+            return False, current_step
+
+        if current_step.locked_by_id != user.id or not current_step.is_actively_locked(now=now):
+            current_step.locked_by = user
+            current_step.locked_at = now
+        current_step.lock_expires_at = now + timedelta(seconds=ttl_seconds)
+        current_step.save(update_fields=['locked_by', 'locked_at', 'lock_expires_at'])
+        return True, current_step
+
+    @staticmethod
+    @transaction.atomic
+    def release_step_lock(request_id, user):
+        """
+        Release the lease lock on the active WAITING step if held by `user`.
+        """
+        try:
+            approval_request = ApprovalRequest.objects.select_for_update().get(id=request_id)
+        except ApprovalRequest.DoesNotExist:
+            return None
+
+        current_step = ApprovalStep.objects.select_for_update().select_related('locked_by').filter(
+            request=approval_request,
+            step_order=approval_request.current_step,
+            status=ApprovalStep.StepStatus.WAITING,
+        ).first()
+        if current_step and current_step.locked_by_id == user.id:
+            current_step.locked_by = None
+            current_step.locked_at = None
+            current_step.lock_expires_at = None
+            current_step.save(update_fields=['locked_by', 'locked_at', 'lock_expires_at'])
+        return current_step
+
+    @staticmethod
+    @transaction.atomic
     def approve_step(request_id, approver, comments='', ip_address=None, dlvdate=None, step_data=None):
         """
         Approve the current step of an approval request.
@@ -847,7 +911,7 @@ class WorkflowEngine:
 
         # Get the current active step
         try:
-            current_step = ApprovalStep.objects.get(
+            current_step = ApprovalStep.objects.select_related('locked_by').get(
                 request=approval_request,
                 step_order=approval_request.current_step,
                 status=ApprovalStep.StepStatus.WAITING,
@@ -858,6 +922,16 @@ class WorkflowEngine:
         # Verify the approver is authorized
         if not WorkflowEngine._is_user_authorized_for_step(approver, current_step, approval_request):
             raise ValidationError("You are not authorized to approve this step.")
+
+        # Verify step is not actively locked by another user
+        if current_step.is_locked_by_other(approver):
+            locker_name = (
+                (current_step.locked_by.get_full_name() or current_step.locked_by.username)
+                if current_step.locked_by else "user lain"
+            )
+            raise ValidationError(
+                f"Pengajuan ini sedang dibuka/diproses oleh {locker_name}. Silakan tunggu hingga selesai."
+            )
 
         # Validate required_inputs if defined for this step
         if current_step.required_inputs:
@@ -911,6 +985,9 @@ class WorkflowEngine:
         if step_data:
             current_step.step_data = step_data
         current_step.acted_at = timezone.now()
+        current_step.locked_by = None
+        current_step.locked_at = None
+        current_step.lock_expires_at = None
         current_step.save()
 
         # Create audit log for approval
@@ -991,7 +1068,7 @@ class WorkflowEngine:
 
         # Get the current active step
         try:
-            current_step = ApprovalStep.objects.get(
+            current_step = ApprovalStep.objects.select_related('locked_by').get(
                 request=approval_request,
                 step_order=approval_request.current_step,
                 status=ApprovalStep.StepStatus.WAITING,
@@ -1003,11 +1080,23 @@ class WorkflowEngine:
         if not WorkflowEngine._is_user_authorized_for_step(approver, current_step, approval_request):
             raise ValidationError("You are not authorized to reject this step.")
 
+        if current_step.is_locked_by_other(approver):
+            locker_name = (
+                (current_step.locked_by.get_full_name() or current_step.locked_by.username)
+                if current_step.locked_by else "user lain"
+            )
+            raise ValidationError(
+                f"Pengajuan ini sedang dibuka/diproses oleh {locker_name}. Silakan tunggu hingga selesai."
+            )
+
         # Reject the step
         current_step.status = ApprovalStep.StepStatus.REJECTED
         current_step.assigned_to = approver
         current_step.comments = comments
         current_step.acted_at = timezone.now()
+        current_step.locked_by = None
+        current_step.locked_at = None
+        current_step.lock_expires_at = None
         current_step.save()
 
         # Reject the entire request
@@ -1163,7 +1252,7 @@ class WorkflowEngine:
             )
 
         try:
-            current_step = ApprovalStep.objects.get(
+            current_step = ApprovalStep.objects.select_related('locked_by').get(
                 request=approval_request,
                 step_order=approval_request.current_step,
                 status=ApprovalStep.StepStatus.WAITING,
@@ -1174,8 +1263,22 @@ class WorkflowEngine:
         if not WorkflowEngine._is_user_authorized_for_step(approver, current_step, approval_request):
             raise ValidationError("You are not authorized to revise this step.")
 
+        if current_step.is_locked_by_other(approver):
+            locker_name = (
+                (current_step.locked_by.get_full_name() or current_step.locked_by.username)
+                if current_step.locked_by else "user lain"
+            )
+            raise ValidationError(
+                f"Pengajuan ini sedang dibuka/diproses oleh {locker_name}. Silakan tunggu hingga selesai."
+            )
+
         if not comments or not comments.strip():
             raise ValidationError("Alasan revisi wajib diisi.")
+
+        current_step.locked_by = None
+        current_step.locked_at = None
+        current_step.lock_expires_at = None
+        current_step.save(update_fields=['locked_by', 'locked_at', 'lock_expires_at'])
 
         # Find preceding quotation upload step (required_inputs contains 'quotation')
         quotation_step = None

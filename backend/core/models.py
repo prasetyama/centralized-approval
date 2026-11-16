@@ -819,6 +819,33 @@ class ApprovalStep(models.Model):
     )
     comments = models.TextField(blank=True, default='', help_text="Approver comments")
     acted_at = models.DateTimeField(null=True, blank=True)
+    locked_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='locked_approval_steps',
+        help_text="User currently holding the lease lock on this step"
+    )
+    locked_at = models.DateTimeField(null=True, blank=True)
+    lock_expires_at = models.DateTimeField(null=True, blank=True)
+
+    def is_actively_locked(self, now=None):
+        """Return True if this step is currently locked and the lease has not expired."""
+        if not self.locked_by_id or not self.lock_expires_at:
+            return False
+        if now is None:
+            from django.utils import timezone
+            now = timezone.now()
+        return self.lock_expires_at > now
+
+    def is_locked_by_other(self, user, now=None):
+        """Return True if this step is actively locked by a user other than `user`."""
+        if not self.is_actively_locked(now=now):
+            return False
+        if not user or not getattr(user, 'id', None):
+            return True
+        return self.locked_by_id != user.id
 
     class Meta:
         db_table = 'aw_approval_step'

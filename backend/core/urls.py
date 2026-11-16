@@ -8,6 +8,7 @@ from rest_framework.routers import DefaultRouter
 
 from core.views import (
     WorkflowSubmitView, SendEorderCCNotificationView, WorkflowDetailView,
+    WorkflowStepLockView,
     WorkflowApproveView, WorkflowRejectView, WorkflowReviseView, WorkflowDelegateView,
     WatcherListView, WatcherRemoveView,
     InboxView, HistoryView, dashboard_summary,
@@ -51,6 +52,7 @@ urlpatterns = [
     path('workflow/submit', WorkflowSubmitView.as_view(), name='workflow-submit'),
     path('workflow/send-eorder-cc', SendEorderCCNotificationView.as_view(), name='workflow-send-eorder-cc'),
     path('workflow/<int:pk>', WorkflowDetailView.as_view(), name='workflow-detail'),
+    path('workflow/<int:pk>/lock', WorkflowStepLockView.as_view(), name='workflow-lock'),
     path('workflow/<int:pk>/approve', WorkflowApproveView.as_view(), name='workflow-approve'),
     path('workflow/<int:pk>/reject', WorkflowRejectView.as_view(), name='workflow-reject'),
     path('workflow/<int:pk>/revise', WorkflowReviseView.as_view(), name='workflow-revise'),
