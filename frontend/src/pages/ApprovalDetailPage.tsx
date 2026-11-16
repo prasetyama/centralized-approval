@@ -287,7 +287,7 @@ export const ApprovalDetailPage = () => {
                 },
                 body: JSON.stringify({ action: 'unlock' }),
                 keepalive: true,
-            }).catch(() => {});
+            }).catch(() => { });
         };
 
         window.addEventListener('beforeunload', releaseLock);
@@ -410,19 +410,19 @@ export const ApprovalDetailPage = () => {
     const isLockedByOther = lockInfo
         ? lockInfo.is_locked_by_other
         : Boolean(
-              activeStep?.locked_by &&
-              activeStep?.locked_by_email &&
-              user?.email &&
-              activeStep.locked_by_email.toLowerCase() !== user.email.toLowerCase()
-          );
+            activeStep?.locked_by &&
+            activeStep?.locked_by_email &&
+            user?.email &&
+            activeStep.locked_by_email.toLowerCase() !== user.email.toLowerCase()
+        );
     const isLockedByMe = lockInfo
         ? Boolean(lockInfo.acquired && lockInfo.is_locked && !lockInfo.is_locked_by_other)
         : Boolean(
-              activeStep?.locked_by &&
-              activeStep?.locked_by_email &&
-              user?.email &&
-              activeStep.locked_by_email.toLowerCase() === user.email.toLowerCase()
-          );
+            activeStep?.locked_by &&
+            activeStep?.locked_by_email &&
+            user?.email &&
+            activeStep.locked_by_email.toLowerCase() === user.email.toLowerCase()
+        );
     const isSharedTeamStep = Boolean(
         activeStep &&
         (activeStep.approver_type === 'TARGET_DEPT_ROLE' ||
@@ -519,10 +519,10 @@ export const ApprovalDetailPage = () => {
                     <Lock size={20} className="text-amber-600 shrink-0 mt-0.5" />
                     <div className="space-y-1">
                         <p className="text-sm font-bold text-amber-900">
-                            Sedang Dibuka / Diproses oleh {stepLockedByName || stepLockedByEmail || 'User Lain'}
+                            Being opened by {stepLockedByName || stepLockedByEmail || 'User Lain'}
                         </p>
                         <p className="text-xs text-amber-800 leading-relaxed">
-                            Pengajuan PR ini sedang dibuka oleh <strong>{stepLockedByName || stepLockedByEmail}</strong>. Untuk mencegah persetujuan ganda (double approval), tombol aksi dikunci sementara hingga user tersebut selesai atau menutup halaman ini.
+                            This request submission is currently being opened by <strong>{stepLockedByName || stepLockedByEmail}</strong>. To prevent double approval, the action button is temporarily locked until this user finishes or closes this page.
                         </p>
                     </div>
                 </div>
@@ -682,10 +682,10 @@ export const ApprovalDetailPage = () => {
                             <Lock size={18} className="text-amber-600 shrink-0 mt-0.5" />
                             <div className="space-y-1">
                                 <p className="text-sm font-bold text-amber-900">
-                                    Dikunci oleh {stepLockedByName || stepLockedByEmail || 'User Lain'}
+                                    Being opened by {stepLockedByName || stepLockedByEmail || 'User Lain'}
                                 </p>
                                 <p className="text-xs text-amber-800 leading-relaxed">
-                                    Tombol aksi tidak dapat digunakan karena dokumen ini sedang dibuka/diproses oleh <strong>{stepLockedByName || stepLockedByEmail}</strong>. Halaman akan otomatis terbuka kembali setelah user tersebut selesai.
+                                    The action button cannot be used because this document is currently being opened/processed by <strong>{stepLockedByName || stepLockedByEmail}</strong>. The page will automatically reopen once that user has finished or refresh the page manually.
                                 </p>
                             </div>
                         </div>
@@ -696,10 +696,10 @@ export const ApprovalDetailPage = () => {
                             <ShieldCheck size={18} className="text-emerald-600 shrink-0 mt-0.5" />
                             <div className="space-y-0.5">
                                 <p className="text-xs font-bold text-emerald-900">
-                                    Dikunci Sementara untuk Anda
+                                    Locked Temporarily for you
                                 </p>
                                 <p className="text-[11px] text-emerald-800 leading-relaxed">
-                                    Anggota tim lain akan melihat info bahwa pengajuan ini sedang Anda buka sehingga tidak terjadi double approve.
+                                    Other team members will see that you have this submission open, which prevents duplicate approvals.
                                 </p>
                             </div>
                         </div>

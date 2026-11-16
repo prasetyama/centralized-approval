@@ -128,7 +128,7 @@ export const InboxPage = () => {
                                             {item.locked_by_name && (
                                                 <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 border border-amber-200 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
                                                     <Lock size={11} className="text-amber-600" />
-                                                    Sedang dibuka oleh {item.locked_by_name}
+                                                    Being opened by {item.locked_by_name}
                                                 </span>
                                             )}
                                         </div>
