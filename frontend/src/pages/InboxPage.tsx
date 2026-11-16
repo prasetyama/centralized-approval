@@ -7,6 +7,7 @@ import {
     Wallet,
     Users,
     Eye,
+    Lock,
 } from 'lucide-react';
 import { useState } from 'react';
 import api from '@/services/api';
@@ -122,7 +123,15 @@ export const InboxPage = () => {
                                 <TableCell>
                                     <div className="space-y-1">
                                         <p className="font-semibold text-slate-900">{item.title}</p>
-                                        <p className="text-xs text-slate-500">Ref: {item.reference_id}</p>
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <p className="text-xs text-slate-500">Ref: {item.reference_id}</p>
+                                            {item.locked_by_name && (
+                                                <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 border border-amber-200 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
+                                                    <Lock size={11} className="text-amber-600" />
+                                                    Sedang dibuka oleh {item.locked_by_name}
+                                                </span>
+                                            )}
+                                        </div>
                                     </div>
                                 </TableCell>
                                 <TableCell>

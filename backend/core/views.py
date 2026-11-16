@@ -175,7 +175,7 @@ class WorkflowDetailView(generics.RetrieveAPIView):
     queryset = ApprovalRequest.objects.select_related(
         'module', 'workflow', 'requester'
     ).prefetch_related(
-        Prefetch('steps', queryset=ApprovalStep.objects.exclude(status='ADDITIONAL')),
+        Prefetch('steps', queryset=ApprovalStep.objects.exclude(status='ADDITIONAL').select_related('locked_by')),
         'audit_logs',
         Prefetch('watchers', queryset=RequestWatcher.objects.filter(deleted_at=None).select_related('user'))
     )
@@ -213,6 +213,51 @@ class WorkflowDetailView(generics.RetrieveAPIView):
                 self.request.user.username, self.kwargs.get('pk')
             )
             raise ValidationError("You are not authorized to view this request.")
+
+
+class WorkflowStepLockView(generics.GenericAPIView):
+    """
+    POST /api/v1/workflow/<id>/lock
+        Acquire/renew lease lock on the active step (or unlock if {"action": "unlock"}).
+    DELETE /api/v1/workflow/<id>/lock
+        Release lease lock on the active step if held by request.user.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        action_type = (request.data.get('action') or 'lock').strip().lower()
+        if action_type == 'unlock':
+            WorkflowEngine.release_step_lock(pk, request.user)
+            return Response({
+                'success': True,
+                'data': {'unlocked': True},
+            })
+
+        acquired, step = WorkflowEngine.acquire_step_lock(pk, request.user, ttl_seconds=120)
+        is_locked = step.is_actively_locked() if step else False
+        is_locked_by_other = step.is_locked_by_other(request.user) if step else False
+        locked_by_user = step.locked_by if (is_locked and step) else None
+
+        return Response({
+            'success': True,
+            'data': {
+                'acquired': acquired,
+                'is_locked': is_locked,
+                'is_locked_by_other': is_locked_by_other,
+                'locked_by': locked_by_user.id if locked_by_user else None,
+                'locked_by_name': (locked_by_user.get_full_name() or locked_by_user.username) if locked_by_user else None,
+                'locked_by_email': locked_by_user.email if locked_by_user else None,
+                'locked_at': step.locked_at if is_locked else None,
+                'lock_expires_at': step.lock_expires_at if is_locked else None,
+            },
+        })
+
+    def delete(self, request, pk):
+        WorkflowEngine.release_step_lock(pk, request.user)
+        return Response({
+            'success': True,
+            'data': {'unlocked': True},
+        })
 
 
 class WorkflowApproveView(generics.GenericAPIView):
