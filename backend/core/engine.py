@@ -942,6 +942,8 @@ class WorkflowEngine:
                 if not step_data.get(field_key):
                     field_label = field.get('label', field_key) if isinstance(field, dict) else field_key
                     missing_fields.append(str(field_label))
+                if field_key in ('approval_quotation', 'selected_quotation') and (not comments or not comments.strip()):
+                    missing_fields.append('Remark')
             if missing_fields:
                 raise ValidationError(f"Data wajib berikut harus diisi sebelum Approve: {', '.join(missing_fields)}")
 

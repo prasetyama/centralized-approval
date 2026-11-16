@@ -130,6 +130,8 @@ export const ActionButtons = ({
         return key === 'approval_quotation' || key === 'selected_quotation';
     });
 
+    const isRemarkMandatory = showModal === 'REVISE' || (showModal === 'APPROVE' && Boolean(requiresApprovalQuotation));
+
     const handlePreviewQuotation = (quot: any) => {
         const target = quot.url || quot.data;
         if (!target) return;
@@ -184,6 +186,10 @@ export const ActionButtons = ({
         }
 
         if (showModal === 'APPROVE') {
+            if (requiresApprovalQuotation && !comments.trim()) {
+                setError('Remark is required');
+                hasError = true;
+            }
             if (requiresPr && !prNumber.trim()) {
                 setPrError('PR Number is required');
                 hasError = true;
@@ -636,7 +642,9 @@ export const ActionButtons = ({
                                     <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
                                         {showModal === 'REVISE' ? (
                                             <>Revision Reason <span className="text-red-500">*</span></>
-                                        ) : 'Remark'}
+                                        ) : (
+                                            <>Remark {isRemarkMandatory && <span className="text-red-500">*</span>}</>
+                                        )}
                                     </label>
                                     {error && <span className="text-[10px] font-bold text-red-500 uppercase animate-pulse">{error}</span>}
                                 </div>
