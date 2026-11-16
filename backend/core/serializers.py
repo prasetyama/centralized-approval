@@ -3,6 +3,7 @@ Core Serializers
 ================
 DRF serializers for all core models.
 """
+from django.conf import settings
 from django.db.models import Q
 from rest_framework import serializers
 from core.models import (
@@ -13,6 +14,32 @@ from core.models import (
     MasterCarNumber,
     PRNonTrade, PRNonTradeItem, PRNonTradeSequence
 )
+
+
+class SitAwareSerializerMixin:
+    """
+    Dynamically includes or excludes the 'is_test' field based on whether
+    the underlying model defines 'is_test' and settings.ENABLE_SIT_MODE is enabled.
+    This keeps Meta.fields identical across Testing (SIT) and Production branches.
+    """
+    def get_fields(self):
+        fields = super().get_fields()
+        model_cls = getattr(getattr(self, 'Meta', None), 'model', None)
+        model_has_is_test = False
+        if model_cls is not None:
+            try:
+                model_cls._meta.get_field('is_test')
+                model_has_is_test = True
+            except Exception:
+                model_has_is_test = False
+
+        is_sit_enabled = getattr(settings, 'ENABLE_SIT_MODE', True) and model_has_is_test
+        if is_sit_enabled:
+            if 'is_test' not in fields:
+                fields['is_test'] = serializers.BooleanField(read_only=True)
+        else:
+            fields.pop('is_test', None)
+        return fields
 
 
 class CompanySerializer(serializers.ModelSerializer):
@@ -739,7 +766,7 @@ class RequestFeedbackSerializer(serializers.ModelSerializer):
         return "Unknown"
 
 
-class ApprovalRequestListSerializer(serializers.ModelSerializer):
+class ApprovalRequestListSerializer(SitAwareSerializerMixin, serializers.ModelSerializer):
     """Lightweight serializer for listing approval requests."""
     module_name = serializers.CharField(source='module.name', read_only=True)
     module_code = serializers.CharField(source='module.code', read_only=True)
@@ -790,7 +817,7 @@ class ApprovalRequestListSerializer(serializers.ModelSerializer):
         return None
 
 
-class ApprovalRequestDetailSerializer(serializers.ModelSerializer):
+class ApprovalRequestDetailSerializer(SitAwareSerializerMixin, serializers.ModelSerializer):
     """Full serializer for approval request detail view with steps and audit trail."""
     module_name = serializers.CharField(source='module.name', read_only=True)
     module_code = serializers.CharField(source='module.code', read_only=True)
@@ -928,7 +955,7 @@ class PRNonTradeItemSerializer(serializers.ModelSerializer):
         fields = ['id', 'item_order', 'goods_code', 'description', 'unit', 'quantity', 'remark']
 
 
-class PRNonTradeSerializer(serializers.ModelSerializer):
+class PRNonTradeSerializer(SitAwareSerializerMixin, serializers.ModelSerializer):
     items = PRNonTradeItemSerializer(many=True, required=False)
     transaction_date = serializers.SerializerMethodField()
     status = serializers.SerializerMethodField()
