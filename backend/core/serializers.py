@@ -757,9 +757,8 @@ class ApprovalRequestListSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'reference_id', 'module', 'module_name', 'module_code',
             'module_color', 'module_icon', 'title', 'status', 'priority',
-            'current_step', 'current_step_name', 'locked_by_name', 'locked_by_email',
-            'requester', 'requester_name', 'requester_email',
-            'division', 'division_name', 'created_at', 'updated_at',
+            'current_step', 'current_step_name', 'requester', 'requester_name', 'requester_email',
+            'division', 'division_name', 'locked_by_name', 'locked_by_email', 'created_at', 'updated_at',
         ]
 
     def get_requester_name(self, obj):
