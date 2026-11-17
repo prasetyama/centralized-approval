@@ -757,10 +757,10 @@ class WorkflowEngine:
         """Check if an approver is authorized to take action on the given step."""
         if approver.is_superuser:
             return True
-        if current_step.assigned_to and current_step.assigned_to == approver:
-            return True
-        if current_step.user_required and current_step.user_required == approver:
-            return True
+        if current_step.assigned_to is not None:
+            return current_step.assigned_to == approver
+        if current_step.user_required is not None:
+            return current_step.user_required == approver
         if current_step.approver_type == WorkflowStepDefinition.ApproverType.REQUESTOR:
             if approval_request.requester == approver:
                 return True
@@ -1144,24 +1144,37 @@ class WorkflowEngine:
     @transaction.atomic
     def delegate_step(request_id, current_user, new_assignee, comments='', ip_address=None):
         """
-        Delegate/reassign an approval step to another user.
-        Can be done by the current assignee or an admin.
+        Redirect/reassign the current active approval step to another user.
+        Restricted to Admin (superuser) only.
 
         Args:
             request_id (int): ID of the ApprovalRequest.
-            current_user (User): User performing the delegation.
-            new_assignee (User): User to whom the step is delegated.
-            comments (str): Optional reason for delegation.
+            current_user (User): Admin user performing the redirect.
+            new_assignee (User): User to whom the active step is redirected.
+            comments (str): Reason for redirecting the approval step.
             ip_address (str): IP address.
+
+        Returns:
+            ApprovalRequest: The updated approval request.
         """
+        if not current_user.is_superuser:
+            raise ValidationError("Only admin users are authorized to redirect approval steps.")
+
         try:
             approval_request = ApprovalRequest.objects.select_for_update().get(id=request_id)
         except ApprovalRequest.DoesNotExist:
             raise ValidationError(f"Approval request {request_id} not found.")
 
+        if approval_request.status != ApprovalRequest.Status.IN_PROGRESS:
+            raise ValidationError(
+                f"Cannot redirect: request is in '{approval_request.status}' state."
+            )
+
         # Get the current active step
         try:
-            current_step = ApprovalStep.objects.get(
+            current_step = ApprovalStep.objects.select_related(
+                'assigned_to', 'user_required', 'target_department', 'role_required'
+            ).get(
                 request=approval_request,
                 step_order=approval_request.current_step,
                 status=ApprovalStep.StepStatus.WAITING,
@@ -1169,59 +1182,52 @@ class WorkflowEngine:
         except ApprovalStep.DoesNotExist:
             raise ValidationError("No active step found for this request.")
 
-        # Authorization: Only current assignee or someone with the right role/id can delegate
-        is_authorized = current_user.is_staff
-        
-        if not is_authorized:
-            if current_step.user_required:
-                is_authorized = (current_step.user_required == current_user)
-            elif current_step.assigned_to:
-                is_authorized = (current_step.assigned_to == current_user)
-            elif current_step.approver_type == WorkflowStepDefinition.ApproverType.REQUESTOR:
-                is_authorized = (approval_request.requester == current_user)
-            elif current_step.approver_type == WorkflowStepDefinition.ApproverType.TARGET_DEPT_ROLE:
-                target_dept = current_step.target_department
-                if target_dept:
-                    curr_dept_ids = current_user.get_department_ids() if hasattr(current_user, 'get_department_ids') else []
-                    if (
-                        target_dept.id in curr_dept_ids or
-                        OrganizationStructure.objects.filter(user=current_user, department=target_dept).exists() or
-                        current_user.department_ref == target_dept or
-                        (current_user.department and (
-                            current_user.department.strip().lower() == target_dept.name.strip().lower() or
-                            current_user.department.strip().lower() == (target_dept.code or '').strip().lower()
-                        )) or
-                        current_user.user_roles.filter(
-                            Q(dept__iexact=target_dept.name) | Q(dept__iexact=target_dept.code)
-                        ).exists()
-                    ):
-                        is_authorized = True
-            
-            if not is_authorized and current_step.role_required:
-                is_authorized = current_user.user_roles.filter(role=current_step.role_required).exists()
+        if not new_assignee.is_active:
+            raise ValidationError(f"User '{new_assignee.username}' is not active.")
 
-        if not is_authorized:
-            raise ValidationError("You are not authorized to delegate this step.")
+        if current_step.assigned_to_id == new_assignee.id:
+            raise ValidationError("Selected user is already the current approver for this step.")
 
-        # Validate new assignee has the required role (if role-based)
-        if current_step.role_required and not current_step.user_required:
-            if not new_assignee.user_roles.filter(role=current_step.role_required).exists():
-                raise ValidationError(f"User '{new_assignee.username}' does not have the required role.")
+        if current_step.assigned_to:
+            old_assignee_label = current_step.assigned_to.get_full_name() or current_step.assigned_to.username
+        elif current_step.user_required:
+            old_assignee_label = current_step.user_required.get_full_name() or current_step.user_required.username
+        elif current_step.target_department:
+            old_assignee_label = f"{current_step.target_department.name} Team"
+        elif current_step.role_required:
+            old_assignee_label = f"Role {current_step.role_required.name}"
+        else:
+            old_assignee_label = "Unassigned"
 
-        old_assignee = current_step.assigned_to
+        new_assignee_label = new_assignee.get_full_name() or new_assignee.username
+
         current_step.assigned_to = new_assignee
-        current_step.save(update_fields=['assigned_to'])
+        current_step.user_required = new_assignee
+        current_step.locked_by = None
+        current_step.locked_at = None
+        current_step.lock_expires_at = None
+        current_step.save(update_fields=[
+            'assigned_to', 'user_required', 'locked_by', 'locked_at', 'lock_expires_at'
+        ])
 
-        # Audit log
+        reason_str = f" Reason: {comments.strip()}" if comments and comments.strip() else ""
         AuditLog.objects.create(
             request=approval_request,
             step=current_step,
             actor=current_user,
             action=AuditLog.Action.REASSIGNED,
-            details=f"Step {current_step.step_order} reassigned from {old_assignee} to {new_assignee}. Reason: {comments}".strip(),
+            details=(
+                f"Step {current_step.step_order} ({current_step.name}) redirected from "
+                f"{old_assignee_label} to {new_assignee_label}.{reason_str}"
+            ).strip(),
             ip_address=ip_address,
             payload_snapshot=approval_request.payload,
         )
+
+        _captured_step = current_step
+        transaction.on_commit(lambda: email_service.send_step_notification(_captured_step))
+
+        return approval_request
 
     @staticmethod
     @transaction.atomic

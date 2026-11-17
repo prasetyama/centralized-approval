@@ -7,7 +7,8 @@ import {
   MessageSquare,
   User as UserIcon,
   Clock,
-  History
+  History,
+  ArrowRightLeft
 } from 'lucide-react';
 // import { formatDistanceToNow } from 'date-fns';
 // import { id } from 'date-fns/locale';
@@ -50,6 +51,13 @@ export const ActivityTimeline: React.FC<ActivityTimelineProps> = ({ logs }) => {
           bgColor: 'bg-amber-50',
           iconColor: 'text-amber-600',
           borderColor: 'border-amber-200'
+        };
+      case 'REASSIGNED':
+        return {
+          icon: <ArrowRightLeft className="w-5 h-5" />,
+          bgColor: 'bg-purple-50',
+          iconColor: 'text-purple-600',
+          borderColor: 'border-purple-200'
         };
       case 'WATCHER_ADDED':
         return {

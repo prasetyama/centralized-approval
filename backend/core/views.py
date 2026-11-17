@@ -422,22 +422,22 @@ class WorkflowReviseView(generics.GenericAPIView):
 class WorkflowDelegateView(generics.GenericAPIView):
     """
     POST /api/v1/workflow/<id>/delegate
-    Delegate/reassign the current step to another user.
+    Redirect/reassign the current active approval step to another user (Admin only).
     """
     serializer_class = DelegateRequestSerializer
     permission_classes = [IsAuthenticated]
 
     def post(self, request, pk):
         if not request.user.is_superuser:
-            logging.getLogger(__name__).error("[Core.Views] Unauthorized delegate for workflow id %s by user %s", pk, request.user.username)
-            return Response({'error': 'Only superusers can delegate steps.'}, status=status.HTTP_403_FORBIDDEN)
+            logging.getLogger(__name__).error("[Core.Views] Unauthorized redirect for workflow id %s by user %s", pk, request.user.username)
+            return Response({'error': 'Only admin users can redirect approval steps.'}, status=status.HTTP_403_FORBIDDEN)
 
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         try:
             new_assignee = User.objects.get(id=serializer.validated_data['new_assignee_id'])
-        except User.DoesNotExist:
+        except User.DoesNotExist as e:
             logging.getLogger(__name__).error("[Core.Views] New assignee not found: %s", str(e), exc_info=True)
             return Response({'error': 'New assignee not found.'}, status=status.HTTP_404_NOT_FOUND)
 
@@ -449,10 +449,11 @@ class WorkflowDelegateView(generics.GenericAPIView):
             ip_address=_get_client_ip(request),
         )
 
+        new_assignee_name = new_assignee.get_full_name() or new_assignee.username
         return Response({
             'success': True,
             'data': ApprovalRequestDetailSerializer(approval_request).data,
-            'message': f'Step delegated to {new_assignee.username}.',
+            'message': f'Approval step redirected to {new_assignee_name}.',
         })
 
 
