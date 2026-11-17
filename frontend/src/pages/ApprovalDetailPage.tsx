@@ -1,8 +1,9 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Clock, History, RotateCcw, Lock, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, Clock, History, RotateCcw, Lock, ShieldCheck, ArrowRightLeft } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import api, { getCookie } from '@/services/api';
+import { useToast } from '@/context/ToastContext';
 import { Button } from '@/components/atoms/Button';
 import { Badge } from '@/components/atoms/Badge';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/atoms/Card';
@@ -201,6 +202,7 @@ export const ApprovalDetailPage = () => {
     const navigate = useNavigate();
     const queryClient = useQueryClient();
     const { user } = useAuth();
+    const { addToast } = useToast();
     const [isDelegateModalOpen, setIsDelegateModalOpen] = useState(false);
     const [isAddWatcherModalOpen, setIsAddWatcherModalOpen] = useState(false);
     const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
@@ -234,7 +236,9 @@ export const ApprovalDetailPage = () => {
         if (user?.is_superuser) return true;
 
         // Use email for matching since user.id is from SSO and activeStep.assigned_to is from local DB
-        if (activeStep.assigned_to_email === user?.email) return true;
+        if (activeStep.assigned_to_email) {
+            return activeStep.assigned_to_email.toLowerCase() === (user?.email || '').toLowerCase();
+        }
         if (activeStep.approver_type === 'USER' && activeStep.user_required_email === user?.email) return true;
         if (activeStep.approver_type === 'ROLE' && activeStep.role_required == user?.role) return true;
         if (activeStep.approver_type === 'REQUESTOR' && (detail?.requester_email === user?.email || activeStep.assigned_to_email === user?.email || detail?.requester === user?.id)) return true;
@@ -318,6 +322,10 @@ export const ApprovalDetailPage = () => {
             queryClient.invalidateQueries({ queryKey: ['inbox'] });
             queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
             setIsDelegateModalOpen(false);
+            addToast('Approval step redirected successfully', 'success');
+        },
+        onError: (err: any) => {
+            addToast(typeof err === 'string' ? err : (err?.message || 'Failed to redirect approval step'), 'error');
         },
     });
 
@@ -481,16 +489,16 @@ export const ApprovalDetailPage = () => {
                     </div>
                 </div>
                 <div className="flex items-center gap-6 flex-row">
-                    {/* {(user?.is_superuser || activeStep.assigned_to_email === user?.email || (activeStep.approver_type === 'TARGET_DEPT_ROLE' && isApprover)) && detail.status === 'IN_PROGRESS' && (
+                    {user?.is_superuser && detail.status === 'IN_PROGRESS' && activeStep && activeStep.status === 'WAITING' && (
                         <Button
                             variant="outline"
                             className="bg-purple-50 text-purple-600 border-purple-200 hover:bg-purple-100 hover:text-purple-700 font-bold"
                             onClick={() => setIsDelegateModalOpen(true)}
                         >
-                            <User size={18} className="mr-2" />
-                            Delegate Task
+                            <ArrowRightLeft size={18} className="mr-2" />
+                            Redirect Approval
                         </Button>
-                    )} */}
+                    )}
 
                     {detail.watchers?.length > 0 && (
                         <WatcherAvatarGroup
@@ -751,6 +759,14 @@ export const ApprovalDetailPage = () => {
                         await delegateMutation.mutateAsync({ new_assignee_id, comments });
                     }}
                     roleName={activeStep.role_name}
+                    stepName={activeStep.name}
+                    stepOrder={activeStep.step_order}
+                    currentApproverName={
+                        activeStep.assigned_to_name ||
+                        activeStep.user_required_name ||
+                        (activeStep.target_department_name ? `${activeStep.target_department_name} Team` : activeStep.role_name)
+                    }
+                    currentApproverEmail={activeStep.assigned_to_email || activeStep.user_required_email}
                     isLoading={delegateMutation.isPending}
                 />
             )}
