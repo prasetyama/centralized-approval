@@ -1388,13 +1388,13 @@ class UserLeaveDelegation(models.Model):
         related_name='leave_delegations_received',
         help_text="Substitute user who receives approval authority"
     )
-    start_date = models.DateTimeField(
+    start_date = models.DateField(
         db_index=True,
-        help_text="Start date & time of the leave / delegation period"
+        help_text="Start date of the leave / delegation period"
     )
-    end_date = models.DateTimeField(
+    end_date = models.DateField(
         db_index=True,
-        help_text="End date & time of the leave / delegation period"
+        help_text="End date of the leave / delegation period"
     )
     reason = models.CharField(
         max_length=255,
@@ -1448,8 +1448,13 @@ class UserLeaveDelegation(models.Model):
         if not self.is_active:
             return False
         if now is None:
-            now = timezone.now()
-        if not (self.start_date <= now <= self.end_date):
+            today = timezone.localdate()
+        elif hasattr(now, 'date'):
+            today = now.date()
+        else:
+            today = now
+
+        if not (self.start_date <= today <= self.end_date):
             return False
         if self.scope == self.Scope.SPECIFIC_MODULE and module_code:
             return module_code in (self.specific_module_codes or [])
@@ -1460,10 +1465,10 @@ class UserLeaveDelegation(models.Model):
         """Calculates current dynamic status: ACTIVE, SCHEDULED, EXPIRED, or INACTIVE."""
         if not self.is_active:
             return 'INACTIVE'
-        now = timezone.now()
-        if now < self.start_date:
+        today = timezone.localdate()
+        if today < self.start_date:
             return 'SCHEDULED'
-        elif self.start_date <= now <= self.end_date:
+        elif self.start_date <= today <= self.end_date:
             return 'ACTIVE'
         else:
             return 'EXPIRED'
@@ -1472,8 +1477,8 @@ class UserLeaveDelegation(models.Model):
         from django.core.exceptions import ValidationError
         if self.user_id and self.delegate_user_id and self.user_id == self.delegate_user_id:
             raise ValidationError("Penerima delegasi tidak boleh diri Anda sendiri.")
-        if self.start_date and self.end_date and self.start_date >= self.end_date:
-            raise ValidationError("Tanggal akhir cuti harus lebih besar daripada tanggal mulai.")
+        if self.start_date and self.end_date and self.start_date > self.end_date:
+            raise ValidationError("Tanggal akhir cuti tidak boleh lebih awal dari tanggal mulai.")
 
         # Anti-circular check: prevent User A -> B when B -> A is active or overlapping
         if self.user_id and self.delegate_user_id and self.start_date and self.end_date:
@@ -1481,8 +1486,8 @@ class UserLeaveDelegation(models.Model):
                 user_id=self.delegate_user_id,
                 delegate_user_id=self.user_id,
                 is_active=True,
-                start_date__lt=self.end_date,
-                end_date__gt=self.start_date,
+                start_date__lte=self.end_date,
+                end_date__gte=self.start_date,
             )
             if self.pk:
                 overlapping = overlapping.exclude(pk=self.pk)

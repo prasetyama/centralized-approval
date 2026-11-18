@@ -504,12 +504,12 @@ class InboxView(generics.ListAPIView):
                 ).values_list('request_id', flat=True))
 
                 # 2. Requests delegated to this user via active UserLeaveDelegation
-                now = timezone.now()
+                today = timezone.localdate()
                 active_delegations = UserLeaveDelegation.objects.filter(
                     delegate_user=user,
                     is_active=True,
-                    start_date__lte=now,
-                    end_date__gte=now,
+                    start_date__lte=today,
+                    end_date__gte=today,
                 ).select_related('user')
 
                 delegated_waiting_ids = set()
@@ -1728,7 +1728,7 @@ class UserLeaveDelegationViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         tab = self.request.query_params.get('tab', None)
-        now = timezone.now()
+        today = timezone.localdate()
 
         if user.is_superuser:
             qs = super().get_queryset()
@@ -1740,7 +1740,7 @@ class UserLeaveDelegationViewSet(viewsets.ModelViewSet):
         elif tab == 'received':
             qs = qs.filter(delegate_user=user)
         elif tab == 'active':
-            qs = qs.filter(is_active=True, start_date__lte=now, end_date__gte=now)
+            qs = qs.filter(is_active=True, start_date__lte=today, end_date__gte=today)
 
         return qs
 
@@ -1758,19 +1758,19 @@ class UserLeaveDelegationViewSet(viewsets.ModelViewSet):
         Check if the current logged-in user is currently on active leave delegation.
         """
         user = request.user
-        now = timezone.now()
+        today = timezone.localdate()
         active_given = UserLeaveDelegation.objects.filter(
             user=user,
             is_active=True,
-            start_date__lte=now,
-            end_date__gte=now,
+            start_date__lte=today,
+            end_date__gte=today,
         ).select_related('delegate_user').first()
 
         active_received_count = UserLeaveDelegation.objects.filter(
             delegate_user=user,
             is_active=True,
-            start_date__lte=now,
-            end_date__gte=now,
+            start_date__lte=today,
+            end_date__gte=today,
         ).count()
 
         return Response({
@@ -1823,11 +1823,11 @@ class UserLeaveDelegationViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'], url_path='end-early')
     def end_early(self, request, pk=None):
         """
-        Ends the leave delegation immediately (setting end_date to now and is_active to False).
+        Ends the leave delegation immediately (setting end_date to today and is_active to False).
         """
         delegation = self.get_object()
-        now = timezone.now()
-        delegation.end_date = now
+        today = timezone.localdate()
+        delegation.end_date = today
         delegation.is_active = False
         delegation.save(update_fields=['end_date', 'is_active', 'updated_at'])
         return Response({

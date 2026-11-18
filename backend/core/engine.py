@@ -822,13 +822,17 @@ class WorkflowEngine:
         """
         from core.models import UserLeaveDelegation
         if now is None:
-            now = timezone.now()
+            today = timezone.localdate()
+        elif hasattr(now, 'date'):
+            today = now.date()
+        else:
+            today = now
 
         active_delegations = UserLeaveDelegation.objects.filter(
             delegate_user=approver,
             is_active=True,
-            start_date__lte=now,
-            end_date__gte=now,
+            start_date__lte=today,
+            end_date__gte=today,
         ).select_related('user')
 
         if not active_delegations.exists():
@@ -837,7 +841,7 @@ class WorkflowEngine:
         module_code = approval_request.module.code if approval_request and approval_request.module else None
 
         for delegation in active_delegations:
-            if not delegation.is_currently_effective(module_code=module_code, now=now):
+            if not delegation.is_currently_effective(module_code=module_code, now=today):
                 continue
 
             if WorkflowEngine._is_user_authorized_direct(delegation.user, current_step, approval_request):

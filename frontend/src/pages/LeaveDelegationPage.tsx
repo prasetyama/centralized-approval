@@ -165,18 +165,18 @@ export const LeaveDelegationPage: React.FC = () => {
 
     const openCreateModal = () => {
         setDelegateUserId('');
-        // Format current local date time: today 08:00 to 5 days later 17:00
+        // Format current date: today to 5 days later
         const now = new Date();
-        const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 8, 0);
-        const end = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 5, 17, 0);
+        const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const end = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 5);
 
-        const formatIso = (d: Date) => {
+        const formatDateOnly = (d: Date) => {
             const pad = (n: number) => n.toString().padStart(2, '0');
-            return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+            return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
         };
 
-        setStartDate(formatIso(start));
-        setEndDate(formatIso(end));
+        setStartDate(formatDateOnly(start));
+        setEndDate(formatDateOnly(end));
         setReason('Cuti Tahunan');
         setScope('ALL');
         setSelectedModules(['EORDER', 'PR_NON_TRADE']);
@@ -204,21 +204,27 @@ export const LeaveDelegationPage: React.FC = () => {
             return;
         }
 
-        if (new Date(startDate) >= new Date(endDate)) {
-            setErrorMsg('Tanggal selesai cuti harus lebih besar dari tanggal mulai.');
+        if (startDate > endDate) {
+            setErrorMsg('Tanggal selesai cuti tidak boleh lebih awal dari tanggal mulai.');
             return;
         }
 
         createMutation.mutate({
             delegate_user: delegateUserId,
-            start_date: new Date(startDate).toISOString(),
-            end_date: new Date(endDate).toISOString(),
+            start_date: startDate,
+            end_date: endDate,
             reason: reason.trim(),
             scope,
             specific_module_codes: scope === 'SPECIFIC_MODULE' ? selectedModules : [],
             notify_delegate: notifyDelegate,
             is_active: true
         });
+    };
+
+    const formatDate = (dateStr: string) => {
+        if (!dateStr) return '-';
+        const d = dateStr.includes('T') ? new Date(dateStr) : new Date(`${dateStr}T00:00:00`);
+        return isNaN(d.getTime()) ? dateStr : d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
     };
 
     const getStatusBadge = (status: LeaveDelegation['current_status']) => {
@@ -295,7 +301,7 @@ export const LeaveDelegationPage: React.FC = () => {
                             </p>
                             <p className="text-xs text-slate-600 flex items-center gap-1.5">
                                 <Calendar size={13} className="text-slate-400" />
-                                Period: {new Date(currentStatusData.active_delegation.start_date).toLocaleDateString('en-US', { dateStyle: 'medium' })} s/d {new Date(currentStatusData.active_delegation.end_date).toLocaleDateString('en-US', { dateStyle: 'medium' })}
+                                Period: {formatDate(currentStatusData.active_delegation.start_date)} {currentStatusData.active_delegation.start_date !== currentStatusData.active_delegation.end_date ? `s/d ${formatDate(currentStatusData.active_delegation.end_date)}` : '(1 hari)'}
                             </p>
                         </div>
                     </div>
@@ -392,15 +398,18 @@ export const LeaveDelegationPage: React.FC = () => {
                                         </div>
                                     </TableCell>
                                     <TableCell>
-                                        <div className="text-xs space-y-1">
-                                            <div className="flex items-center gap-1.5 text-slate-700 font-medium">
-                                                <span>{new Date(item.start_date).toLocaleDateString('id-ID', { dateStyle: 'medium' })}</span>
-                                                <ArrowRight size={12} className="text-slate-400" />
-                                                <span>{new Date(item.end_date).toLocaleDateString('id-ID', { dateStyle: 'medium' })}</span>
-                                            </div>
-                                            <p className="text-[11px] text-slate-400">
-                                                Time: {new Date(item.start_date).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} - {new Date(item.end_date).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
-                                            </p>
+                                        <div className="text-xs">
+                                            {item.start_date === item.end_date ? (
+                                                <div className="font-medium text-slate-700">
+                                                    {formatDate(item.start_date)} <span className="text-slate-400 font-normal">(1 hari)</span>
+                                                </div>
+                                            ) : (
+                                                <div className="flex items-center gap-1.5 text-slate-700 font-medium">
+                                                    <span>{formatDate(item.start_date)}</span>
+                                                    <ArrowRight size={12} className="text-slate-400 shrink-0" />
+                                                    <span>{formatDate(item.end_date)}</span>
+                                                </div>
+                                            )}
                                         </div>
                                     </TableCell>
                                     <TableCell>
@@ -532,11 +541,11 @@ export const LeaveDelegationPage: React.FC = () => {
                                         Start Date <span className="text-red-500">*</span>
                                     </label>
                                     <Input
-                                        type="datetime-local"
+                                        type="date"
                                         value={startDate}
                                         onChange={(e) => setStartDate(e.target.value)}
                                         required
-                                        className="w-full text-xs"
+                                        className="w-full text-sm"
                                     />
                                 </div>
                                 <div>
@@ -544,11 +553,11 @@ export const LeaveDelegationPage: React.FC = () => {
                                         End Date <span className="text-red-500">*</span>
                                     </label>
                                     <Input
-                                        type="datetime-local"
+                                        type="date"
                                         value={endDate}
                                         onChange={(e) => setEndDate(e.target.value)}
                                         required
-                                        className="w-full text-xs"
+                                        className="w-full text-sm"
                                     />
                                 </div>
                             </div>

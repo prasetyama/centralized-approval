@@ -810,13 +810,13 @@ class ApprovalRequestListSerializer(SitAwareSerializerMixin, serializers.ModelSe
                     if delegator:
                         from core.models import UserLeaveDelegation
                         from django.utils import timezone
-                        now = timezone.now()
+                        today = timezone.localdate()
                         del_rule = UserLeaveDelegation.objects.filter(
                             user=delegator,
                             delegate_user=current_user,
                             is_active=True,
-                            start_date__lte=now,
-                            end_date__gte=now
+                            start_date__lte=today,
+                            end_date__gte=today
                         ).first()
                         obj._cached_delegation_info = {
                             'is_delegated': True,
@@ -913,13 +913,13 @@ class ApprovalRequestDetailSerializer(SitAwareSerializerMixin, serializers.Model
                     if delegator:
                         from core.models import UserLeaveDelegation
                         from django.utils import timezone
-                        now = timezone.now()
+                        today = timezone.localdate()
                         del_rule = UserLeaveDelegation.objects.filter(
                             user=delegator,
                             delegate_user=current_user,
                             is_active=True,
-                            start_date__lte=now,
-                            end_date__gte=now
+                            start_date__lte=today,
+                            end_date__gte=today
                         ).first()
                         obj._cached_detail_delegation_info = {
                             'is_delegated': True,
@@ -1138,6 +1138,7 @@ class PRNonTradeSerializer(SitAwareSerializerMixin, serializers.ModelSerializer)
 
 class UserLeaveDelegationSerializer(serializers.ModelSerializer):
     """Serializer for UserLeaveDelegation model."""
+    user = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), required=False)
     user_name = serializers.SerializerMethodField()
     user_email = serializers.CharField(source='user.email', read_only=True)
     user_department = serializers.CharField(source='user.department', read_only=True)
@@ -1167,7 +1168,11 @@ class UserLeaveDelegationSerializer(serializers.ModelSerializer):
         return obj.created_by.get_full_name() or obj.created_by.username if obj.created_by else '-'
 
     def validate(self, attrs):
-        user = attrs.get('user', self.instance.user if self.instance else None)
+        user = attrs.get('user')
+        if not user and 'request' in self.context and hasattr(self.context['request'], 'user'):
+            user = self.context['request'].user
+        if not user and self.instance:
+            user = self.instance.user
         delegate_user = attrs.get('delegate_user', self.instance.delegate_user if self.instance else None)
         start_date = attrs.get('start_date', self.instance.start_date if self.instance else None)
         end_date = attrs.get('end_date', self.instance.end_date if self.instance else None)
@@ -1175,8 +1180,8 @@ class UserLeaveDelegationSerializer(serializers.ModelSerializer):
         if user and delegate_user and user.id == delegate_user.id:
             raise serializers.ValidationError({"delegate_user": "Penerima delegasi tidak boleh diri Anda sendiri."})
 
-        if start_date and end_date and start_date >= end_date:
-            raise serializers.ValidationError({"end_date": "Tanggal akhir cuti harus lebih besar daripada tanggal mulai."})
+        if start_date and end_date and start_date > end_date:
+            raise serializers.ValidationError({"end_date": "Tanggal akhir cuti tidak boleh lebih awal dari tanggal mulai."})
 
         # Anti-circular validation
         if user and delegate_user and start_date and end_date:
@@ -1184,8 +1189,8 @@ class UserLeaveDelegationSerializer(serializers.ModelSerializer):
                 user=delegate_user,
                 delegate_user=user,
                 is_active=True,
-                start_date__lt=end_date,
-                end_date__gt=start_date,
+                start_date__lte=end_date,
+                end_date__gte=start_date,
             )
             if self.instance and self.instance.pk:
                 overlapping = overlapping.exclude(pk=self.instance.pk)
