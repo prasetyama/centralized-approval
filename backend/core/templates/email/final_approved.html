@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="id">
+<html lang="en">
 
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Request Disetujui</title>
+  <title>Request Approved</title>
   <style>
     body {
       margin: 0;
@@ -131,26 +131,26 @@
   <div class="wrapper">
     <div class="header">
       <div class="icon">✅</div>
-      <h1>Permintaan Disetujui</h1>
+      <h1>Request Approved</h1>
       <p>{{ module_name }}</p>
     </div>
     <div class="body">
-      <p class="greeting">Halo, <strong>{{ requester_name }}</strong>,</p>
+      <p class="greeting">Hello, <strong>{{ requester_name }}</strong>,</p>
       <p style="font-size:15px; color:#555; line-height:1.6;">
-        Permintaan Anda telah <strong>disetujui oleh semua approver</strong>. Proses selanjutnya dapat dilanjutkan.
+        Your request has been <strong>approved by all approvers</strong>. Further processing can proceed.
       </p>
 
       <div class="info-card">
         <div class="info-row">
-          <span class="info-label">Judul</span>
+          <span class="info-label">Title</span>
           <span class="info-value"><strong>{{ request_title }}</strong></span>
         </div>
         <div class="info-row">
-          <span class="info-label">Modul</span>
+          <span class="info-label">Module</span>
           <span class="info-value">{{ module_name }}</span>
         </div>
         <div class="info-row">
-          <span class="info-label">No. Referensi</span>
+          <span class="info-label">Reference No.</span>
           <span class="info-value">{{ reference_id }}</span>
         </div>
         <div class="info-row">
@@ -160,11 +160,11 @@
       </div>
 
       <div class="cta">
-        <a href="{{ detail_url }}">Lihat Detail</a>
+        <a href="{{ detail_url }}">View Details</a>
       </div>
     </div>
     <div class="footer">
-      Email ini dikirim otomatis oleh sistem. Harap tidak membalas email ini.<br />
+      This email was sent automatically by the system. Please do not reply directly to this email.<br />
       &copy; 2026 Approval HUB
     </div>
   </div>

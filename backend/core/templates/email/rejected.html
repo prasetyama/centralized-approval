@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="id">
+<html lang="en">
 
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Request Ditolak</title>
+  <title>Request Status Update</title>
   <style>
     body {
       margin: 0;
@@ -151,34 +151,34 @@
   <div class="wrapper">
     <div class="header">
       <div class="icon">❌</div>
-      <h1>Permintaan Ditolak</h1>
+      <h1>Request Update</h1>
       <p>{{ module_name }}</p>
     </div>
     <div class="body">
-      <p class="greeting">Halo, <strong>{{ requester_name }}</strong>,</p>
+      <p class="greeting">Hello, <strong>{{ requester_name }}</strong>,</p>
       <p style="font-size:15px; color:#555; line-height:1.6;">
-        Mohon maaf, permintaan Anda telah <strong>ditolak</strong> pada Step {{ step_order }}: {{ step_name }}.
+        Your request has been reviewed at Step {{ step_order }}: {{ step_name }}.
       </p>
 
       <div class="info-card">
         <div class="info-row">
-          <span class="info-label">Judul</span>
+          <span class="info-label">Title</span>
           <span class="info-value"><strong>{{ request_title }}</strong></span>
         </div>
         <div class="info-row">
-          <span class="info-label">Modul</span>
+          <span class="info-label">Module</span>
           <span class="info-value">{{ module_name }}</span>
         </div>
         <div class="info-row">
-          <span class="info-label">No. Referensi</span>
+          <span class="info-label">Reference No.</span>
           <span class="info-value">{{ reference_id }}</span>
         </div>
         <div class="info-row">
-          <span class="info-label">Ditolak oleh</span>
+          <span class="info-label">Action by</span>
           <span class="info-value">{{ rejector_name }}</span>
         </div>
         <div class="info-row">
-          <span class="info-label">Pada Step</span>
+          <span class="info-label">Step</span>
           <span class="info-value">{{ step_order }} — {{ step_name }}</span>
         </div>
         <div class="info-row">
@@ -188,15 +188,15 @@
       </div>
 
       <div class="reason-box">
-        <div class="label">Alasan Penolakan</div>
+        <div class="label">Reason / Comments</div>
         {{ rejection_reason }}
       </div>
       <div class="cta">
-        <a href="{{ detail_url }}">Lihat Detail</a>
+        <a href="{{ detail_url }}">View Details</a>
       </div>
     </div>
     <div class="footer">
-      Email ini dikirim otomatis oleh sistem. Harap tidak membalas email ini.<br />
+      This email was sent automatically by the system. Please do not reply directly to this email.<br />
       &copy; 2026 Approval HUB
     </div>
   </div>

@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="id">
+<html lang="en">
 
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Permintaan Approval</title>
+  <title>Approval Request</title>
   <style>
     body {
       margin: 0;
@@ -159,53 +159,57 @@
 <body>
   <div class="wrapper">
     <div class="header">
-      <h1>Permintaan Approval</h1>
+      <h1>Approval Request</h1>
       <p>{{ module_name }}</p>
     </div>
     <div class="body">
-      <p class="greeting">Halo, <strong>{{ approver_name }}</strong>,</p>
+      <p class="greeting">Hello, <strong>{{ approver_name }}</strong>,</p>
       <p style="font-size:15px; color:#555; line-height:1.6;">
-        Terdapat permintaan approval yang memerlukan persetujuan Anda
+        {% if is_delegated %}
+        You have received delegated approval authority on behalf of <strong>{{ delegated_from_name }}</strong> (currently on leave) that requires your review and action.
+        {% else %}
+        There is an approval request that requires your review and action.
+        {% endif %}
       </p>
 
       <div class="info-card">
         <div class="info-row">
-          <span class="info-label">Judul</span>
+          <span class="info-label">Title</span>
           <span class="info-value"><strong>{{ request_title }}</strong></span>
         </div>
         <div class="info-row">
-          <span class="info-label">Modul</span>
+          <span class="info-label">Module</span>
           <span class="info-value">{{ module_name }}</span>
         </div>
         <div class="info-row">
-          <span class="info-label">No. Referensi</span>
+          <span class="info-label">Reference No.</span>
           <span class="info-value">{{ reference_id }}</span>
         </div>
         <div class="info-row">
-          <span class="info-label">Diajukan oleh</span>
+          <span class="info-label">Submitted by</span>
           <span class="info-value">{{ requester_name }}</span>
         </div>
         <div class="info-row">
           <span class="info-label">Progress</span>
-          <span class="info-value"><span class="step-badge">Step {{ step_order }} dari {{ total_steps }}</span></span>
+          <span class="info-value"><span class="step-badge">Step {{ step_order }} of {{ total_steps }}</span></span>
         </div>
         {% if description %}
         <div class="info-row" style="flex-direction: column; gap: 4px;">
-          <span class="info-label">Keterangan</span>
+          <span class="info-label">Description</span>
           <span style="color:#555; font-size:13px; margin-top:4px;">{{ description }}</span>
         </div>
         {% endif %}
       </div>
 
       <div class="cta">
-        <a href="{{ approval_url }}">Lihat</a>
+        <a href="{{ approval_url }}">View Request</a>
       </div>
       <p style="text-align:center; font-size:12px; color:#aaa; margin-top:12px;">
-        Atau kunjungi: <a href="{{ approval_url }}" style="color:#3032DC;">{{ approval_url }}</a>
+        Or visit: <a href="{{ approval_url }}" style="color:#3032DC;">{{ approval_url }}</a>
       </p>
     </div>
     <div class="footer">
-      Email ini dikirim otomatis oleh sistem. Harap tidak membalas email ini.<br />
+      This email was sent automatically by the system. Please do not reply directly to this email.<br />
       &copy; 2026 Approval HUB
     </div>
   </div>

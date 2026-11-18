@@ -783,6 +783,14 @@ class ApprovalStep(models.Model):
         blank=True,
         help_text="Specific user required for this step"
     )
+    delegated_from = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        related_name='delegated_approval_steps',
+        null=True,
+        blank=True,
+        help_text="Original approver who was on leave when this step was assigned"
+    )
     required_inputs = models.JSONField(
         default=list,
         blank=True,

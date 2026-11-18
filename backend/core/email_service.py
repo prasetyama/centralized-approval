@@ -68,8 +68,13 @@ def send_step_notification(step) -> None:
     approval_request = step.request
     requester = approval_request.requester
 
+    is_delegated = bool(step.delegated_from)
+    delegator_name = (step.delegated_from.get_full_name() or step.delegated_from.username) if is_delegated else ''
+
     context = {
         'approver_name': step.assigned_to.get_full_name() or step.assigned_to.username if step.assigned_to else 'Approver',
+        'is_delegated': is_delegated,
+        'delegated_from_name': delegator_name,
         'request_title': approval_request.title,
         'request_id': approval_request.id,
         'reference_id': approval_request.reference_id,
@@ -84,18 +89,24 @@ def send_step_notification(step) -> None:
         'approval_url': f"{_get_frontend_url()}/workflow/{approval_request.id}",
     }
 
-    subject = f"[Action Required] {approval_request.module.name}: {approval_request.title}"
+    subject_prefix = "[Action Required - Leave Delegation]" if is_delegated else "[Action Required]"
+    subject = f"{subject_prefix} {approval_request.module.name}: {approval_request.title}"
+    delegation_intro = (
+        f"You have received delegated approval authority on behalf of {delegator_name} (currently on leave) that requires your action."
+        if is_delegated else
+        "You have an approval request that requires your action."
+    )
     text_body = (
-        f"Halo {context['approver_name']},\n\n"
-        f"Anda memiliki permintaan approval yang perlu ditindaklanjuti.\n\n"
-        f"Judul: {approval_request.title}\n"
-        f"Modul: {approval_request.module.name}\n"
-        f"Referensi: {approval_request.reference_id}\n"
-        f"Diajukan oleh: {context['requester_name']}\n"
+        f"Hello {context['approver_name']},\n\n"
+        f"{delegation_intro}\n\n"
+        f"Title: {approval_request.title}\n"
+        f"Module: {approval_request.module.name}\n"
+        f"Reference: {approval_request.reference_id}\n"
+        f"Submitted by: {context['requester_name']}\n"
         f"Step: {step.step_order} - {step.name}\n\n"
-        f"Silakan login untuk melihat detail dan mengambil tindakan:\n"
+        f"Please log in to view the details and take action:\n"
         f"{context['approval_url']}\n\n"
-        f"Salam,\nApproval HUB"
+        f"Regards,\nApproval HUB"
     )
 
     try:
@@ -116,6 +127,42 @@ def send_step_notification(step) -> None:
         logger.error(
             f"[EmailService] Failed to send step notification to {recipient_email}: {e}"
         )
+
+    # Also send notification email to the user currently on leave
+    if step.delegated_from and step.delegated_from.email:
+        delegator_email = step.delegated_from.email
+        delegate_name = step.assigned_to.get_full_name() or step.assigned_to.username if step.assigned_to else 'Assigned Delegate'
+
+        del_subject = f"[Leave Delegation Info] {approval_request.module.name}: {approval_request.title}"
+        del_text_body = (
+            f"Hello {delegator_name},\n\n"
+            f"Notice: A new approval request #{approval_request.id} ({approval_request.title}) "
+            f"has been delegated to {delegate_name} according to your scheduled leave delegation.\n\n"
+            f"Title: {approval_request.title}\n"
+            f"Module: {approval_request.module.name}\n"
+            f"Reference: {approval_request.reference_id}\n"
+            f"Submitted by: {context['requester_name']}\n"
+            f"Step: {step.step_order} - {step.name}\n\n"
+            f"You can monitor the status of this request at:\n"
+            f"{context['approval_url']}\n\n"
+            f"Regards,\nApproval HUB"
+        )
+        try:
+            del_msg = EmailMultiAlternatives(
+                subject=del_subject,
+                body=del_text_body,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                to=[delegator_email],
+            )
+            del_msg.send(fail_silently=False)
+            logger.info(
+                f"[EmailService] Leave delegation notice sent to {delegator_email} "
+                f"for request #{approval_request.id} step {step.step_order}."
+            )
+        except Exception as e:
+            logger.error(
+                f"[EmailService] Failed to send leave delegation notice to {delegator_email}: {e}"
+            )
 
 
 @run_in_thread
@@ -146,13 +193,13 @@ def send_final_approved_notification(approval_request) -> None:
 
     subject = f"[Approved] {approval_request.module.name}: {approval_request.title}"
     text_body = (
-        f"Halo {context['requester_name']},\n\n"
-        f"Permintaan Anda telah disetujui oleh semua approver.\n\n"
-        f"Judul: {approval_request.title}\n"
-        f"Modul: {approval_request.module.name}\n"
-        f"Referensi: {approval_request.reference_id}\n\n"
-        f"Lihat detail:\n{context['detail_url']}\n\n"
-        f"Salam,\nApproval HUB"
+        f"Hello {context['requester_name']},\n\n"
+        f"Your request has been approved by all approvers.\n\n"
+        f"Title: {approval_request.title}\n"
+        f"Module: {approval_request.module.name}\n"
+        f"Reference: {approval_request.reference_id}\n\n"
+        f"View details:\n{context['detail_url']}\n\n"
+        f"Regards,\nApproval HUB"
     )
 
     try:
@@ -202,22 +249,22 @@ def send_rejected_notification(approval_request, step) -> None:
         'step_name': step.name,
         'step_order': step.step_order,
         'rejector_name': rejector.get_full_name() or rejector.username if rejector else 'Approver',
-        'rejection_reason': step.comments or '(Tidak ada keterangan)',
+        'rejection_reason': step.comments or '(No reason provided)',
         'frontend_url': _get_frontend_url(),
         'detail_url': f"{_get_frontend_url()}/workflow/{approval_request.id}",
     }
 
-    subject = f"[Ditolak] {approval_request.module.name}: {approval_request.title}"
+    subject = f"[Rejected] {approval_request.module.name}: {approval_request.title}"
     text_body = (
-        f"Halo {context['requester_name']},\n\n"
-        f"Permintaan Anda telah ditolak.\n\n"
-        f"Judul: {approval_request.title}\n"
-        f"Modul: {approval_request.module.name}\n"
-        f"Referensi: {approval_request.reference_id}\n"
-        f"Ditolak oleh: {context['rejector_name']} (Step {step.step_order}: {step.name})\n"
-        f"Alasan: {context['rejection_reason']}\n\n"
-        f"Anda dapat melakukan revisi melalui:\n{context['detail_url']}\n\n"
-        f"Salam,\nApproval HUB"
+        f"Hello {context['requester_name']},\n\n"
+        f"Your request has been rejected.\n\n"
+        f"Title: {approval_request.title}\n"
+        f"Module: {approval_request.module.name}\n"
+        f"Reference: {approval_request.reference_id}\n"
+        f"Rejected by: {context['rejector_name']} (Step {step.step_order}: {step.name})\n"
+        f"Reason: {context['rejection_reason']}\n\n"
+        f"You can review and revise this request via:\n{context['detail_url']}\n\n"
+        f"Regards,\nApproval HUB"
     )
 
     try:
@@ -258,17 +305,18 @@ def send_revised_to_requester_notification(approval_request, step, revisor=None,
     step_name = step.name if step else 'Approval Review'
     step_order = step.step_order if step else 1
 
-    subject = f"[Revisi Diperlukan] {approval_request.module.name}: {approval_request.title}"
+    subject = f"[Revision Required] {approval_request.module.name}: {approval_request.title}"
     text_body = (
-        f"Halo {requester.get_full_name() or requester.username},\n\n"
-        f"Pengajuan Anda memerlukan revisi formulir/dokumen sebelum dapat diproses lebih lanjut.\n\n"
-        f"Judul: {approval_request.title}\n"
-        f"Modul: {approval_request.module.name}\n"
-        f"Referensi: {approval_request.reference_id}\n"
-        f"Direvisi oleh: {revisor_name} (Step {step_order}: {step_name})\n"
-        f"Alasan Revisi: {comments or '(Wajib direvisi)'}\n\n"
-        f"Silakan periksa dan perbarui formulir pengajuan Anda.\n\n"
-        f"Salam,\nApproval HUB"
+        f"Hello {requester.get_full_name() or requester.username},\n\n"
+        f"Your request requires revision of form/document details before it can be processed further.\n\n"
+        f"Title: {approval_request.title}\n"
+        f"Module: {approval_request.module.name}\n"
+        f"Reference: {approval_request.reference_id}\n"
+        f"Requested by: {revisor_name} (Step {step_order}: {step_name})\n"
+        f"Revision Reason: {comments or '(Revision required)'}\n\n"
+        f"Please review and update your submission at:\n"
+        f"{_get_frontend_url()}/workflow/{approval_request.id}\n\n"
+        f"Regards,\nApproval HUB"
     )
 
     try:
@@ -443,7 +491,7 @@ def send_eorder_info_cc_notification(payload) -> None:
         msg.attach_alternative(html_body, "text/html")
 
         if csv_file_content:
-            attachment_filename = f"Rincian_Item_Order_{filename_order_id}.csv"
+            attachment_filename = f"Order_Item_Details_{filename_order_id}.csv"
             msg.attach(attachment_filename, csv_file_content, 'text/csv')
 
         attachments = payload.get('attachments') or []

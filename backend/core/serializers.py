@@ -629,6 +629,8 @@ class ApprovalStepSerializer(serializers.ModelSerializer):
     role_name = serializers.CharField(source='role_required.name', read_only=True)
     user_required_name = serializers.SerializerMethodField()
     user_required_email = serializers.CharField(source='user_required.email', read_only=True)
+    delegated_from_name = serializers.SerializerMethodField()
+    delegated_from_email = serializers.CharField(source='delegated_from.email', read_only=True)
     target_department_name = serializers.CharField(source='target_department.name', read_only=True)
     adhoc_user = serializers.SerializerMethodField()
     adhoc_user_name = serializers.SerializerMethodField()
@@ -644,6 +646,7 @@ class ApprovalStepSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'step_order', 'name', 'approver_type', 'assigned_to', 'assigned_to_name', 'assigned_to_email',
             'role_required', 'role_name', 'user_required', 'user_required_name', 'user_required_email',
+            'delegated_from', 'delegated_from_name', 'delegated_from_email',
             'target_department', 'target_department_name', 'required_inputs', 'step_data',
             'allow_adhoc', 'adhoc_user', 'adhoc_user_name', 'is_adhoc', 'adhoc_created_by', 'adhoc_created_by_name',
             'locked_by', 'locked_by_name', 'locked_by_email', 'locked_at', 'lock_expires_at',
@@ -659,6 +662,11 @@ class ApprovalStepSerializer(serializers.ModelSerializer):
     def get_user_required_name(self, obj):
         if obj.user_required:
             return obj.user_required.get_full_name() or obj.user_required.username
+        return None
+
+    def get_delegated_from_name(self, obj):
+        if obj.delegated_from:
+            return obj.delegated_from.get_full_name() or obj.delegated_from.username
         return None
 
     def _resolve_adhoc_user(self, obj):
@@ -798,33 +806,24 @@ class ApprovalRequestListSerializer(SitAwareSerializerMixin, serializers.ModelSe
         if not hasattr(obj, '_cached_delegation_info'):
             req = self.context.get('request')
             current_user = req.user if req and hasattr(req, 'user') and req.user.is_authenticated else None
-            if not current_user:
+            waiting_step = obj.steps.filter(step_order=obj.current_step, status='WAITING').first()
+            if not waiting_step or not waiting_step.delegated_from:
                 obj._cached_delegation_info = None
             else:
-                waiting_step = obj.steps.filter(step_order=obj.current_step, status='WAITING').first()
-                if not waiting_step:
-                    obj._cached_delegation_info = None
+                del_user = waiting_step.delegated_from
+                if current_user and (
+                    waiting_step.assigned_to == current_user or
+                    waiting_step.user_required == current_user or
+                    current_user.is_superuser or
+                    del_user == current_user
+                ):
+                    obj._cached_delegation_info = {
+                        'is_delegated': True,
+                        'delegated_from_name': del_user.get_full_name() or del_user.username,
+                        'delegation_reason': 'Cuti / Out of Office'
+                    }
                 else:
-                    from core.engine import WorkflowEngine
-                    delegator = WorkflowEngine.get_effective_delegator(current_user, waiting_step, obj)
-                    if delegator:
-                        from core.models import UserLeaveDelegation
-                        from django.utils import timezone
-                        today = timezone.localdate()
-                        del_rule = UserLeaveDelegation.objects.filter(
-                            user=delegator,
-                            delegate_user=current_user,
-                            is_active=True,
-                            start_date__lte=today,
-                            end_date__gte=today
-                        ).first()
-                        obj._cached_delegation_info = {
-                            'is_delegated': True,
-                            'delegated_from_name': delegator.get_full_name() or delegator.username,
-                            'delegation_reason': del_rule.reason if del_rule else 'Cuti / Out of Office'
-                        }
-                    else:
-                        obj._cached_delegation_info = None
+                    obj._cached_delegation_info = None
         return obj._cached_delegation_info
 
     def get_is_delegated(self, obj):
@@ -901,33 +900,24 @@ class ApprovalRequestDetailSerializer(SitAwareSerializerMixin, serializers.Model
         if not hasattr(obj, '_cached_detail_delegation_info'):
             req = self.context.get('request')
             current_user = req.user if req and hasattr(req, 'user') and req.user.is_authenticated else None
-            if not current_user:
+            waiting_step = obj.steps.filter(step_order=obj.current_step, status='WAITING').first()
+            if not waiting_step or not waiting_step.delegated_from:
                 obj._cached_detail_delegation_info = None
             else:
-                waiting_step = obj.steps.filter(step_order=obj.current_step, status='WAITING').first()
-                if not waiting_step:
-                    obj._cached_detail_delegation_info = None
+                del_user = waiting_step.delegated_from
+                if current_user and (
+                    waiting_step.assigned_to == current_user or
+                    waiting_step.user_required == current_user or
+                    current_user.is_superuser or
+                    del_user == current_user
+                ):
+                    obj._cached_detail_delegation_info = {
+                        'is_delegated': True,
+                        'delegated_from_name': del_user.get_full_name() or del_user.username,
+                        'delegation_reason': 'Cuti / Out of Office'
+                    }
                 else:
-                    from core.engine import WorkflowEngine
-                    delegator = WorkflowEngine.get_effective_delegator(current_user, waiting_step, obj)
-                    if delegator:
-                        from core.models import UserLeaveDelegation
-                        from django.utils import timezone
-                        today = timezone.localdate()
-                        del_rule = UserLeaveDelegation.objects.filter(
-                            user=delegator,
-                            delegate_user=current_user,
-                            is_active=True,
-                            start_date__lte=today,
-                            end_date__gte=today
-                        ).first()
-                        obj._cached_detail_delegation_info = {
-                            'is_delegated': True,
-                            'delegated_from_name': delegator.get_full_name() or delegator.username,
-                            'delegation_reason': del_rule.reason if del_rule else 'Cuti / Out of Office'
-                        }
-                    else:
-                        obj._cached_detail_delegation_info = None
+                    obj._cached_detail_delegation_info = None
         return obj._cached_detail_delegation_info
 
     def get_is_delegated(self, obj):

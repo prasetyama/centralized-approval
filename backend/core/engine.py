@@ -18,7 +18,7 @@ import logging
 from core.models import (
     Module, WorkflowDefinition, WorkflowStepDefinition,
     ApprovalRequest, ApprovalStep, AuditLog, User, Division, Department,
-    Company, OrganizationStructure, Brand, RequestWatcher
+    Company, OrganizationStructure, Brand, RequestWatcher, UserLeaveDelegation
 )
 from core.state_machine import can_transition
 from core import email_service
@@ -147,8 +147,22 @@ class WorkflowEngine:
             ).order_by('step_order').first()
 
         if next_step:
+            update_fields = ['status']
+            # If not already delegated, check if the step's approver is currently on leave
+            if not next_step.delegated_from:
+                target_user = next_step.user_required or next_step.assigned_to
+                if target_user:
+                    eff_user, del_user, _ = WorkflowEngine.resolve_leave_delegation(
+                        target_user, module_code=approval_request.module.code if approval_request.module else None
+                    )
+                    if del_user and eff_user:
+                        next_step.assigned_to = eff_user
+                        next_step.user_required = eff_user
+                        next_step.delegated_from = del_user
+                        update_fields.extend(['assigned_to', 'user_required', 'delegated_from'])
+
             next_step.status = ApprovalStep.StepStatus.WAITING
-            next_step.save(update_fields=['status'])
+            next_step.save(update_fields=update_fields)
             approval_request.current_step = next_step.step_order
             approval_request.save(update_fields=['current_step', 'updated_at'])
             # Notify next approver via email after commit
@@ -574,13 +588,17 @@ class WorkflowEngine:
                         else:
                             req_inputs = step_def.required_inputs or []
 
+                        eff_user, del_user, _ = WorkflowEngine.resolve_leave_delegation(
+                            link['user'], module_code=approval_request.module.code if approval_request.module else None
+                        )
                         ApprovalStep.objects.create(
                             request=approval_request,
                             step_order=current_step_order,
                             name=f"{step_def.name} - {link['title']}",
                             approver_type=step_def.approver_type,
-                            assigned_to=link['user'],
-                            user_required=link['user'],
+                            assigned_to=eff_user,
+                            user_required=eff_user,
+                            delegated_from=del_user,
                             required_inputs=req_inputs,
                             allow_adhoc=(step_def.allow_adhoc if idx == len(org_chain) - 1 else False),
                             adhoc_user=(step_def.adhoc_user if (step_def.allow_adhoc and idx == len(org_chain) - 1) else None),
@@ -625,12 +643,17 @@ class WorkflowEngine:
                         req_inputs = step_def.required_inputs or []
 
                     step_status = ApprovalStep.StepStatus.WAITING if current_step_order == 1 else ApprovalStep.StepStatus.PENDING
+                    eff_user, del_user, _ = WorkflowEngine.resolve_leave_delegation(
+                        assignee, module_code=approval_request.module.code if approval_request.module else None
+                    )
                     ApprovalStep.objects.create(
                         request=approval_request,
                         step_order=current_step_order,
                         name=step_def.name,
                         approver_type=step_def.approver_type,
-                        assigned_to=assignee,
+                        assigned_to=eff_user,
+                        user_required=eff_user if eff_user else None,
+                        delegated_from=del_user,
                         required_inputs=req_inputs,
                         allow_adhoc=step_def.allow_adhoc,
                         adhoc_user=step_def.adhoc_user if step_def.allow_adhoc else None,
@@ -679,14 +702,26 @@ class WorkflowEngine:
                 step_status = ApprovalStep.StepStatus.WAITING
 
             if step_status != ApprovalStep.StepStatus.ADDITIONAL:
+                target_user = step_def.user_required or assignee
+                eff_user, del_user, _ = WorkflowEngine.resolve_leave_delegation(
+                    target_user, module_code=approval_request.module.code if approval_request.module else None
+                )
+                if del_user and eff_user:
+                    actual_assigned = eff_user
+                    actual_user_req = eff_user
+                else:
+                    actual_assigned = assignee
+                    actual_user_req = assignee if step_def.approver_type == WorkflowStepDefinition.ApproverType.REQUESTOR else step_def.user_required
+
                 ApprovalStep.objects.create(
                     request=approval_request,
                     step_order=current_step_order,
                     name=step_def.name,
                     approver_type=step_def.approver_type,
-                    assigned_to=assignee,
+                    assigned_to=actual_assigned,
                     role_required=step_def.role_required,
-                    user_required=assignee if step_def.approver_type == WorkflowStepDefinition.ApproverType.REQUESTOR else step_def.user_required,
+                    user_required=actual_user_req,
+                    delegated_from=del_user,
                     target_department=step_def.target_department,
                     required_inputs=step_def.required_inputs,
                     allow_adhoc=step_def.allow_adhoc,
@@ -753,14 +788,47 @@ class WorkflowEngine:
 
 
     @staticmethod
+    def resolve_leave_delegation(target_user, module_code=None, on_date=None):
+        """
+        Check if target_user has an active UserLeaveDelegation covering on_date (defaults to today).
+        Returns (delegate_user, target_user, delegation) if on leave, else (target_user, None, None).
+        """
+        if not target_user:
+            return None, None, None
+
+        from core.models import UserLeaveDelegation
+        from django.utils import timezone
+
+        if on_date is None:
+            check_date = timezone.localdate()
+        elif hasattr(on_date, 'date'):
+            check_date = on_date.date()
+        else:
+            check_date = on_date
+
+        delegation = UserLeaveDelegation.objects.filter(
+            user=target_user,
+            is_active=True,
+            start_date__lte=check_date,
+            end_date__gte=check_date,
+        ).select_related('delegate_user').first()
+
+        if delegation and delegation.is_currently_effective(module_code=module_code, now=check_date):
+            return delegation.delegate_user, target_user, delegation
+
+        return target_user, None, None
+
+    @staticmethod
     def _is_user_authorized_direct(approver, current_step, approval_request):
         """Check if an approver has direct authorization (without delegation) for the step."""
         if approver.is_superuser:
             return True
-        if current_step.assigned_to is not None:
-            return current_step.assigned_to == approver
-        if current_step.user_required is not None:
-            return current_step.user_required == approver
+        if current_step.assigned_to is not None and current_step.assigned_to == approver:
+            return True
+        if current_step.user_required is not None and current_step.user_required == approver:
+            return True
+        if current_step.delegated_from is not None and current_step.delegated_from == approver:
+            return True
         if current_step.approver_type == WorkflowStepDefinition.ApproverType.REQUESTOR:
             if approval_request.requester == approver:
                 return True
@@ -815,56 +883,30 @@ class WorkflowEngine:
         return False
 
     @staticmethod
-    def get_effective_delegator(approver, current_step, approval_request, now=None):
+    def get_effective_delegator(approver, current_step, approval_request=None, now=None):
         """
-        Check if `approver` is an active delegate of someone who is authorized for this step.
-        Returns the User on leave (delegator) if authorized as a delegate, else None.
+        Check if `current_step` was delegated to `approver` due to leave.
+        Returns the User on leave (delegated_from) if authorized as a delegate, else None.
         """
-        from core.models import UserLeaveDelegation
-        if now is None:
-            today = timezone.localdate()
-        elif hasattr(now, 'date'):
-            today = now.date()
-        else:
-            today = now
-
-        active_delegations = UserLeaveDelegation.objects.filter(
-            delegate_user=approver,
-            is_active=True,
-            start_date__lte=today,
-            end_date__gte=today,
-        ).select_related('user')
-
-        if not active_delegations.exists():
-            return None
-
-        module_code = approval_request.module.code if approval_request and approval_request.module else None
-
-        for delegation in active_delegations:
-            if not delegation.is_currently_effective(module_code=module_code, now=today):
-                continue
-
-            if WorkflowEngine._is_user_authorized_direct(delegation.user, current_step, approval_request):
-                return delegation.user
-
+        if current_step and current_step.delegated_from:
+            if (
+                current_step.assigned_to == approver or
+                current_step.user_required == approver or
+                (hasattr(approver, 'is_superuser') and approver.is_superuser)
+            ):
+                return current_step.delegated_from
         return None
 
     @staticmethod
     def _is_user_authorized_for_step(approver, current_step, approval_request):
         """
-        Check if an approver is authorized to take action on the given step,
-        either directly or via an active leave delegation (Out of Office proxy).
+        Check if an approver is authorized to take action on the given step.
         """
-        # 1. Direct authorization
+        # 1. Direct authorization (covers assigned_to, user_required, delegated_from, role, dept)
         if WorkflowEngine._is_user_authorized_direct(approver, current_step, approval_request):
-            return True
-
-        # 2. Leave / Out-of-Office delegation authorization
-        delegator = WorkflowEngine.get_effective_delegator(approver, current_step, approval_request)
-        if delegator:
             # Segregation of Duties (SoD) check: requester cannot approve own request even via delegation
             if approver == approval_request.requester:
-                raise ValidationError("Pemohon tidak dapat menyetujui pengajuannya sendiri, termasuk melalui pendelegasian wewenang.")
+                raise ValidationError("Requestor cannot approve own request even via delegation")
             return True
 
         return False
@@ -982,10 +1024,10 @@ class WorkflowEngine:
         if current_step.is_locked_by_other(approver):
             locker_name = (
                 (current_step.locked_by.get_full_name() or current_step.locked_by.username)
-                if current_step.locked_by else "user lain"
+                if current_step.locked_by else "another user"
             )
             raise ValidationError(
-                f"Pengajuan ini sedang dibuka/diproses oleh {locker_name}. Silakan tunggu hingga selesai."
+                f"This request is currently being processed by {locker_name}. Please wait until it is completed."
             )
 
         # Validate required_inputs if defined for this step
@@ -1000,7 +1042,7 @@ class WorkflowEngine:
                 if field_key in ('approval_quotation', 'selected_quotation') and (not comments or not comments.strip()):
                     missing_fields.append('Remark')
             if missing_fields:
-                raise ValidationError(f"Data wajib berikut harus diisi sebelum Approve: {', '.join(missing_fields)}")
+                raise ValidationError(f"The following required data must be filled before Approve: {', '.join(missing_fields)}")
 
         acted_step = current_step
 
@@ -1013,7 +1055,7 @@ class WorkflowEngine:
         adhoc_user = None
         if use_adhoc or adhoc_approver_id:
             if not current_step.allow_adhoc or current_step.is_adhoc:
-                raise ValidationError("Step ini tidak mengizinkan penambahan Ad-Hoc Approver.")
+                raise ValidationError("This step does not allow adding an Ad-Hoc Approver.")
             adhoc_user = current_step.adhoc_user
             if not adhoc_user:
                 step_def_adhoc = approval_request.workflow.steps.filter(
@@ -1022,9 +1064,9 @@ class WorkflowEngine:
                 if step_def_adhoc:
                     adhoc_user = step_def_adhoc.adhoc_user
             if not adhoc_user:
-                raise ValidationError("User Ad-Hoc Approver belum ditentukan pada konfigurasi Admin Workflow.")
+                raise ValidationError("Ad-hoc user for approval is not determined in the Workflow configuration.")
             if not adhoc_user.is_active:
-                raise ValidationError("User Ad-Hoc Approver yang ditentukan pada Admin Workflow sedang tidak aktif.")
+                raise ValidationError("Ad-hoc user for approval is currently inactive.")
 
         if dlvdate or step_data:
             if not isinstance(approval_request.payload, dict):
@@ -1053,12 +1095,12 @@ class WorkflowEngine:
             approver_name = approver.get_full_name() or approver.username
             delegator_name = delegator.get_full_name() or delegator.username
             approve_log_detail = (
-                f"Step {current_step.step_order} ({current_step.name}) disetujui oleh {approver_name} "
-                f"atas nama {delegator_name} (Pendelegasian Cuti / Out of Office). "
+                f"Step {current_step.step_order} ({current_step.name}) approved by {approver_name} "
+                f"on behalf of {delegator_name} (Leave Delegation). "
                 f"{comments}".strip()
             )
         else:
-            approve_log_detail = f"Step {current_step.step_order} ({current_step.name}) approved. {comments}".strip()
+            approve_log_detail = f"Step {current_step.step_order} ({current_step.name}) approved by {approver.get_full_name() or approver.username}. {comments}".strip()
 
         AuditLog.objects.create(
             request=approval_request,
@@ -1086,9 +1128,9 @@ class WorkflowEngine:
                 actor=approver,
                 action=AuditLog.Action.ADHOC_ADDED,
                 details=(
-                    f"Ad-Hoc Approval ({adhoc_step.name}) ditambahkan pada Step {adhoc_step.step_order} "
-                    f"untuk {adhoc_user.get_full_name() or adhoc_user.username}."
-                    f"{f' Catatan: {adhoc_notes}' if adhoc_notes else ''}"
+                    f"Ad-Hoc Approval ({adhoc_step.name}) added to Step {adhoc_step.step_order} "
+                    f"for {adhoc_user.get_full_name() or adhoc_user.username}."
+                    f"{f' Remark: {adhoc_notes}' if adhoc_notes else ''}"
                 ),
                 ip_address=ip_address,
                 payload_snapshot=approval_request.payload,
@@ -1152,10 +1194,10 @@ class WorkflowEngine:
         if current_step.is_locked_by_other(approver):
             locker_name = (
                 (current_step.locked_by.get_full_name() or current_step.locked_by.username)
-                if current_step.locked_by else "user lain"
+                if current_step.locked_by else "another user"
             )
             raise ValidationError(
-                f"Pengajuan ini sedang dibuka/diproses oleh {locker_name}. Silakan tunggu hingga selesai."
+                f"This request is currently being processed by {locker_name}. Please wait until it is completed."
             )
 
         # Reject the step
@@ -1188,11 +1230,11 @@ class WorkflowEngine:
             approver_name = approver.get_full_name() or approver.username
             delegator_name = delegator.get_full_name() or delegator.username
             reject_log_detail = (
-                f"Step {current_step.step_order} ({current_step.name}) ditolak oleh {approver_name} "
-                f"atas nama {delegator_name} (Pendelegasian Cuti / Out of Office). Alasan: {comments}"
+                f"Step {current_step.step_order} ({current_step.name}) Rejected by {approver_name} "
+                f"on behalf of {delegator_name} (Leave Delegation). Reason: {comments}"
             ).strip()
         else:
-            reject_log_detail = f"Step {current_step.step_order} ({current_step.name}) rejected. Reason: {comments}".strip()
+            reject_log_detail = f"Step {current_step.step_order} ({current_step.name}) Rejected by {approver.get_full_name() or approver.username}. Reason: {comments}".strip()
 
         AuditLog.objects.create(
             request=approval_request,
@@ -1355,11 +1397,11 @@ class WorkflowEngine:
                 if current_step.locked_by else "user lain"
             )
             raise ValidationError(
-                f"Pengajuan ini sedang dibuka/diproses oleh {locker_name}. Silakan tunggu hingga selesai."
+                f"This request is currently being processed by {locker_name}. Please wait until it is completed."
             )
 
         if not comments or not comments.strip():
-            raise ValidationError("Alasan revisi wajib diisi.")
+            raise ValidationError("Reason for revision is required.")
 
         current_step.locked_by = None
         current_step.locked_at = None
@@ -1429,7 +1471,7 @@ class WorkflowEngine:
                 approval_request.save(update_fields=['current_step', 'updated_at'])
 
             # Create AuditLog entry
-            log_details = f"Step {rev_step_order} ({rev_step_name}) direvisi oleh {approver.get_full_name() or approver.username} kembali ke Step {quotation_step.step_order} ({quotation_step.name}). Alasan: {comments.strip()}"
+            log_details = f"Step {rev_step_order} ({rev_step_name}) revised by {approver.get_full_name() or approver.username} back to Step {quotation_step.step_order} ({quotation_step.name}). Reason: {comments.strip()}"
             AuditLog.objects.create(
                 request=approval_request,
                 step=audit_step_ref,
@@ -1497,9 +1539,9 @@ class WorkflowEngine:
             # Create AuditLog entry
             requester_name = approval_request.requester.get_full_name() or approval_request.requester.username
             log_details = (
-                f"Step {rev_step_order} ({rev_step_name}) direvisi oleh "
-                f"{approver.get_full_name() or approver.username}. Alasan: {comments.strip()}. "
-                f"Status PR Form diubah menjadi REVISE untuk diedit kembali oleh pemohon ({requester_name})."
+                f"Step {rev_step_order} ({rev_step_name}) revised by "
+                f"{approver.get_full_name() or approver.username}. Reason: {comments.strip()}. "
+                f"The PR Form status is changed to REVISE so that it can be edited again by the requester ({requester_name})."
             )
             AuditLog.objects.create(
                 request=approval_request,

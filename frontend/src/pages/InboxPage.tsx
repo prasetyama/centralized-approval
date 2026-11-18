@@ -65,7 +65,7 @@ export const InboxPage = () => {
                         }`}
                 >
                     <Inbox size={18} />
-                    Semua Inbox
+                    Inbox
                 </button>
                 <button
                     onClick={() => handleTabChange('delegated')}
@@ -75,7 +75,7 @@ export const InboxPage = () => {
                         }`}
                 >
                     <UserCheck size={18} />
-                    Tugas Delegasi (Cuti)
+                    Delegated
                 </button>
                 <button
                     onClick={() => handleTabChange('watching')}
@@ -92,14 +92,14 @@ export const InboxPage = () => {
             <div className="flex items-center justify-between">
                 <div>
                     <h1 className="text-3xl font-bold tracking-tight text-slate-900">
-                        {activeTab === 'inbox' ? 'Approval Inbox' : activeTab === 'delegated' ? 'Tugas Delegasi Cuti' : 'Watched Requests'}
+                        {activeTab === 'inbox' ? 'Approval Inbox' : activeTab === 'delegated' ? 'Delegated Approval' : 'Watched Requests'}
                     </h1>
                     <p className="mt-1 text-slate-500">
                         {activeTab === 'inbox'
                             ? 'Review and approve tasks from all departments.'
                             : activeTab === 'delegated'
-                            ? 'Daftar pengajuan yang didelegasikan kepada Anda oleh rekan kerja yang sedang cuti.'
-                            : 'Monitor requests where you are added as a watcher.'}
+                                ? 'A list of submissions delegated to you'
+                                : 'Monitor requests where you are added as a watcher.'}
                     </p>
                 </div>
                 <div className="flex gap-3">
@@ -141,10 +141,10 @@ export const InboxPage = () => {
                                             {item.is_delegated && (
                                                 <span
                                                     className="inline-flex items-center gap-1 rounded-full bg-purple-50 border border-purple-200 px-2.5 py-0.5 text-[11px] font-semibold text-purple-800"
-                                                    title={`Pendelegasian Cuti: ${item.delegation_reason || 'Cuti'}`}
+                                                    title={`Delegation of Approval: ${item.delegation_reason || 'Cuti'}`}
                                                 >
                                                     <UserCheck size={11} className="text-purple-600" />
-                                                    Atas Nama: {item.delegated_from_name} (Cuti)
+                                                    On Behalf Of: {item.delegated_from_name}
                                                 </span>
                                             )}
                                             {item.locked_by_name && (

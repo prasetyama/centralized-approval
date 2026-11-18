@@ -493,7 +493,7 @@ class InboxView(generics.ListAPIView):
             else:
                 dept_ids = user.get_department_ids() if hasattr(user, 'get_department_ids') else []
 
-                # 1. Requests where user is the direct active approver or member of target department
+                # 1. Requests where user is the active approver (including steps assigned to user via leave delegation)
                 waiting_ids = set(ApprovalStep.objects.filter(
                     status=ApprovalStep.StepStatus.WAITING
                 ).filter(
@@ -503,34 +503,14 @@ class InboxView(generics.ListAPIView):
                     Q(approver_type='TARGET_DEPT_ROLE', target_department_id__in=dept_ids)
                 ).values_list('request_id', flat=True))
 
-                # 2. Requests delegated to this user via active UserLeaveDelegation
-                today = timezone.localdate()
-                active_delegations = UserLeaveDelegation.objects.filter(
-                    delegate_user=user,
-                    is_active=True,
-                    start_date__lte=today,
-                    end_date__gte=today,
-                ).select_related('user')
-
-                delegated_waiting_ids = set()
-                if active_delegations.exists():
-                    for delegation in active_delegations:
-                        del_user = delegation.user
-                        del_dept_ids = del_user.get_department_ids() if hasattr(del_user, 'get_department_ids') else []
-                        del_step_qs = ApprovalStep.objects.filter(
-                            status=ApprovalStep.StepStatus.WAITING
-                        ).exclude(
-                            request__requester=user  # Segregation of duties: cannot approve own request
-                        ).filter(
-                            Q(assigned_to=del_user) |
-                            Q(user_required=del_user) |
-                            Q(approver_type='REQUESTOR', request__requester=del_user) |
-                            Q(approver_type='TARGET_DEPT_ROLE', target_department_id__in=del_dept_ids)
-                        )
-                        if delegation.scope == UserLeaveDelegation.Scope.SPECIFIC_MODULE:
-                            del_step_qs = del_step_qs.filter(request__module__code__in=delegation.specific_module_codes or [])
-
-                        delegated_waiting_ids.update(del_step_qs.values_list('request_id', flat=True))
+                # 2. Delegated requests: only steps that were explicitly assigned to this user because someone is on leave
+                delegated_waiting_ids = set(ApprovalStep.objects.filter(
+                    status=ApprovalStep.StepStatus.WAITING,
+                    delegated_from__isnull=False
+                ).filter(
+                    Q(assigned_to=user) |
+                    Q(user_required=user)
+                ).values_list('request_id', flat=True))
 
                 # 3. Requests where user has participated in the discussion
                 discussion_ids = set(RequestFeedback.objects.filter(
@@ -541,9 +521,9 @@ class InboxView(generics.ListAPIView):
                 if tab == 'delegated':
                     target_ids = delegated_waiting_ids
                 elif tab == 'my_tasks':
-                    target_ids = waiting_ids
+                    target_ids = waiting_ids - delegated_waiting_ids
                 else:
-                    target_ids = waiting_ids | delegated_waiting_ids | discussion_ids
+                    target_ids = waiting_ids | discussion_ids
 
                 queryset = ApprovalRequest.objects.filter(
                     id__in=target_ids,

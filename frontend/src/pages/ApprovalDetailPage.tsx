@@ -527,10 +527,10 @@ export const ApprovalDetailPage = () => {
                     <UserCheck size={20} className="text-purple-600 shrink-0 mt-0.5" />
                     <div className="space-y-1">
                         <p className="text-sm font-bold text-purple-900">
-                            Pendelegasian Persetujuan (Out of Office)
+                            Delegation of Approval (Out of Office)
                         </p>
-                        <p className="text-xs text-purple-800 leading-relaxed">
-                            Anda memiliki wewenang untuk meninjau dan mengambil tindakan pada pengajuan ini <strong>atas nama {detail.delegated_from_name}</strong> ({detail.delegation_reason || 'Cuti / Out of Office'}). Tindakan persetujuan Anda akan tercatat secara resmi dalam riwayat audit sistem.
+                        <p className="text-sm text-purple-800 leading-relaxed">
+                            You have the authority to review and take action on this submission <strong>on behalf of {detail.delegated_from_name}</strong> ({detail.delegation_reason || 'Cuti / Out of Office'}). Your approval actions will be officially recorded in the system audit history.
                         </p>
                     </div>
                 </div>
@@ -543,7 +543,7 @@ export const ApprovalDetailPage = () => {
                         <p className="text-sm font-bold text-amber-900">
                             Being opened by {stepLockedByName || stepLockedByEmail || 'User Lain'}
                         </p>
-                        <p className="text-xs text-amber-800 leading-relaxed">
+                        <p className="text-sm text-amber-800 leading-relaxed">
                             This request submission is currently being opened by <strong>{stepLockedByName || stepLockedByEmail}</strong>. To prevent double approval, the action button is temporarily locked until this user finishes or closes this page.
                         </p>
                     </div>
@@ -559,7 +559,7 @@ export const ApprovalDetailPage = () => {
                                 ? 'Perhatian: Pengajuan Memerlukan Revisi dari Pemohon (Requester)'
                                 : 'Perhatian: Pengajuan Memerlukan Revisi Quotation'}
                         </p>
-                        <p className="text-xs text-amber-800 leading-relaxed">{lastRevisedLog.details}</p>
+                        <p className="text-sm text-amber-800 leading-relaxed">{lastRevisedLog.details}</p>
                     </div>
                 </div>
             )}
@@ -591,31 +591,31 @@ export const ApprovalDetailPage = () => {
                             <div className="grid grid-cols-2 gap-8">
                                 <div className="space-y-4">
                                     <div>
-                                        <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Requester</p>
+                                        <p className="text-sm font-bold text-slate-400 uppercase tracking-wider">Requester</p>
                                         <p className="text-sm font-semibold text-slate-900">{detail.requester_name}</p>
-                                        <p className="text-xs text-slate-500">{detail.requester_email}</p>
+                                        <p className="text-sm text-slate-500">{detail.requester_email}</p>
                                     </div>
                                     <div>
-                                        <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Module Source</p>
+                                        <p className="text-sm font-bold text-slate-400 uppercase tracking-wider">Module Source</p>
                                         <p className="text-sm font-semibold text-slate-900">{detail.module_name}</p>
                                     </div>
                                 </div>
                                 <div className="space-y-4">
                                     <div>
-                                        <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Current Location</p>
+                                        <p className="text-sm font-bold text-slate-400 uppercase tracking-wider">Current Location</p>
                                         <div className="flex items-center gap-2 mt-1">
                                             <Clock size={14} className="text-blue-500" />
                                             <p className="text-sm font-bold text-blue-700">Step {detail.current_step} of {detail.workflow_name}</p>
                                         </div>
                                     </div>
                                     <div>
-                                        <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Priority</p>
+                                        <p className="text-sm font-bold text-slate-400 uppercase tracking-wider">Priority</p>
                                         <Badge variant={detail.priority === 'URGENT' ? 'error' : 'secondary'}>{detail.priority}</Badge>
                                     </div>
                                 </div>
                             </div>
                             <div className="mt-8 pt-8 border-t border-slate-100">
-                                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Internal Description</p>
+                                <p className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-2">Internal Description</p>
                                 <p className="text-sm text-slate-600 leading-relaxed italic">
                                     {detail.description || 'No description provided.'}
                                 </p>
@@ -700,27 +700,27 @@ export const ApprovalDetailPage = () => {
                     </Card>
 
                     {detail?.is_delegated && (
-                <div className="rounded-xl border border-purple-200 bg-purple-50/80 p-4 text-purple-900 shadow-sm flex items-start gap-3 animate-in fade-in">
-                    <UserCheck size={20} className="text-purple-600 shrink-0 mt-0.5" />
-                    <div className="space-y-1">
-                        <p className="text-sm font-bold text-purple-900">
-                            Pendelegasian Persetujuan (Out of Office)
-                        </p>
-                        <p className="text-xs text-purple-800 leading-relaxed">
-                            Anda memiliki wewenang untuk meninjau dan mengambil tindakan pada pengajuan ini <strong>atas nama {detail.delegated_from_name}</strong> ({detail.delegation_reason || 'Cuti / Out of Office'}). Tindakan persetujuan Anda akan tercatat secara resmi dalam riwayat audit sistem.
-                        </p>
-                    </div>
-                </div>
-            )}
+                        <div className="rounded-xl border border-purple-200 bg-purple-50/80 p-4 text-purple-900 shadow-sm flex items-start gap-3 animate-in fade-in">
+                            <UserCheck size={20} className="text-purple-600 shrink-0 mt-0.5" />
+                            <div className="space-y-1">
+                                <p className="text-sm font-bold text-purple-900">
+                                    Delegation of Approval (Out of Office)
+                                </p>
+                                <p className="text-sm text-purple-800 leading-relaxed">
+                                    You have the authority to review and take action on this submission <strong>on behalf of {detail.delegated_from_name}</strong> ({detail.delegation_reason || 'Cuti / Out of Office'}). Your approval actions will be officially recorded in the system audit history.
+                                </p>
+                            </div>
+                        </div>
+                    )}
 
-            {detail?.status === 'IN_PROGRESS' && isLockedByOther && (
+                    {detail?.status === 'IN_PROGRESS' && isLockedByOther && (
                         <div className="rounded-xl border border-amber-300 bg-amber-50/90 p-4 text-amber-900 shadow-sm flex items-start gap-3 animate-in fade-in">
                             <Lock size={18} className="text-amber-600 shrink-0 mt-0.5" />
                             <div className="space-y-1">
                                 <p className="text-sm font-bold text-amber-900">
                                     Being opened by {stepLockedByName || stepLockedByEmail || 'User Lain'}
                                 </p>
-                                <p className="text-xs text-amber-800 leading-relaxed">
+                                <p className="text-sm text-amber-800 leading-relaxed">
                                     The action button cannot be used because this document is currently being opened/processed by <strong>{stepLockedByName || stepLockedByEmail}</strong>. The page will automatically reopen once that user has finished or refresh the page manually.
                                 </p>
                             </div>
@@ -731,7 +731,7 @@ export const ApprovalDetailPage = () => {
                         <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-3.5 text-emerald-900 shadow-sm flex items-start gap-3 animate-in fade-in">
                             <ShieldCheck size={18} className="text-emerald-600 shrink-0 mt-0.5" />
                             <div className="space-y-0.5">
-                                <p className="text-xs font-bold text-emerald-900">
+                                <p className="text-sm font-bold text-emerald-900">
                                     Locked Temporarily for you
                                 </p>
                                 <p className="text-[11px] text-emerald-800 leading-relaxed">
