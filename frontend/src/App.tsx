@@ -16,6 +16,7 @@ import { CcEmailConfigPage } from './pages/CcEmailConfigPage';
 import { AdminOrgStructurePage } from './pages/AdminOrgStructurePage';
 import { PRNonTradeFormPage } from './pages/PRNonTradeFormPage';
 import { PRNonTradeListPage } from './pages/PRNonTradeListPage';
+import { LeaveDelegationPage } from './pages/LeaveDelegationPage';
 
 const AppRoutes = () => {
     const { loading } = useAuth();
@@ -41,6 +42,7 @@ const AppRoutes = () => {
                 <Route index element={<DashboardPage />} />
                 <Route path="approval" element={<InboxPage />} />
                 <Route path="history" element={<HistoryPage />} />
+                <Route path="settings/leave-delegation" element={<LeaveDelegationPage />} />
                 <Route path="pr-non-trade" element={<PRNonTradeListPage />} />
                 <Route element={<NonApproverGuard />}>
                     <Route path="pr-non-trade/create" element={<PRNonTradeFormPage />} />

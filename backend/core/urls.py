@@ -18,7 +18,8 @@ from core.views import (
     BrandViewSet, UserBrandViewSet, MasterWorkflowCriteriaViewSet,
     ModuleVariableViewSet, CCEmailConfigViewSet, system_logs,
     PRNonTradeViewSet, MasterAssetViewSet, MasterWBSViewSet,
-    MasterEquipmentViewSet, MasterGoodsViewSet, MasterCarNumberViewSet
+    MasterEquipmentViewSet, MasterGoodsViewSet, MasterCarNumberViewSet,
+    UserLeaveDelegationViewSet
 )
 
 router = DefaultRouter()
@@ -37,6 +38,8 @@ router.register(r'admin/user-brands', UserBrandViewSet, basename='user-brand')
 router.register(r'admin/master-workflow-conditions', MasterWorkflowCriteriaViewSet, basename='master-condition')
 router.register(r'admin/module-variables', ModuleVariableViewSet, basename='module-variable')
 router.register(r'admin/cc-email-configs', CCEmailConfigViewSet, basename='cc-email-config')
+router.register(r'settings/leave-delegations', UserLeaveDelegationViewSet, basename='leave-delegation')
+router.register(r'admin/leave-delegations', UserLeaveDelegationViewSet, basename='admin-leave-delegation')
 router.register(r'pr-non-trade', PRNonTradeViewSet, basename='pr-non-trade')
 router.register(r'master/assets', MasterAssetViewSet, basename='master-asset')
 router.register(r'master/wbs', MasterWBSViewSet, basename='master-wbs')

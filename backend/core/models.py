@@ -663,6 +663,11 @@ class ApprovalRequest(models.Model):
         choices=[('LOW', 'Low'), ('MEDIUM', 'Medium'), ('HIGH', 'High'), ('URGENT', 'Urgent')],
         default='MEDIUM'
     )
+    is_test = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text="True if this approval request was created by a SIT testing user"
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -1174,7 +1179,7 @@ class MasterCarNumber(models.Model):
 class MasterEquipment(models.Model):
     """Master Equipment data table for Equipment Name lookup."""
     code = models.CharField(max_length=50, unique=True, help_text="Equipment Code")
-    plant = models.CharField(max_length=50, help_text="Plant")
+    plant = models.CharField(max_length=50, blank=True, default='', help_text="Plant")
     company_id = models.IntegerField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True, null=True, blank=True)
     description = models.TextField(blank=True, default='')
@@ -1305,6 +1310,11 @@ class PRNonTrade(models.Model):
         blank=True,
         related_name='pr_non_trade_headers'
     )
+    is_test = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text="True if this PR Non-Trade record was created by a SIT testing user"
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -1354,6 +1364,134 @@ class PRNonTradeItem(models.Model):
 
     def __str__(self):
         return f"[{self.goods_code}] {self.description} x {self.quantity} {self.unit}"
+
+
+class UserLeaveDelegation(models.Model):
+    """
+    Stores leave / Out-of-Office (OOO) approval delegation rules.
+    When a designated approver is on leave, their approval authority is
+    temporarily delegated to another user during the specified date range.
+    """
+    class Scope(models.TextChoices):
+        ALL = 'ALL', 'Semua Pengajuan (Global)'
+        SPECIFIC_MODULE = 'SPECIFIC_MODULE', 'Modul Tertentu Saja'
+
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='leave_delegations_given',
+        help_text="User/approver who is taking leave"
+    )
+    delegate_user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='leave_delegations_received',
+        help_text="Substitute user who receives approval authority"
+    )
+    start_date = models.DateTimeField(
+        db_index=True,
+        help_text="Start date & time of the leave / delegation period"
+    )
+    end_date = models.DateTimeField(
+        db_index=True,
+        help_text="End date & time of the leave / delegation period"
+    )
+    reason = models.CharField(
+        max_length=255,
+        blank=True,
+        default='Cuti / Out of Office',
+        help_text="Reason for leave or delegation (e.g. Cuti Tahunan, Ibadah, Sakit, Dinas)"
+    )
+    is_active = models.BooleanField(
+        default=True,
+        db_index=True,
+        help_text="Toggle to manually activate/deactivate this delegation"
+    )
+    scope = models.CharField(
+        max_length=30,
+        choices=Scope.choices,
+        default=Scope.ALL,
+        help_text="Module scope for this delegation"
+    )
+    specific_module_codes = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="List of module codes if scope=SPECIFIC_MODULE (e.g. ['EORDER', 'PR_NON_TRADE'])"
+    )
+    notify_delegate = models.BooleanField(
+        default=True,
+        help_text="Send email notification to delegate user when created"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='created_leave_delegations'
+    )
+
+    class Meta:
+        db_table = 'aw_user_leave_delegation'
+        ordering = ['-start_date']
+        indexes = [
+            models.Index(fields=['user', 'is_active', 'start_date', 'end_date'], name='idx_deleg_u_act_dates'),
+            models.Index(fields=['delegate_user', 'is_active', 'start_date', 'end_date'], name='idx_deleg_d_act_dates'),
+        ]
+
+    def __str__(self):
+        return f"Delegation: {self.user.username} -> {self.delegate_user.username} ({self.start_date.strftime('%Y-%m-%d')} to {self.end_date.strftime('%Y-%m-%d')})"
+
+    def is_currently_effective(self, module_code=None, now=None):
+        """Returns True if this delegation rule is actively effective right now."""
+        if not self.is_active:
+            return False
+        if now is None:
+            now = timezone.now()
+        if not (self.start_date <= now <= self.end_date):
+            return False
+        if self.scope == self.Scope.SPECIFIC_MODULE and module_code:
+            return module_code in (self.specific_module_codes or [])
+        return True
+
+    @property
+    def current_status(self):
+        """Calculates current dynamic status: ACTIVE, SCHEDULED, EXPIRED, or INACTIVE."""
+        if not self.is_active:
+            return 'INACTIVE'
+        now = timezone.now()
+        if now < self.start_date:
+            return 'SCHEDULED'
+        elif self.start_date <= now <= self.end_date:
+            return 'ACTIVE'
+        else:
+            return 'EXPIRED'
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        if self.user_id and self.delegate_user_id and self.user_id == self.delegate_user_id:
+            raise ValidationError("Penerima delegasi tidak boleh diri Anda sendiri.")
+        if self.start_date and self.end_date and self.start_date >= self.end_date:
+            raise ValidationError("Tanggal akhir cuti harus lebih besar daripada tanggal mulai.")
+
+        # Anti-circular check: prevent User A -> B when B -> A is active or overlapping
+        if self.user_id and self.delegate_user_id and self.start_date and self.end_date:
+            overlapping = UserLeaveDelegation.objects.filter(
+                user_id=self.delegate_user_id,
+                delegate_user_id=self.user_id,
+                is_active=True,
+                start_date__lt=self.end_date,
+                end_date__gt=self.start_date,
+            )
+            if self.pk:
+                overlapping = overlapping.exclude(pk=self.pk)
+            if overlapping.exists():
+                raise ValidationError(
+                    f"Pendelegasian sirkular terdeteksi: {self.delegate_user.get_full_name() or self.delegate_user.username} "
+                    f"telah mendelegasikan wewenang kepada Anda pada periode yang tumpang tindih."
+                )
+
 
 
 

@@ -13,7 +13,8 @@ import {
     Settings,
     Terminal,
     Mail,
-    Network
+    Network,
+    UserCheck
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
@@ -22,6 +23,7 @@ const navItems = [
     { name: 'Dashboard', href: '/', icon: LayoutDashboard },
     { name: 'Approval Inbox', href: '/approval', icon: Inbox },
     { name: 'History', href: '/history', icon: History, userOnly: true },
+    { name: 'Leave Delegation', href: '/settings/leave-delegation', icon: UserCheck },
     { name: 'Workflows', href: '/admin/workflows', icon: GitBranch, adminOnly: true },
     { name: 'User Management', href: '/admin/users', icon: Users, adminOnly: true },
     { name: 'Simulator', href: '/admin/workflow/simulator', icon: Play, adminOnly: true },

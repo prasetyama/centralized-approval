@@ -8,6 +8,7 @@ import {
     Users,
     Eye,
     Lock,
+    UserCheck,
 } from 'lucide-react';
 import { useState } from 'react';
 import api from '@/services/api';
@@ -26,11 +27,11 @@ import { formatDate } from '@/lib/utils';
 import { Link } from 'react-router-dom';
 
 export const InboxPage = () => {
-    const [activeTab, setActiveTab] = useState<'inbox' | 'watching'>('inbox');
+    const [activeTab, setActiveTab] = useState<'inbox' | 'delegated' | 'watching'>('inbox');
     const [page, setPage] = useState(1);
     const [pageSize, setPageSize] = useState(10);
 
-    const handleTabChange = (tab: 'inbox' | 'watching') => {
+    const handleTabChange = (tab: 'inbox' | 'delegated' | 'watching') => {
         setActiveTab(tab);
         setPage(1);
     };
@@ -64,7 +65,17 @@ export const InboxPage = () => {
                         }`}
                 >
                     <Inbox size={18} />
-                    Inbox
+                    Semua Inbox
+                </button>
+                <button
+                    onClick={() => handleTabChange('delegated')}
+                    className={`px-6 py-4 text-sm font-bold flex items-center gap-2 transition-all ${activeTab === 'delegated'
+                        ? 'text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50/30'
+                        : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'
+                        }`}
+                >
+                    <UserCheck size={18} />
+                    Tugas Delegasi (Cuti)
                 </button>
                 <button
                     onClick={() => handleTabChange('watching')}
@@ -81,11 +92,13 @@ export const InboxPage = () => {
             <div className="flex items-center justify-between">
                 <div>
                     <h1 className="text-3xl font-bold tracking-tight text-slate-900">
-                        {activeTab === 'inbox' ? 'Approval Inbox' : 'Watched Requests'}
+                        {activeTab === 'inbox' ? 'Approval Inbox' : activeTab === 'delegated' ? 'Tugas Delegasi Cuti' : 'Watched Requests'}
                     </h1>
                     <p className="mt-1 text-slate-500">
                         {activeTab === 'inbox'
                             ? 'Review and approve tasks from all departments.'
+                            : activeTab === 'delegated'
+                            ? 'Daftar pengajuan yang didelegasikan kepada Anda oleh rekan kerja yang sedang cuti.'
                             : 'Monitor requests where you are added as a watcher.'}
                     </p>
                 </div>
@@ -125,6 +138,15 @@ export const InboxPage = () => {
                                         <p className="font-semibold text-slate-900">{item.title}</p>
                                         <div className="flex flex-wrap items-center gap-2">
                                             <p className="text-xs text-slate-500">Ref: {item.reference_id}</p>
+                                            {item.is_delegated && (
+                                                <span
+                                                    className="inline-flex items-center gap-1 rounded-full bg-purple-50 border border-purple-200 px-2.5 py-0.5 text-[11px] font-semibold text-purple-800"
+                                                    title={`Pendelegasian Cuti: ${item.delegation_reason || 'Cuti'}`}
+                                                >
+                                                    <UserCheck size={11} className="text-purple-600" />
+                                                    Atas Nama: {item.delegated_from_name} (Cuti)
+                                                </span>
+                                            )}
                                             {item.locked_by_name && (
                                                 <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 border border-amber-200 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
                                                     <Lock size={11} className="text-amber-600" />

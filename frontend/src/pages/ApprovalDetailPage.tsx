@@ -1,6 +1,6 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Clock, History, RotateCcw, Lock, ShieldCheck, ArrowRightLeft } from 'lucide-react';
+import { ArrowLeft, Clock, History, RotateCcw, Lock, ShieldCheck, ArrowRightLeft, UserCheck } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import api, { getCookie } from '@/services/api';
 import { useToast } from '@/context/ToastContext';
@@ -522,6 +522,20 @@ export const ApprovalDetailPage = () => {
                 </div>
             </div>
 
+            {detail?.is_delegated && (
+                <div className="rounded-xl border border-purple-200 bg-purple-50/80 p-4 text-purple-900 shadow-sm flex items-start gap-3 animate-in fade-in">
+                    <UserCheck size={20} className="text-purple-600 shrink-0 mt-0.5" />
+                    <div className="space-y-1">
+                        <p className="text-sm font-bold text-purple-900">
+                            Pendelegasian Persetujuan (Out of Office)
+                        </p>
+                        <p className="text-xs text-purple-800 leading-relaxed">
+                            Anda memiliki wewenang untuk meninjau dan mengambil tindakan pada pengajuan ini <strong>atas nama {detail.delegated_from_name}</strong> ({detail.delegation_reason || 'Cuti / Out of Office'}). Tindakan persetujuan Anda akan tercatat secara resmi dalam riwayat audit sistem.
+                        </p>
+                    </div>
+                </div>
+            )}
+
             {detail?.status === 'IN_PROGRESS' && isLockedByOther && (
                 <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-900 shadow-sm flex items-start gap-3 animate-in fade-in">
                     <Lock size={20} className="text-amber-600 shrink-0 mt-0.5" />
@@ -685,7 +699,21 @@ export const ApprovalDetailPage = () => {
                         </CardContent>
                     </Card>
 
-                    {detail?.status === 'IN_PROGRESS' && isLockedByOther && (
+                    {detail?.is_delegated && (
+                <div className="rounded-xl border border-purple-200 bg-purple-50/80 p-4 text-purple-900 shadow-sm flex items-start gap-3 animate-in fade-in">
+                    <UserCheck size={20} className="text-purple-600 shrink-0 mt-0.5" />
+                    <div className="space-y-1">
+                        <p className="text-sm font-bold text-purple-900">
+                            Pendelegasian Persetujuan (Out of Office)
+                        </p>
+                        <p className="text-xs text-purple-800 leading-relaxed">
+                            Anda memiliki wewenang untuk meninjau dan mengambil tindakan pada pengajuan ini <strong>atas nama {detail.delegated_from_name}</strong> ({detail.delegation_reason || 'Cuti / Out of Office'}). Tindakan persetujuan Anda akan tercatat secara resmi dalam riwayat audit sistem.
+                        </p>
+                    </div>
+                </div>
+            )}
+
+            {detail?.status === 'IN_PROGRESS' && isLockedByOther && (
                         <div className="rounded-xl border border-amber-300 bg-amber-50/90 p-4 text-amber-900 shadow-sm flex items-start gap-3 animate-in fade-in">
                             <Lock size={18} className="text-amber-600 shrink-0 mt-0.5" />
                             <div className="space-y-1">

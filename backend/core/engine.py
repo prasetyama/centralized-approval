@@ -753,8 +753,8 @@ class WorkflowEngine:
 
 
     @staticmethod
-    def _is_user_authorized_for_step(approver, current_step, approval_request):
-        """Check if an approver is authorized to take action on the given step."""
+    def _is_user_authorized_direct(approver, current_step, approval_request):
+        """Check if an approver has direct authorization (without delegation) for the step."""
         if approver.is_superuser:
             return True
         if current_step.assigned_to is not None:
@@ -811,6 +811,57 @@ class WorkflowEngine:
                     return True
                 else:
                     raise ValidationError(f"You are not authorized to approve requests for division '{approval_request.division}'.")
+
+        return False
+
+    @staticmethod
+    def get_effective_delegator(approver, current_step, approval_request, now=None):
+        """
+        Check if `approver` is an active delegate of someone who is authorized for this step.
+        Returns the User on leave (delegator) if authorized as a delegate, else None.
+        """
+        from core.models import UserLeaveDelegation
+        if now is None:
+            now = timezone.now()
+
+        active_delegations = UserLeaveDelegation.objects.filter(
+            delegate_user=approver,
+            is_active=True,
+            start_date__lte=now,
+            end_date__gte=now,
+        ).select_related('user')
+
+        if not active_delegations.exists():
+            return None
+
+        module_code = approval_request.module.code if approval_request and approval_request.module else None
+
+        for delegation in active_delegations:
+            if not delegation.is_currently_effective(module_code=module_code, now=now):
+                continue
+
+            if WorkflowEngine._is_user_authorized_direct(delegation.user, current_step, approval_request):
+                return delegation.user
+
+        return None
+
+    @staticmethod
+    def _is_user_authorized_for_step(approver, current_step, approval_request):
+        """
+        Check if an approver is authorized to take action on the given step,
+        either directly or via an active leave delegation (Out of Office proxy).
+        """
+        # 1. Direct authorization
+        if WorkflowEngine._is_user_authorized_direct(approver, current_step, approval_request):
+            return True
+
+        # 2. Leave / Out-of-Office delegation authorization
+        delegator = WorkflowEngine.get_effective_delegator(approver, current_step, approval_request)
+        if delegator:
+            # Segregation of Duties (SoD) check: requester cannot approve own request even via delegation
+            if approver == approval_request.requester:
+                raise ValidationError("Pemohon tidak dapat menyetujui pengajuannya sendiri, termasuk melalui pendelegasian wewenang.")
+            return True
 
         return False
 
@@ -981,6 +1032,7 @@ class WorkflowEngine:
             approval_request.save(update_fields=['payload', 'updated_at'])
 
         # Approve the current step
+        delegator = WorkflowEngine.get_effective_delegator(approver, current_step, approval_request)
         current_step.status = ApprovalStep.StepStatus.APPROVED
         current_step.assigned_to = approver
         current_step.comments = comments
@@ -993,12 +1045,23 @@ class WorkflowEngine:
         current_step.save()
 
         # Create audit log for approval
+        if delegator:
+            approver_name = approver.get_full_name() or approver.username
+            delegator_name = delegator.get_full_name() or delegator.username
+            approve_log_detail = (
+                f"Step {current_step.step_order} ({current_step.name}) disetujui oleh {approver_name} "
+                f"atas nama {delegator_name} (Pendelegasian Cuti / Out of Office). "
+                f"{comments}".strip()
+            )
+        else:
+            approve_log_detail = f"Step {current_step.step_order} ({current_step.name}) approved. {comments}".strip()
+
         AuditLog.objects.create(
             request=approval_request,
             step=current_step,
             actor=approver,
             action=AuditLog.Action.APPROVED,
-            details=f"Step {current_step.step_order} ({current_step.name}) approved. {comments}".strip(),
+            details=approve_log_detail,
             ip_address=ip_address,
             payload_snapshot=approval_request.payload,
         )
@@ -1092,6 +1155,7 @@ class WorkflowEngine:
             )
 
         # Reject the step
+        delegator = WorkflowEngine.get_effective_delegator(approver, current_step, approval_request)
         current_step.status = ApprovalStep.StepStatus.REJECTED
         current_step.assigned_to = approver
         current_step.comments = comments
@@ -1116,12 +1180,22 @@ class WorkflowEngine:
         ).update(status=ApprovalStep.StepStatus.SKIPPED)
 
         # Create audit log
+        if delegator:
+            approver_name = approver.get_full_name() or approver.username
+            delegator_name = delegator.get_full_name() or delegator.username
+            reject_log_detail = (
+                f"Step {current_step.step_order} ({current_step.name}) ditolak oleh {approver_name} "
+                f"atas nama {delegator_name} (Pendelegasian Cuti / Out of Office). Alasan: {comments}"
+            ).strip()
+        else:
+            reject_log_detail = f"Step {current_step.step_order} ({current_step.name}) rejected. Reason: {comments}".strip()
+
         AuditLog.objects.create(
             request=approval_request,
             step=current_step,
             actor=approver,
             action=AuditLog.Action.REJECTED,
-            details=f"Step {current_step.step_order} ({current_step.name}) rejected. Reason: {comments}".strip(),
+            details=reject_log_detail,
             ip_address=ip_address,
             payload_snapshot=approval_request.payload,
         )

@@ -46,7 +46,8 @@ from core.models import (
     Company, OrganizationStructure, Brand, UserBrand, MasterWorkflowCriteria, RequestWatcher, ModuleVariable,
     CCEmailConfig, MasterAsset, MasterWBS, MasterEquipment, MasterGoods,
     MasterCarNumber,
-    PRNonTrade, PRNonTradeItem, PRNonTradeSequence
+    PRNonTrade, PRNonTradeItem, PRNonTradeSequence,
+    UserLeaveDelegation
 )
 from core.serializers import (
     ModuleSerializer, RoleSerializer, UserListSerializer, UserDetailSerializer,
@@ -60,7 +61,8 @@ from core.serializers import (
     RequestWatcherSerializer, ModuleVariableSerializer, CCEmailConfigSerializer,
     MasterAssetSerializer, MasterWBSSerializer, MasterEquipmentSerializer, MasterGoodsSerializer,
     MasterCarNumberSerializer,
-    PRNonTradeSerializer, PRNonTradeItemSerializer
+    PRNonTradeSerializer, PRNonTradeItemSerializer,
+    UserLeaveDelegationSerializer
 )
 from core.engine import WorkflowEngine
 from core import email_service
@@ -491,25 +493,60 @@ class InboxView(generics.ListAPIView):
             else:
                 dept_ids = user.get_department_ids() if hasattr(user, 'get_department_ids') else []
 
-                # 1. Requests where user is the active approver or member of target department
-                waiting_ids = ApprovalStep.objects.filter(
+                # 1. Requests where user is the direct active approver or member of target department
+                waiting_ids = set(ApprovalStep.objects.filter(
                     status=ApprovalStep.StepStatus.WAITING
                 ).filter(
                     Q(assigned_to=user) |
+                    Q(user_required=user) |
                     Q(approver_type='REQUESTOR', request__requester=user) |
                     Q(approver_type='TARGET_DEPT_ROLE', target_department_id__in=dept_ids)
-                ).values_list('request_id', flat=True)
+                ).values_list('request_id', flat=True))
 
-                # 2. Requests where user has participated in the discussion
-                discussion_ids = RequestFeedback.objects.filter(
+                # 2. Requests delegated to this user via active UserLeaveDelegation
+                now = timezone.now()
+                active_delegations = UserLeaveDelegation.objects.filter(
+                    delegate_user=user,
+                    is_active=True,
+                    start_date__lte=now,
+                    end_date__gte=now,
+                ).select_related('user')
+
+                delegated_waiting_ids = set()
+                if active_delegations.exists():
+                    for delegation in active_delegations:
+                        del_user = delegation.user
+                        del_dept_ids = del_user.get_department_ids() if hasattr(del_user, 'get_department_ids') else []
+                        del_step_qs = ApprovalStep.objects.filter(
+                            status=ApprovalStep.StepStatus.WAITING
+                        ).exclude(
+                            request__requester=user  # Segregation of duties: cannot approve own request
+                        ).filter(
+                            Q(assigned_to=del_user) |
+                            Q(user_required=del_user) |
+                            Q(approver_type='REQUESTOR', request__requester=del_user) |
+                            Q(approver_type='TARGET_DEPT_ROLE', target_department_id__in=del_dept_ids)
+                        )
+                        if delegation.scope == UserLeaveDelegation.Scope.SPECIFIC_MODULE:
+                            del_step_qs = del_step_qs.filter(request__module__code__in=delegation.specific_module_codes or [])
+
+                        delegated_waiting_ids.update(del_step_qs.values_list('request_id', flat=True))
+
+                # 3. Requests where user has participated in the discussion
+                discussion_ids = set(RequestFeedback.objects.filter(
                     user=user
-                ).values_list('request_id', flat=True)
+                ).values_list('request_id', flat=True))
 
-                # Combine all relevant request IDs
-                all_ids = set(waiting_ids) | set(discussion_ids)
+                # Combine IDs based on tab filter
+                if tab == 'delegated':
+                    target_ids = delegated_waiting_ids
+                elif tab == 'my_tasks':
+                    target_ids = waiting_ids
+                else:
+                    target_ids = waiting_ids | delegated_waiting_ids | discussion_ids
 
                 queryset = ApprovalRequest.objects.filter(
-                    id__in=all_ids,
+                    id__in=target_ids,
                     status=ApprovalRequest.Status.IN_PROGRESS
                 )
 
@@ -1674,6 +1711,130 @@ class MasterCarNumberViewSet(viewsets.ReadOnlyModelViewSet):
     filter_backends = [DjangoFilterBackend, SearchFilter]
     search_fields = ['code', 'description']
     filterset_fields = ['company_id']
+
+
+class UserLeaveDelegationViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for managing User Leave / Out-of-Office (OOO) Delegations.
+    Allows approvers to schedule leave and delegate approval authority.
+    """
+    queryset = UserLeaveDelegation.objects.select_related('user', 'delegate_user', 'created_by').all()
+    serializer_class = UserLeaveDelegationSerializer
+    permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend, SearchFilter]
+    filterset_fields = ['is_active', 'scope']
+    search_fields = ['reason', 'user__username', 'user__first_name', 'user__last_name', 'delegate_user__username', 'delegate_user__first_name', 'delegate_user__last_name']
+
+    def get_queryset(self):
+        user = self.request.user
+        tab = self.request.query_params.get('tab', None)
+        now = timezone.now()
+
+        if user.is_superuser:
+            qs = super().get_queryset()
+        else:
+            qs = super().get_queryset().filter(Q(user=user) | Q(delegate_user=user))
+
+        if tab == 'given':
+            qs = qs.filter(user=user)
+        elif tab == 'received':
+            qs = qs.filter(delegate_user=user)
+        elif tab == 'active':
+            qs = qs.filter(is_active=True, start_date__lte=now, end_date__gte=now)
+
+        return qs
+
+    def perform_create(self, serializer):
+        user = self.request.user
+        if not user.is_superuser:
+            serializer.save(user=user, created_by=user)
+        else:
+            target_user = serializer.validated_data.get('user', user)
+            serializer.save(user=target_user, created_by=user)
+
+    @action(detail=False, methods=['get'], url_path='current-status')
+    def current_status(self, request):
+        """
+        Check if the current logged-in user is currently on active leave delegation.
+        """
+        user = request.user
+        now = timezone.now()
+        active_given = UserLeaveDelegation.objects.filter(
+            user=user,
+            is_active=True,
+            start_date__lte=now,
+            end_date__gte=now,
+        ).select_related('delegate_user').first()
+
+        active_received_count = UserLeaveDelegation.objects.filter(
+            delegate_user=user,
+            is_active=True,
+            start_date__lte=now,
+            end_date__gte=now,
+        ).count()
+
+        return Response({
+            'is_on_leave': active_given is not None,
+            'active_delegation': UserLeaveDelegationSerializer(active_given).data if active_given else None,
+            'active_received_count': active_received_count,
+        })
+
+    @action(detail=False, methods=['get'], url_path='eligible-delegates')
+    def eligible_delegates(self, request):
+        """
+        Return list of active users eligible to be chosen as delegate (excluding current user).
+        Supports search by name, username, or department.
+        """
+        search = request.query_params.get('search', '').strip()
+        qs = User.objects.filter(is_active=True).exclude(id=request.user.id)
+        if search:
+            qs = qs.filter(
+                Q(username__icontains=search) |
+                Q(first_name__icontains=search) |
+                Q(last_name__icontains=search) |
+                Q(email__icontains=search) |
+                Q(department__icontains=search)
+            )
+        qs = qs.order_by('first_name', 'username')[:100]
+
+        data = [
+            {
+                'id': u.id,
+                'username': u.username,
+                'name': u.get_full_name() or u.username,
+                'email': u.email,
+                'department': u.department or '-',
+            }
+            for u in qs
+        ]
+        return Response(data)
+
+    @action(detail=True, methods=['patch', 'post'], url_path='toggle-active')
+    def toggle_active(self, request, pk=None):
+        delegation = self.get_object()
+        delegation.is_active = not delegation.is_active
+        delegation.save(update_fields=['is_active', 'updated_at'])
+        return Response({
+            'success': True,
+            'is_active': delegation.is_active,
+            'message': f"Pendelegasian cuti sekarang {'diaktifkan' if delegation.is_active else 'dinonaktifkan'}."
+        })
+
+    @action(detail=True, methods=['post'], url_path='end-early')
+    def end_early(self, request, pk=None):
+        """
+        Ends the leave delegation immediately (setting end_date to now and is_active to False).
+        """
+        delegation = self.get_object()
+        now = timezone.now()
+        delegation.end_date = now
+        delegation.is_active = False
+        delegation.save(update_fields=['end_date', 'is_active', 'updated_at'])
+        return Response({
+            'success': True,
+            'message': "Pendelegasian cuti telah diakhiri lebih awal. Wewenang approval telah kembali kepada Anda."
+        })
+
 
 
 

@@ -12,7 +12,8 @@ from core.models import (
     Company, OrganizationStructure, Brand, UserBrand, MasterWorkflowCriteria, RequestWatcher, ModuleVariable,
     UserRole, CCEmailConfig, MasterAsset, MasterWBS, MasterEquipment, MasterGoods,
     MasterCarNumber,
-    PRNonTrade, PRNonTradeItem, PRNonTradeSequence
+    PRNonTrade, PRNonTradeItem, PRNonTradeSequence,
+    UserLeaveDelegation
 )
 
 
@@ -778,6 +779,9 @@ class ApprovalRequestListSerializer(SitAwareSerializerMixin, serializers.ModelSe
     current_step_name = serializers.SerializerMethodField()
     locked_by_name = serializers.SerializerMethodField()
     locked_by_email = serializers.SerializerMethodField()
+    is_delegated = serializers.SerializerMethodField()
+    delegated_from_name = serializers.SerializerMethodField()
+    delegation_reason = serializers.SerializerMethodField()
 
     class Meta:
         model = ApprovalRequest
@@ -785,8 +789,55 @@ class ApprovalRequestListSerializer(SitAwareSerializerMixin, serializers.ModelSe
             'id', 'reference_id', 'module', 'module_name', 'module_code',
             'module_color', 'module_icon', 'title', 'status', 'priority',
             'current_step', 'current_step_name', 'requester', 'requester_name', 'requester_email',
-            'division', 'division_name', 'locked_by_name', 'locked_by_email', 'created_at', 'updated_at',
+            'division', 'division_name', 'locked_by_name', 'locked_by_email',
+            'is_delegated', 'delegated_from_name', 'delegation_reason',
+            'created_at', 'updated_at',
         ]
+
+    def _get_delegation_info(self, obj):
+        if not hasattr(obj, '_cached_delegation_info'):
+            req = self.context.get('request')
+            current_user = req.user if req and hasattr(req, 'user') and req.user.is_authenticated else None
+            if not current_user:
+                obj._cached_delegation_info = None
+            else:
+                waiting_step = obj.steps.filter(step_order=obj.current_step, status='WAITING').first()
+                if not waiting_step:
+                    obj._cached_delegation_info = None
+                else:
+                    from core.engine import WorkflowEngine
+                    delegator = WorkflowEngine.get_effective_delegator(current_user, waiting_step, obj)
+                    if delegator:
+                        from core.models import UserLeaveDelegation
+                        from django.utils import timezone
+                        now = timezone.now()
+                        del_rule = UserLeaveDelegation.objects.filter(
+                            user=delegator,
+                            delegate_user=current_user,
+                            is_active=True,
+                            start_date__lte=now,
+                            end_date__gte=now
+                        ).first()
+                        obj._cached_delegation_info = {
+                            'is_delegated': True,
+                            'delegated_from_name': delegator.get_full_name() or delegator.username,
+                            'delegation_reason': del_rule.reason if del_rule else 'Cuti / Out of Office'
+                        }
+                    else:
+                        obj._cached_delegation_info = None
+        return obj._cached_delegation_info
+
+    def get_is_delegated(self, obj):
+        info = self._get_delegation_info(obj)
+        return bool(info and info.get('is_delegated'))
+
+    def get_delegated_from_name(self, obj):
+        info = self._get_delegation_info(obj)
+        return info.get('delegated_from_name') if info else None
+
+    def get_delegation_reason(self, obj):
+        info = self._get_delegation_info(obj)
+        return info.get('delegation_reason') if info else None
 
     def get_requester_name(self, obj):
         return obj.requester.get_full_name() or obj.requester.username
@@ -831,6 +882,9 @@ class ApprovalRequestDetailSerializer(SitAwareSerializerMixin, serializers.Model
     audit_logs = AuditLogSerializer(many=True, read_only=True)
     feedbacks = RequestFeedbackSerializer(many=True, read_only=True)
     watchers = RequestWatcherSerializer(many=True, read_only=True)
+    is_delegated = serializers.SerializerMethodField()
+    delegated_from_name = serializers.SerializerMethodField()
+    delegation_reason = serializers.SerializerMethodField()
 
     class Meta:
         model = ApprovalRequest
@@ -839,8 +893,54 @@ class ApprovalRequestDetailSerializer(SitAwareSerializerMixin, serializers.Model
             'module_color', 'module_icon', 'workflow', 'workflow_name',
             'requester', 'requester_name', 'requester_email', 'title', 'description',
             'payload', 'status', 'current_step', 'priority', 'division', 'division_details',
+            'is_delegated', 'delegated_from_name', 'delegation_reason',
             'steps', 'audit_logs', 'feedbacks', 'watchers', 'created_at', 'updated_at',
         ]
+
+    def _get_delegation_info(self, obj):
+        if not hasattr(obj, '_cached_detail_delegation_info'):
+            req = self.context.get('request')
+            current_user = req.user if req and hasattr(req, 'user') and req.user.is_authenticated else None
+            if not current_user:
+                obj._cached_detail_delegation_info = None
+            else:
+                waiting_step = obj.steps.filter(step_order=obj.current_step, status='WAITING').first()
+                if not waiting_step:
+                    obj._cached_detail_delegation_info = None
+                else:
+                    from core.engine import WorkflowEngine
+                    delegator = WorkflowEngine.get_effective_delegator(current_user, waiting_step, obj)
+                    if delegator:
+                        from core.models import UserLeaveDelegation
+                        from django.utils import timezone
+                        now = timezone.now()
+                        del_rule = UserLeaveDelegation.objects.filter(
+                            user=delegator,
+                            delegate_user=current_user,
+                            is_active=True,
+                            start_date__lte=now,
+                            end_date__gte=now
+                        ).first()
+                        obj._cached_detail_delegation_info = {
+                            'is_delegated': True,
+                            'delegated_from_name': delegator.get_full_name() or delegator.username,
+                            'delegation_reason': del_rule.reason if del_rule else 'Cuti / Out of Office'
+                        }
+                    else:
+                        obj._cached_detail_delegation_info = None
+        return obj._cached_detail_delegation_info
+
+    def get_is_delegated(self, obj):
+        info = self._get_delegation_info(obj)
+        return bool(info and info.get('is_delegated'))
+
+    def get_delegated_from_name(self, obj):
+        info = self._get_delegation_info(obj)
+        return info.get('delegated_from_name') if info else None
+
+    def get_delegation_reason(self, obj):
+        info = self._get_delegation_info(obj)
+        return info.get('delegation_reason') if info else None
 
     def get_requester_name(self, obj):
         return obj.requester.get_full_name() or obj.requester.username
@@ -1034,5 +1134,68 @@ class PRNonTradeSerializer(SitAwareSerializerMixin, serializers.ModelSerializer)
             for order, item_data in enumerate(items_data, 1):
                 PRNonTradeItem.objects.create(pr_non_trade=instance, item_order=order, **item_data)
         return instance
+
+
+class UserLeaveDelegationSerializer(serializers.ModelSerializer):
+    """Serializer for UserLeaveDelegation model."""
+    user_name = serializers.SerializerMethodField()
+    user_email = serializers.CharField(source='user.email', read_only=True)
+    user_department = serializers.CharField(source='user.department', read_only=True)
+    delegate_user_name = serializers.SerializerMethodField()
+    delegate_user_email = serializers.CharField(source='delegate_user.email', read_only=True)
+    delegate_user_department = serializers.CharField(source='delegate_user.department', read_only=True)
+    current_status = serializers.CharField(read_only=True)
+    created_by_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = UserLeaveDelegation
+        fields = [
+            'id', 'user', 'user_name', 'user_email', 'user_department',
+            'delegate_user', 'delegate_user_name', 'delegate_user_email', 'delegate_user_department',
+            'start_date', 'end_date', 'reason', 'is_active', 'scope', 'specific_module_codes',
+            'notify_delegate', 'current_status', 'created_at', 'updated_at', 'created_by', 'created_by_name'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at', 'created_by']
+
+    def get_user_name(self, obj):
+        return obj.user.get_full_name() or obj.user.username if obj.user else '-'
+
+    def get_delegate_user_name(self, obj):
+        return obj.delegate_user.get_full_name() or obj.delegate_user.username if obj.delegate_user else '-'
+
+    def get_created_by_name(self, obj):
+        return obj.created_by.get_full_name() or obj.created_by.username if obj.created_by else '-'
+
+    def validate(self, attrs):
+        user = attrs.get('user', self.instance.user if self.instance else None)
+        delegate_user = attrs.get('delegate_user', self.instance.delegate_user if self.instance else None)
+        start_date = attrs.get('start_date', self.instance.start_date if self.instance else None)
+        end_date = attrs.get('end_date', self.instance.end_date if self.instance else None)
+
+        if user and delegate_user and user.id == delegate_user.id:
+            raise serializers.ValidationError({"delegate_user": "Penerima delegasi tidak boleh diri Anda sendiri."})
+
+        if start_date and end_date and start_date >= end_date:
+            raise serializers.ValidationError({"end_date": "Tanggal akhir cuti harus lebih besar daripada tanggal mulai."})
+
+        # Anti-circular validation
+        if user and delegate_user and start_date and end_date:
+            overlapping = UserLeaveDelegation.objects.filter(
+                user=delegate_user,
+                delegate_user=user,
+                is_active=True,
+                start_date__lt=end_date,
+                end_date__gt=start_date,
+            )
+            if self.instance and self.instance.pk:
+                overlapping = overlapping.exclude(pk=self.instance.pk)
+            if overlapping.exists():
+                d_name = delegate_user.get_full_name() or delegate_user.username
+                raise serializers.ValidationError({
+                    "delegate_user": f"Pendelegasian sirkular terdeteksi: {d_name} telah mendelegasikan wewenang kepada Anda pada periode yang tumpang tindih."
+                })
+
+        return attrs
+
 
 
