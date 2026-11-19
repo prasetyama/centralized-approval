@@ -1763,18 +1763,37 @@ class UserLeaveDelegationViewSet(viewsets.ModelViewSet):
     def eligible_delegates(self, request):
         """
         Return list of active users eligible to be chosen as delegate (excluding current user).
-        Supports search by name, username, or department.
+        Strictly filtered to the same company as the logged-in user.
+        Supports search by name, username, email, or department.
         """
-        search = request.query_params.get('search', '').strip()
-        qs = User.objects.filter(is_active=True).exclude(id=request.user.id)
+        user = request.user
+        search = request.query_params.get('search', '').strip() or request.query_params.get('q', '').strip()
+        qs = User.objects.filter(is_active=True).exclude(id=user.id)
+
+        # Filter to the same company as the logged-in user
+        user_company_ids = user.get_company_ids() if hasattr(user, 'get_company_ids') else []
+        if user_company_ids:
+            qs = qs.filter(
+                Q(org_positions__company_id__in=user_company_ids) |
+                Q(org_positions__department__company_id__in=user_company_ids) |
+                Q(dept_approver_1__company_id__in=user_company_ids) |
+                Q(dept_approver_2__company_id__in=user_company_ids) |
+                Q(dept_approver_3__company_id__in=user_company_ids) |
+                Q(headed_departments__company_id__in=user_company_ids)
+            ).distinct()
+        elif not user.is_superuser:
+            qs = qs.none()
+
         if search:
             qs = qs.filter(
                 Q(username__icontains=search) |
                 Q(first_name__icontains=search) |
                 Q(last_name__icontains=search) |
                 Q(email__icontains=search) |
-                Q(department__icontains=search)
-            )
+                Q(org_positions__department__name__icontains=search) |
+                Q(org_positions__department__code__icontains=search) |
+                Q(user_roles__dept__icontains=search)
+            ).distinct()
         qs = qs.order_by('first_name', 'username')[:100]
 
         data = [
@@ -1784,6 +1803,8 @@ class UserLeaveDelegationViewSet(viewsets.ModelViewSet):
                 'name': u.get_full_name() or u.username,
                 'email': u.email,
                 'department': u.department or '-',
+                'company': u.company or '-',
+                'company_code': u.company_code or '',
             }
             for u in qs
         ]

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
     CalendarOff,
@@ -14,7 +14,10 @@ import {
     Users,
     ShieldCheck,
     Info,
-    Check
+    Check,
+    Search,
+    Loader2,
+    X
 } from 'lucide-react';
 import api from '@/services/api';
 import { Card } from '@/components/atoms/Card';
@@ -61,6 +64,8 @@ interface EligibleDelegate {
     name: string;
     email: string;
     department: string;
+    company?: string;
+    company_code?: string;
 }
 
 export const LeaveDelegationPage: React.FC = () => {
@@ -72,6 +77,9 @@ export const LeaveDelegationPage: React.FC = () => {
 
     // Form inputs
     const [delegateUserId, setDelegateUserId] = useState<number | ''>('');
+    const [selectedDelegate, setSelectedDelegate] = useState<EligibleDelegate | null>(null);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [debouncedSearch, setDebouncedSearch] = useState('');
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
     const [reason, setReason] = useState('Cuti Tahunan');
@@ -79,6 +87,13 @@ export const LeaveDelegationPage: React.FC = () => {
     const [selectedModules, setSelectedModules] = useState<string[]>(['EORDER', 'PR_NON_TRADE']);
     const [notifyDelegate, setNotifyDelegate] = useState(true);
     const [errorMsg, setErrorMsg] = useState('');
+
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setDebouncedSearch(searchQuery.trim());
+        }, 300);
+        return () => clearTimeout(timer);
+    }, [searchQuery]);
 
     // Query list delegations
     const { data: delegations = [], isLoading } = useQuery<LeaveDelegation[]>({
@@ -104,13 +119,16 @@ export const LeaveDelegationPage: React.FC = () => {
         }
     });
 
-    // Query eligible delegates
-    const { data: eligibleDelegates = [] } = useQuery<EligibleDelegate[]>({
-        queryKey: ['eligible-delegates'],
+    // Query eligible delegates (filtered to user's company and search query)
+    const { data: eligibleDelegates = [], isLoading: isLoadingDelegates } = useQuery<EligibleDelegate[]>({
+        queryKey: ['eligible-delegates', debouncedSearch],
         queryFn: async () => {
-            const res: any = await api.get('/settings/leave-delegations/eligible-delegates/');
-            return res;
-        }
+            const res: any = await api.get('/settings/leave-delegations/eligible-delegates/', {
+                params: debouncedSearch ? { search: debouncedSearch } : {}
+            });
+            return Array.isArray(res) ? res : res.results || [];
+        },
+        enabled: isModalOpen && debouncedSearch.length > 0
     });
 
     // Mutations
@@ -165,6 +183,9 @@ export const LeaveDelegationPage: React.FC = () => {
 
     const openCreateModal = () => {
         setDelegateUserId('');
+        setSelectedDelegate(null);
+        setSearchQuery('');
+        setDebouncedSearch('');
         // Format current date: today to 5 days later
         const now = new Date();
         const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -187,6 +208,9 @@ export const LeaveDelegationPage: React.FC = () => {
 
     const closeModal = () => {
         setIsModalOpen(false);
+        setSelectedDelegate(null);
+        setSearchQuery('');
+        setDebouncedSearch('');
         setErrorMsg('');
     };
 
@@ -195,17 +219,17 @@ export const LeaveDelegationPage: React.FC = () => {
         setErrorMsg('');
 
         if (!delegateUserId) {
-            setErrorMsg('Silakan pilih rekan pengganti (delegate).');
+            setErrorMsg('Please search and select a substitute delegate colleague from your company.');
             return;
         }
 
         if (!startDate || !endDate) {
-            setErrorMsg('Tanggal mulai dan selesai cuti wajib diisi.');
+            setErrorMsg('Start date and end date are required.');
             return;
         }
 
         if (startDate > endDate) {
-            setErrorMsg('Tanggal selesai cuti tidak boleh lebih awal dari tanggal mulai.');
+            setErrorMsg('End date cannot be earlier than start date.');
             return;
         }
 
@@ -514,24 +538,128 @@ export const LeaveDelegationPage: React.FC = () => {
                                 </p>
                             </div>
 
-                            {/* Delegate User Selection */}
+                            {/* Delegate User Selection via Search */}
                             <div>
-                                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                                    Select Substitute Delegate <span className="text-red-500">*</span>
+                                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+                                    <span>
+                                        Select Substitute Delegate <span className="text-red-500">*</span>
+                                    </span>
+                                    <span className="text-[11px] font-normal text-slate-400 lowercase">
+                                        (same company)
+                                    </span>
                                 </label>
-                                <select
-                                    value={delegateUserId}
-                                    onChange={(e) => setDelegateUserId(e.target.value ? Number(e.target.value) : '')}
-                                    required
-                                    className="w-full h-10 px-3 rounded-lg border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                >
-                                    <option value="">-- Select Delegate --</option>
-                                    {eligibleDelegates.map((u) => (
-                                        <option key={u.id} value={u.id}>
-                                            {u.name} ({u.username}) — {u.department || 'No Dept'}
-                                        </option>
-                                    ))}
-                                </select>
+
+                                {selectedDelegate ? (
+                                    <div className="flex items-center justify-between p-3 rounded-xl border border-blue-200 bg-blue-50/50 shadow-xs">
+                                        <div className="flex items-center gap-3 min-w-0">
+                                            <div className="w-9 h-9 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-xs">
+                                                {selectedDelegate.name.charAt(0).toUpperCase()}
+                                            </div>
+                                            <div className="min-w-0">
+                                                <div className="flex items-center gap-2">
+                                                    <p className="text-sm font-bold text-slate-800 truncate">
+                                                        {selectedDelegate.name}
+                                                    </p>
+                                                    <span className="text-[11px] font-mono text-slate-400">
+                                                        (@{selectedDelegate.username})
+                                                    </span>
+                                                </div>
+                                                <p className="text-xs text-slate-500 truncate flex items-center gap-1.5 mt-0.5">
+                                                    <span>{selectedDelegate.department || 'No Dept'}</span>
+                                                    {selectedDelegate.company && (
+                                                        <>
+                                                            <span>•</span>
+                                                            <span className="font-medium text-blue-700">{selectedDelegate.company}</span>
+                                                        </>
+                                                    )}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => {
+                                                setSelectedDelegate(null);
+                                                setDelegateUserId('');
+                                            }}
+                                            className="text-xs font-semibold border-slate-200 text-slate-600 hover:text-red-600 hover:border-red-200 hover:bg-red-50 shrink-0 ml-2"
+                                        >
+                                            Change
+                                        </Button>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-2">
+                                        <div className="relative">
+                                            <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                                            <input
+                                                type="text"
+                                                value={searchQuery}
+                                                onChange={(e) => setSearchQuery(e.target.value)}
+                                                placeholder="Search colleague by name, username, or department..."
+                                                className="w-full pl-10 pr-9 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all placeholder:text-slate-400"
+                                                autoFocus
+                                            />
+                                            {searchQuery && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setSearchQuery('')}
+                                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded-full"
+                                                >
+                                                    <X size={14} />
+                                                </button>
+                                            )}
+                                        </div>
+
+                                        {/* Colleagues Result List - Hidden until user enters search */}
+                                        {searchQuery.trim().length > 1 && (
+                                            <div className="max-h-52 overflow-y-auto rounded-xl border border-slate-200 divide-y divide-slate-100 bg-white shadow-xs">
+                                                {isLoadingDelegates || searchQuery.trim() !== debouncedSearch ? (
+                                                    <div className="flex items-center justify-center gap-2 text-xs text-slate-500 p-4">
+                                                        <Loader2 size={15} className="animate-spin text-blue-600" />
+                                                        Searching colleagues in your company...
+                                                    </div>
+                                                ) : eligibleDelegates.length === 0 ? (
+                                                    <div className="p-4 text-center text-xs text-slate-400">
+                                                        No colleagues found matching "{debouncedSearch}" in your company.
+                                                    </div>
+                                                ) : (
+                                                    eligibleDelegates.map((u) => (
+                                                        <button
+                                                            key={u.id}
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setSelectedDelegate(u);
+                                                                setDelegateUserId(u.id);
+                                                                setErrorMsg('');
+                                                            }}
+                                                            className="w-full text-left px-3.5 py-2.5 hover:bg-blue-50/70 flex items-center justify-between gap-3 transition-colors group"
+                                                        >
+                                                            <div className="flex items-center gap-2.5 min-w-0">
+                                                                <div className="w-7 h-7 rounded-full bg-slate-100 group-hover:bg-blue-200 group-hover:text-blue-800 text-slate-600 flex items-center justify-center font-bold text-xs shrink-0 transition-colors">
+                                                                    {u.name.charAt(0).toUpperCase()}
+                                                                </div>
+                                                                <div className="min-w-0">
+                                                                    <p className="text-xs font-bold text-slate-800 truncate group-hover:text-blue-700">
+                                                                        {u.name} <span className="font-normal text-slate-400 font-mono text-[11px]">({u.username})</span>
+                                                                    </p>
+                                                                    <p className="text-[11px] text-slate-400 truncate">
+                                                                        {u.department || 'No Dept'} {u.email ? `• ${u.email}` : ''}
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+                                                            {u.company && (
+                                                                <Badge variant="outline" className="text-[10px] font-semibold bg-slate-50 text-slate-600 border-slate-200 shrink-0">
+                                                                    {u.company}
+                                                                </Badge>
+                                                            )}
+                                                        </button>
+                                                    ))
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
                             </div>
 
                             {/* Date Range: Start and End Date */}

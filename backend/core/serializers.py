@@ -1170,6 +1170,15 @@ class UserLeaveDelegationSerializer(serializers.ModelSerializer):
         if user and delegate_user and user.id == delegate_user.id:
             raise serializers.ValidationError({"delegate_user": "Penerima delegasi tidak boleh diri Anda sendiri."})
 
+        # Ensure delegate belongs to the same company
+        if user and delegate_user:
+            user_comp_ids = user.get_company_ids() if hasattr(user, 'get_company_ids') else []
+            del_comp_ids = delegate_user.get_company_ids() if hasattr(delegate_user, 'get_company_ids') else []
+            if user_comp_ids and del_comp_ids and not set(user_comp_ids).intersection(set(del_comp_ids)):
+                raise serializers.ValidationError({
+                    "delegate_user": f"Rekan pengganti ({delegate_user.get_full_name() or delegate_user.username}) harus berasal dari perusahaan yang sama."
+                })
+
         if start_date and end_date and start_date > end_date:
             raise serializers.ValidationError({"end_date": "Tanggal akhir cuti tidak boleh lebih awal dari tanggal mulai."})
 
