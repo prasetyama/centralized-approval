@@ -309,10 +309,10 @@ export const LeaveDelegationPage: React.FC = () => {
                         </div>
                         <div className="space-y-1">
                             <div className="flex items-center gap-2">
-                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-emerald-600 text-white">
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-sm font-bold bg-emerald-600 text-white">
                                     ACTIVE LEAVE STATUS
                                 </span>
-                                <span className="text-xs text-slate-500 font-medium">
+                                <span className="text-sm text-slate-500 font-medium">
                                     {currentStatusData.active_delegation.reason}
                                 </span>
                             </div>
@@ -323,7 +323,7 @@ export const LeaveDelegationPage: React.FC = () => {
                                 </strong>{' '}
                                 ({currentStatusData.active_delegation.delegate_user_department})
                             </p>
-                            <p className="text-xs text-slate-600 flex items-center gap-1.5">
+                            <p className="text-sm text-slate-600 flex items-center gap-1.5">
                                 <Calendar size={13} className="text-slate-400" />
                                 Period: {formatDate(currentStatusData.active_delegation.start_date)} {currentStatusData.active_delegation.start_date !== currentStatusData.active_delegation.end_date ? `s/d ${formatDate(currentStatusData.active_delegation.end_date)}` : '(1 hari)'}
                             </p>
@@ -333,7 +333,7 @@ export const LeaveDelegationPage: React.FC = () => {
                         variant="outline"
                         onClick={() => endEarlyMutation.mutate(currentStatusData.active_delegation!.id)}
                         disabled={endEarlyMutation.isPending}
-                        className="bg-white border-emerald-300 text-emerald-800 hover:bg-emerald-50 text-xs font-semibold shrink-0"
+                        className="bg-white border-emerald-300 text-emerald-800 hover:bg-emerald-50 text-sm font-semibold shrink-0"
                     >
                         {endEarlyMutation.isPending ? 'Processing...' : 'I am already back at work (End Leave Early)'}
                     </Button>
@@ -346,7 +346,7 @@ export const LeaveDelegationPage: React.FC = () => {
                     <div className="flex space-x-1">
                         <button
                             onClick={() => setActiveTab('given')}
-                            className={`px-5 py-3.5 text-xs font-bold flex items-center gap-2 transition-all border-b-2 ${activeTab === 'given'
+                            className={`px-5 py-3.5 text-sm font-bold flex items-center gap-2 transition-all border-b-2 ${activeTab === 'given'
                                 ? 'text-blue-600 border-blue-600 bg-white shadow-xs'
                                 : 'text-slate-500 hover:text-slate-700 border-transparent'
                                 }`}
@@ -356,7 +356,7 @@ export const LeaveDelegationPage: React.FC = () => {
                         </button>
                         <button
                             onClick={() => setActiveTab('received')}
-                            className={`px-5 py-3.5 text-xs font-bold flex items-center gap-2 transition-all border-b-2 ${activeTab === 'received'
+                            className={`px-5 py-3.5 text-sm font-bold flex items-center gap-2 transition-all border-b-2 ${activeTab === 'received'
                                 ? 'text-blue-600 border-blue-600 bg-white shadow-xs'
                                 : 'text-slate-500 hover:text-slate-700 border-transparent'
                                 }`}
@@ -370,7 +370,7 @@ export const LeaveDelegationPage: React.FC = () => {
                             )}
                         </button>
                     </div>
-                    <span className="text-xs text-slate-400 font-medium hidden sm:inline">
+                    <span className="text-sm text-slate-400 font-medium hidden sm:inline">
                         Total: {delegations.length} Delegation
                     </span>
                 </div>
@@ -383,7 +383,7 @@ export const LeaveDelegationPage: React.FC = () => {
                     <div className="p-12 text-center text-slate-500">
                         <CalendarOff className="mx-auto mb-3 text-slate-300" size={40} />
                         <p className="font-semibold text-slate-700">No Leave Delegation Schedule</p>
-                        <p className="text-xs text-slate-400 mt-1">
+                        <p className="text-sm text-slate-400 mt-1">
                             {activeTab === 'given'
                                 ? 'Click Button "Set New Leave Approval Delegation" to appoint a substitute colleague for approval.'
                                 : 'No colleagues have delegated approval authority to you.'}
@@ -405,7 +405,7 @@ export const LeaveDelegationPage: React.FC = () => {
                         <TableBody>
                             {delegations.map((item, index) => (
                                 <TableRow key={item.id} className="hover:bg-slate-50/50 transition-colors">
-                                    <TableCell className="font-medium text-slate-400 text-xs">
+                                    <TableCell className="font-medium text-slate-400 text-sm">
                                         {index + 1}
                                     </TableCell>
                                     <TableCell>
@@ -416,13 +416,13 @@ export const LeaveDelegationPage: React.FC = () => {
                                             <p className="font-semibold text-slate-800 text-sm">
                                                 {activeTab === 'given' ? item.delegate_user_name : item.user_name}
                                             </p>
-                                            <p className="text-xs text-slate-400 font-mono">
+                                            <p className="text-sm text-slate-400 font-mono">
                                                 {activeTab === 'given' ? item.delegate_user_email : item.user_email} • {activeTab === 'given' ? item.delegate_user_department : item.user_department}
                                             </p>
                                         </div>
                                     </TableCell>
                                     <TableCell>
-                                        <div className="text-xs">
+                                        <div className="text-sm">
                                             {item.start_date === item.end_date ? (
                                                 <div className="font-medium text-slate-700">
                                                     {formatDate(item.start_date)} <span className="text-slate-400 font-normal">(1 hari)</span>
@@ -437,13 +437,13 @@ export const LeaveDelegationPage: React.FC = () => {
                                         </div>
                                     </TableCell>
                                     <TableCell>
-                                        <span className="text-xs text-slate-700 font-medium">
+                                        <span className="text-sm text-slate-700 font-medium">
                                             {item.reason || '-'}
                                         </span>
                                     </TableCell>
                                     <TableCell>
                                         {item.scope === 'ALL' ? (
-                                            <Badge variant="outline" className="text-xs bg-slate-50 text-slate-700 border-slate-200">
+                                            <Badge variant="outline" className="text-sm bg-slate-50 text-slate-700 border-slate-200">
                                                 All Approval (Global)
                                             </Badge>
                                         ) : (
@@ -465,7 +465,7 @@ export const LeaveDelegationPage: React.FC = () => {
                                                         size="sm"
                                                         onClick={() => endEarlyMutation.mutate(item.id)}
                                                         disabled={endEarlyMutation.isPending}
-                                                        className="h-8 text-xs text-emerald-700 hover:bg-emerald-50 px-2"
+                                                        className="h-8 text-sm text-emerald-700 hover:bg-emerald-50 px-2"
                                                         title="End Leave Early"
                                                     >
                                                         End Now
@@ -474,7 +474,7 @@ export const LeaveDelegationPage: React.FC = () => {
 
                                                 <button
                                                     onClick={() => toggleActiveMutation.mutate(item.id)}
-                                                    className="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors text-xs"
+                                                    className="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors text-sm"
                                                     title={item.is_active ? 'Deactivate' : 'Activate'}
                                                 >
                                                     {item.is_active ? <XCircle size={16} className="text-amber-600" /> : <Check size={16} className="text-emerald-600" />}
@@ -522,29 +522,29 @@ export const LeaveDelegationPage: React.FC = () => {
 
                         <form onSubmit={handleSubmit} className="p-6 space-y-4">
                             {errorMsg && (
-                                <div className="p-3 text-xs bg-red-50 border border-red-200 text-red-600 rounded-xl flex items-center gap-2">
+                                <div className="p-3 text-sm bg-red-50 border border-red-200 text-red-600 rounded-xl flex items-center gap-2">
                                     <AlertCircle size={16} className="shrink-0" />
                                     <span>{errorMsg}</span>
                                 </div>
                             )}
 
                             {/* Info Callout */}
-                            <div className="p-3.5 bg-blue-50/70 border border-blue-100 rounded-xl text-xs text-blue-900 space-y-1">
+                            <div className="p-3.5 bg-blue-50/70 border border-blue-100 rounded-xl text-sm text-blue-900 space-y-1">
                                 <p className="font-semibold flex items-center gap-1.5">
                                     <Info size={15} className="text-blue-600 shrink-0" /> Terms of Delegation:
                                 </p>
-                                <p className="text-slate-600 leading-relaxed text-[11px]">
+                                <p className="text-slate-600 leading-relaxed text-sm">
                                     During the date range you specify, all requests addressed to you will be reviewed and approved by the substitute colleague you appoint. All actions are officially recorded in the audit history.
                                 </p>
                             </div>
 
                             {/* Delegate User Selection via Search */}
                             <div>
-                                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+                                <label className="block text-sm font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center justify-between">
                                     <span>
                                         Select Substitute Delegate <span className="text-red-500">*</span>
                                     </span>
-                                    <span className="text-[11px] font-normal text-slate-400 lowercase">
+                                    <span className="text-sm font-normal text-slate-400 lowercase">
                                         (same company)
                                     </span>
                                 </label>
@@ -552,7 +552,7 @@ export const LeaveDelegationPage: React.FC = () => {
                                 {selectedDelegate ? (
                                     <div className="flex items-center justify-between p-3 rounded-xl border border-blue-200 bg-blue-50/50 shadow-xs">
                                         <div className="flex items-center gap-3 min-w-0">
-                                            <div className="w-9 h-9 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-xs">
+                                            <div className="w-9 h-9 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-sm shrink-0 shadow-xs">
                                                 {selectedDelegate.name.charAt(0).toUpperCase()}
                                             </div>
                                             <div className="min-w-0">
@@ -560,11 +560,11 @@ export const LeaveDelegationPage: React.FC = () => {
                                                     <p className="text-sm font-bold text-slate-800 truncate">
                                                         {selectedDelegate.name}
                                                     </p>
-                                                    <span className="text-[11px] font-mono text-slate-400">
+                                                    <span className="text-sm font-mono text-slate-400">
                                                         (@{selectedDelegate.username})
                                                     </span>
                                                 </div>
-                                                <p className="text-xs text-slate-500 truncate flex items-center gap-1.5 mt-0.5">
+                                                <p className="text-sm text-slate-500 truncate flex items-center gap-1.5 mt-0.5">
                                                     <span>{selectedDelegate.department || 'No Dept'}</span>
                                                     {selectedDelegate.company && (
                                                         <>
@@ -583,7 +583,7 @@ export const LeaveDelegationPage: React.FC = () => {
                                                 setSelectedDelegate(null);
                                                 setDelegateUserId('');
                                             }}
-                                            className="text-xs font-semibold border-slate-200 text-slate-600 hover:text-red-600 hover:border-red-200 hover:bg-red-50 shrink-0 ml-2"
+                                            className="text-sm font-semibold border-slate-200 text-slate-600 hover:text-red-600 hover:border-red-200 hover:bg-red-50 shrink-0 ml-2"
                                         >
                                             Change
                                         </Button>
@@ -615,12 +615,12 @@ export const LeaveDelegationPage: React.FC = () => {
                                         {searchQuery.trim().length > 1 && (
                                             <div className="max-h-52 overflow-y-auto rounded-xl border border-slate-200 divide-y divide-slate-100 bg-white shadow-xs">
                                                 {isLoadingDelegates || searchQuery.trim() !== debouncedSearch ? (
-                                                    <div className="flex items-center justify-center gap-2 text-xs text-slate-500 p-4">
+                                                    <div className="flex items-center justify-center gap-2 text-sm text-slate-500 p-4">
                                                         <Loader2 size={15} className="animate-spin text-blue-600" />
                                                         Searching colleagues in your company...
                                                     </div>
                                                 ) : eligibleDelegates.length === 0 ? (
-                                                    <div className="p-4 text-center text-xs text-slate-400">
+                                                    <div className="p-4 text-center text-sm text-slate-400">
                                                         No colleagues found matching "{debouncedSearch}" in your company.
                                                     </div>
                                                 ) : (
@@ -636,14 +636,14 @@ export const LeaveDelegationPage: React.FC = () => {
                                                             className="w-full text-left px-3.5 py-2.5 hover:bg-blue-50/70 flex items-center justify-between gap-3 transition-colors group"
                                                         >
                                                             <div className="flex items-center gap-2.5 min-w-0">
-                                                                <div className="w-7 h-7 rounded-full bg-slate-100 group-hover:bg-blue-200 group-hover:text-blue-800 text-slate-600 flex items-center justify-center font-bold text-xs shrink-0 transition-colors">
+                                                                <div className="w-7 h-7 rounded-full bg-slate-100 group-hover:bg-blue-200 group-hover:text-blue-800 text-slate-600 flex items-center justify-center font-bold text-sm shrink-0 transition-colors">
                                                                     {u.name.charAt(0).toUpperCase()}
                                                                 </div>
                                                                 <div className="min-w-0">
-                                                                    <p className="text-xs font-bold text-slate-800 truncate group-hover:text-blue-700">
-                                                                        {u.name} <span className="font-normal text-slate-400 font-mono text-[11px]">({u.username})</span>
+                                                                    <p className="text-sm font-bold text-slate-800 truncate group-hover:text-blue-700">
+                                                                        {u.name} <span className="font-normal text-slate-400 font-mono text-sm">({u.username})</span>
                                                                     </p>
-                                                                    <p className="text-[11px] text-slate-400 truncate">
+                                                                    <p className="text-sm text-slate-400 truncate">
                                                                         {u.department || 'No Dept'} {u.email ? `• ${u.email}` : ''}
                                                                     </p>
                                                                 </div>
@@ -665,7 +665,7 @@ export const LeaveDelegationPage: React.FC = () => {
                             {/* Date Range: Start and End Date */}
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                                    <label className="block text-sm font-bold text-slate-700 uppercase tracking-wider mb-1.5">
                                         Start Date <span className="text-red-500">*</span>
                                     </label>
                                     <Input
@@ -677,7 +677,7 @@ export const LeaveDelegationPage: React.FC = () => {
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                                    <label className="block text-sm font-bold text-slate-700 uppercase tracking-wider mb-1.5">
                                         End Date <span className="text-red-500">*</span>
                                     </label>
                                     <Input
@@ -692,7 +692,7 @@ export const LeaveDelegationPage: React.FC = () => {
 
                             {/* Reason for Leave */}
                             <div>
-                                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                                <label className="block text-sm font-bold text-slate-700 uppercase tracking-wider mb-1.5">
                                     Reason <span className="text-red-500">*</span>
                                 </label>
                                 <Input
@@ -706,11 +706,11 @@ export const LeaveDelegationPage: React.FC = () => {
 
                             {/* Scope Selection */}
                             <div>
-                                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                                <label className="block text-sm font-bold text-slate-700 uppercase tracking-wider mb-1.5">
                                     Delegation Scope
                                 </label>
                                 <div className="space-y-2">
-                                    <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
+                                    <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
                                         <input
                                             type="radio"
                                             name="scope"
@@ -721,7 +721,7 @@ export const LeaveDelegationPage: React.FC = () => {
                                         />
                                         <span>All Requests (Global — Recommended)</span>
                                     </label>
-                                    <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
+                                    <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
                                         <input
                                             type="radio"
                                             name="scope"
@@ -736,7 +736,7 @@ export const LeaveDelegationPage: React.FC = () => {
                             </div>
 
                             {scope === 'SPECIFIC_MODULE' && (
-                                <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2 text-xs">
+                                <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2 text-sm">
                                     <span className="font-semibold text-slate-700 block">Select Modules:</span>
                                     <div className="flex flex-wrap gap-4">
                                         {['EORDER', 'PR_NON_TRADE', 'FINANCE', 'HR'].map((mod) => (
@@ -762,7 +762,7 @@ export const LeaveDelegationPage: React.FC = () => {
 
                             {/* Notify Delegate Checkbox */}
                             <div className="pt-2">
-                                <label className="flex items-center gap-2 text-xs text-slate-600 cursor-pointer">
+                                <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
                                     <input
                                         type="checkbox"
                                         checked={notifyDelegate}
