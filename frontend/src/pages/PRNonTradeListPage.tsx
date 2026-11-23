@@ -157,7 +157,11 @@ export const PRNonTradeListPage: React.FC = () => {
                                     {paginatedItems.map((item) => (
                                     <tr key={item.id} className="hover:bg-slate-50 transition-colors">
                                         <td className="py-3.5 px-4 font-mono font-bold text-blue-700 text-sm">
-                                            {item.transaction_id || <span className="text-slate-400 italic font-normal">Draft (Belum diset)</span>}
+                                            {item.transaction_id || (
+                                                <span className="text-amber-700 font-medium italic text-xs bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200">
+                                                    Draft (Belum ada ID)
+                                                </span>
+                                            )}
                                         </td>
                                         <td className="py-3.5 px-4 text-slate-600 font-medium text-sm">
                                             {item.transaction_date || '-'}

@@ -1757,9 +1757,6 @@ class PRNonTradeViewSet(viewsets.ModelViewSet):
         else:
             pr = PRNonTrade(requestor=user)
 
-        if not pr.transaction_id:
-            pr.transaction_id = PRNonTrade.generate_transaction_id(code_name=code_name)
-
         pr.requestor_name = user.get_full_name() or user.username
         pr.requester_department = request.data.get('requester_department') or dept
         pr.requester_company = request.data.get('requester_company') or comp
@@ -1792,7 +1789,7 @@ class PRNonTradeViewSet(viewsets.ModelViewSet):
 
         return Response({
             'success': True,
-            'message': f'Draft saved successfully with Transaction ID: {pr.transaction_id}',
+            'message': 'Draft saved successfully.',
             'data': PRNonTradeSerializer(pr).data
         }, status=status.HTTP_200_OK if pr_id else status.HTTP_201_CREATED)
 
