@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Mail, Plus, Edit2, Trash2, Search, CheckCircle2, XCircle, AlertCircle, Upload, FileSpreadsheet, Download, X, FileText } from 'lucide-react';
+import { Mail, Plus, Edit2, Trash2, Search, CheckCircle2, XCircle, AlertCircle, Upload, FileSpreadsheet, Download, X, FileText, RefreshCw, ExternalLink } from 'lucide-react';
 import api from '@/services/api';
 import { useAuth } from '@/context/AuthContext';
 import { Card } from '@/components/atoms/Card';
@@ -61,6 +61,27 @@ export const CcEmailConfigPage: React.FC = () => {
         message?: string;
         created_count?: number;
         updated_count?: number;
+        skipped_count?: number;
+        errors?: string[];
+    } | null>(null);
+
+    // Google Sheet Sync Modal states
+    const DEFAULT_GSHEET_URL = 'https://docs.google.com/spreadsheets/d/1r7vi_SW8vh8jc3YI5h5RGkSBZQ_IVGCGpb2Oi9origM/edit?gid=0#gid=0';
+    const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
+    const [syncSheetUrl, setSyncSheetUrl] = useState(DEFAULT_GSHEET_URL);
+    const [syncSheetName, setSyncSheetName] = useState('Distributor');
+    const [syncSubject, setSyncSubject] = useState('eorder information');
+    const [syncCustomSubject, setSyncCustomSubject] = useState('');
+    const [syncMode, setSyncMode] = useState<'mirror' | 'upsert'>('mirror');
+    const [syncError, setSyncError] = useState('');
+    const [syncResult, setSyncResult] = useState<{
+        success?: boolean;
+        message?: string;
+        sheet_name?: string;
+        sync_mode?: string;
+        created_count?: number;
+        updated_count?: number;
+        deleted_count?: number;
         skipped_count?: number;
         errors?: string[];
     } | null>(null);
@@ -148,6 +169,26 @@ export const CcEmailConfigPage: React.FC = () => {
         }
     });
 
+    const syncGsheetMutation = useMutation({
+        mutationFn: async () => {
+            const targetSubject = syncSubject === 'custom' ? syncCustomSubject.trim() : syncSubject;
+            const res: any = await api.post('/admin/cc-email-configs/sync-gsheet/', {
+                sheet_url: syncSheetUrl.trim(),
+                sheet_name: syncSheetName.trim() || 'RD Shipment',
+                subject: targetSubject,
+                sync_mode: syncMode
+            });
+            return res;
+        },
+        onSuccess: (data: any) => {
+            setSyncResult(data);
+            queryClient.invalidateQueries({ queryKey: ['cc-email-configs'] });
+        },
+        onError: (err: any) => {
+            setSyncError(typeof err === 'string' ? err : 'Gagal sinkronisasi dengan Google Sheet');
+        }
+    });
+
     const openCreateModal = () => {
         setEditingConfig(null);
         setEmail('');
@@ -195,6 +236,23 @@ export const CcEmailConfigPage: React.FC = () => {
         setImportFile(null);
         setImportError('');
         setImportResult(null);
+    };
+
+    const openSyncModal = () => {
+        setSyncSheetUrl(DEFAULT_GSHEET_URL);
+        setSyncSheetName('Distributor');
+        setSyncSubject('eorder information');
+        setSyncCustomSubject('');
+        setSyncMode('mirror');
+        setSyncError('');
+        setSyncResult(null);
+        setIsSyncModalOpen(true);
+    };
+
+    const closeSyncModal = () => {
+        setIsSyncModalOpen(false);
+        setSyncError('');
+        setSyncResult(null);
     };
 
     const downloadSampleCsv = () => {
@@ -250,6 +308,29 @@ export const CcEmailConfigPage: React.FC = () => {
         importMutation.mutate();
     };
 
+    const handleSyncSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        setSyncError('');
+        setSyncResult(null);
+
+        if (!syncSheetUrl.trim()) {
+            setSyncError('URL Google Sheet wajib diisi');
+            return;
+        }
+
+        if (!syncSheetName.trim()) {
+            setSyncError('Nama tab / sheet wajib diisi (contoh: Distributor)');
+            return;
+        }
+
+        if (syncSubject === 'custom' && !syncCustomSubject.trim()) {
+            setSyncError('Custom subject harus diisi');
+            return;
+        }
+
+        syncGsheetMutation.mutate();
+    };
+
     if (!isAdmin) {
         return (
             <div className="p-8 max-w-4xl mx-auto">
@@ -280,6 +361,14 @@ export const CcEmailConfigPage: React.FC = () => {
                     </p>
                 </div>
                 <div className="flex items-center gap-3">
+                    <Button
+                        variant="outline"
+                        onClick={openSyncModal}
+                        className="flex items-center gap-2 border-emerald-300 text-emerald-700 bg-emerald-50/40 hover:bg-emerald-100/60 shadow-xs"
+                    >
+                        <RefreshCw size={18} className="text-emerald-600" />
+                        Sync Google Sheet
+                    </Button>
                     <Button
                         variant="outline"
                         onClick={openImportModal}
@@ -707,6 +796,198 @@ export const CcEmailConfigPage: React.FC = () => {
                                         </Button>
                                         <Button type="submit" disabled={importMutation.isPending || !importFile}>
                                             {importMutation.isPending ? 'Mengimpor...' : 'Impor Data CSV'}
+                                        </Button>
+                                    </div>
+                                </>
+                            )}
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Google Sheet Sync Modal */}
+            {isSyncModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4">
+                    <div className="bg-white rounded-xl shadow-xl w-full max-w-xl overflow-hidden animate-in fade-in zoom-in duration-200">
+                        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-emerald-50/40">
+                            <div className="flex items-center gap-2">
+                                <RefreshCw className="text-emerald-600" size={22} />
+                                <h3 className="font-bold text-slate-800 text-lg">
+                                    Sinkronisasi Google Sheet
+                                </h3>
+                            </div>
+                            <button
+                                onClick={closeSyncModal}
+                                className="text-slate-400 hover:text-slate-600 text-lg font-bold"
+                            >
+                                &times;
+                            </button>
+                        </div>
+
+                        <form onSubmit={handleSyncSubmit} className="p-6 space-y-4">
+                            {syncError && (
+                                <div className="p-3 text-xs bg-red-50 border border-red-200 text-red-600 rounded-lg flex items-center gap-2">
+                                    <AlertCircle size={16} className="shrink-0" />
+                                    <span>{syncError}</span>
+                                </div>
+                            )}
+
+                            {syncResult ? (
+                                <div className="space-y-4">
+                                    <div className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl space-y-2">
+                                        <div className="flex items-center gap-2 font-bold text-emerald-900">
+                                            <CheckCircle2 size={20} className="text-emerald-600" />
+                                            <span>Sinkronisasi Selesai</span>
+                                        </div>
+                                        <p className="text-xs text-emerald-700">{syncResult.message}</p>
+                                        <div className="flex flex-wrap gap-2 pt-2">
+                                            <Badge className="bg-emerald-100 text-emerald-800 border-emerald-300">
+                                                +{syncResult.created_count || 0} Ditambahkan
+                                            </Badge>
+                                            <Badge className="bg-blue-100 text-blue-800 border-blue-300">
+                                                {syncResult.updated_count || 0} Diperbarui
+                                            </Badge>
+                                            {(syncResult.deleted_count || 0) > 0 && (
+                                                <Badge className="bg-rose-100 text-rose-800 border-rose-300">
+                                                    -{syncResult.deleted_count} Dihapus (Mirror)
+                                                </Badge>
+                                            )}
+                                            {(syncResult.skipped_count || 0) > 0 && (
+                                                <Badge className="bg-amber-100 text-amber-800 border-amber-300">
+                                                    {syncResult.skipped_count} Dilewati
+                                                </Badge>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {syncResult.errors && syncResult.errors.length > 0 && (
+                                        <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs space-y-1">
+                                            <span className="font-bold text-amber-800 block">Catatan / Baris Dilewati:</span>
+                                            <ul className="list-disc pl-4 space-y-0.5 text-amber-700 max-h-32 overflow-y-auto">
+                                                {syncResult.errors.map((err, idx) => (
+                                                    <li key={idx}>{err}</li>
+                                                ))}
+                                            </ul>
+                                        </div>
+                                    )}
+
+                                    <div className="flex justify-end pt-2">
+                                        <Button type="button" onClick={closeSyncModal}>
+                                            Selesai
+                                        </Button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <>
+                                    {/* Google Sheet Info Banner */}
+                                    <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-700 space-y-2">
+                                        <div className="flex items-center justify-between font-bold text-slate-800">
+                                            <span className="flex items-center gap-1.5">
+                                                <FileSpreadsheet size={15} className="text-emerald-600" /> Sumber Data Google Sheet:
+                                            </span>
+                                            <a
+                                                href={syncSheetUrl}
+                                                target="_blank"
+                                                rel="noreferrer"
+                                                className="text-blue-600 hover:text-blue-800 flex items-center gap-1 font-semibold"
+                                            >
+                                                Buka Sheet <ExternalLink size={13} />
+                                            </a>
+                                        </div>
+                                        <p className="text-slate-600 leading-relaxed">
+                                            Tab default: <strong className="font-semibold text-slate-800">Distributor</strong> (Kolom A: <strong className="font-mono text-slate-800">shipto rd</strong>, Kolom E: <strong className="font-mono text-slate-800">eOrder Notification</strong>).
+                                        </p>
+                                        <div className="p-2 bg-amber-50 border border-amber-200 rounded text-[11px] text-amber-800">
+                                            <strong>Akses:</strong> Pastikan spreadsheet telah di-share (Viewer) ke Service Account <code className="font-mono bg-white px-1 py-0.5 rounded border border-amber-300">distributorid@distributor-file.iam.gserviceaccount.com</code> atau General Access diatur ke "Anyone with the link can view".
+                                        </div>
+                                    </div>
+
+                                    {/* URL Input */}
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                                            URL Google Sheet <span className="text-red-500">*</span>
+                                        </label>
+                                        <Input
+                                            type="url"
+                                            value={syncSheetUrl}
+                                            onChange={(e) => setSyncSheetUrl(e.target.value)}
+                                            placeholder="https://docs.google.com/spreadsheets/d/..."
+                                            required
+                                            className="w-full text-xs font-mono"
+                                        />
+                                    </div>
+
+                                    {/* Sheet / Tab Name & Sync Mode in grid */}
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                                                Nama Tab / Sheet <span className="text-red-500">*</span>
+                                            </label>
+                                            <Input
+                                                value={syncSheetName}
+                                                onChange={(e) => setSyncSheetName(e.target.value)}
+                                                placeholder="Distributor"
+                                                required
+                                                className="w-full"
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                                                Mode Sinkronisasi
+                                            </label>
+                                            <select
+                                                value={syncMode}
+                                                onChange={(e) => setSyncMode(e.target.value as 'mirror' | 'upsert')}
+                                                className="w-full h-10 px-3 rounded-md border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                                            >
+                                                <option value="mirror">Mirror (Hapus yang tidak ada di Sheet)</option>
+                                                <option value="upsert">Upsert (Tambah & Perbarui Saja)</option>
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    {/* Target Subject */}
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                                            Subject Email Target <span className="text-red-500">*</span>
+                                        </label>
+                                        <select
+                                            value={syncSubject}
+                                            onChange={(e) => setSyncSubject(e.target.value)}
+                                            className="w-full h-10 px-3 rounded-md border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                                        >
+                                            <option value="eorder information">eorder information</option>
+                                            <option value="custom">+ Subject Lain (Custom)</option>
+                                        </select>
+                                    </div>
+
+                                    {syncSubject === 'custom' && (
+                                        <div>
+                                            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                                                Nama Subject Custom <span className="text-red-500">*</span>
+                                            </label>
+                                            <Input
+                                                placeholder="Masukkan nama subject custom..."
+                                                value={syncCustomSubject}
+                                                onChange={(e) => setSyncCustomSubject(e.target.value)}
+                                                required
+                                                className="w-full"
+                                            />
+                                        </div>
+                                    )}
+
+                                    <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+                                        <Button type="button" variant="outline" onClick={closeSyncModal}>
+                                            Batal
+                                        </Button>
+                                        <Button
+                                            type="submit"
+                                            disabled={syncGsheetMutation.isPending}
+                                            className="bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-2"
+                                        >
+                                            <RefreshCw size={16} className={syncGsheetMutation.isPending ? 'animate-spin' : ''} />
+                                            {syncGsheetMutation.isPending ? 'Menyinkronkan...' : 'Mulai Sinkronisasi'}
                                         </Button>
                                     </div>
                                 </>
