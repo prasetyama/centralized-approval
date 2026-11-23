@@ -396,7 +396,7 @@ export const PRNonTradeFormPage: React.FC = () => {
                                 </label>
                                 <input
                                     type="text"
-                                    value={transactionId || '(Otomatis saat disimpan)'}
+                                    value={transactionId || '(Otomatis saat disubmit)'}
                                     readOnly
                                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-mono font-bold text-slate-700 shadow-xs cursor-default select-all"
                                 />
