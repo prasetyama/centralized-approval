@@ -16,6 +16,16 @@ from rest_framework.filters import SearchFilter
 from rest_framework.exceptions import ValidationError
 from rest_framework.pagination import PageNumberPagination
 import logging
+import csv
+import io
+import os
+import re
+import urllib.parse
+import requests
+from django.conf import settings
+from google.oauth2 import service_account
+from google.auth.transport.requests import Request as GoogleAuthRequest
+import openpyxl
 
 
 class StandardResultsSetPagination(PageNumberPagination):
@@ -1290,6 +1300,345 @@ class CCEmailConfigViewSet(viewsets.ModelViewSet):
             logger.exception("Error importing CC email CSV")
             return Response(
                 {'detail': f'Terjadi kesalahan saat memproses file CSV: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(detail=False, methods=['post'], url_path='sync-gsheet')
+    def sync_gsheet(self, request):
+        """
+        Synchronize CC email configurations directly from a Google Sheet tab (default: 'RD Shipment').
+        Supports both public/link-shared sheets and private sheets shared with the Service Account.
+        """
+
+        default_url = 'https://docs.google.com/spreadsheets/d/1r7vi_SW8vh8jc3YI5h5RGkSBZQ_IVGCGpb2Oi9origM/edit?gid=0#gid=0'
+        sheet_url = str(request.data.get('sheet_url') or default_url).strip()
+        sheet_name = str(request.data.get('sheet_name') or 'Distributor').strip()
+        subject_val = str(request.data.get('subject') or 'eorder information').strip()
+        sync_mode = str(request.data.get('sync_mode') or 'mirror').strip().lower()
+
+        if not subject_val:
+            subject_val = 'eorder information'
+
+        # Extract spreadsheet_id and gid from URL
+        id_match = re.search(r'/spreadsheets/d/([a-zA-Z0-9-_]+)', sheet_url)
+        spreadsheet_id = id_match.group(1) if id_match else sheet_url
+        gid_match = re.search(r'[?&#]gid=([0-9]+)', sheet_url)
+        gid = gid_match.group(1) if gid_match else '0'
+
+        if not spreadsheet_id or '/' in spreadsheet_id:
+            return Response(
+                {'detail': 'URL Google Sheet tidak valid. Pastikan URL mengandung ID Spreadsheet.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        sa_email = os.getenv('GDRIVE_EMAIL')
+        sa_path = getattr(
+            settings,
+            'GOOGLE_SERVICE_ACCOUNT_FILE',
+            os.path.join(settings.BASE_DIR, os.getenv('GDRIVE_CREDENTIALS'))
+        )
+
+        rows = None
+        fetch_error_details = []
+
+        def _parse_csv_bytes(content_bytes):
+            try:
+                text = content_bytes.decode('utf-8-sig')
+            except UnicodeDecodeError:
+                text = content_bytes.decode('latin-1')
+            return list(csv.reader(io.StringIO(text)))
+
+        def _is_valid_csv_response(resp):
+            if resp.status_code != 200:
+                return False
+            if 'accounts.google.com' in resp.url or 'ServiceLogin' in resp.url:
+                return False
+            sample = resp.text[:300].lstrip().lower()
+            if sample.startswith('<!doctype html') or sample.startswith('<html'):
+                return False
+            return True
+
+        # 1. Try Service Account authentication first (if credentials file exists)
+        if os.path.exists(sa_path):
+            try:
+
+                creds = service_account.Credentials.from_service_account_file(
+                    sa_path,
+                    scopes=[
+                        'https://www.googleapis.com/auth/drive.readonly',
+                        'https://www.googleapis.com/auth/spreadsheets.readonly',
+                    ]
+                )
+                sa_email = getattr(creds, 'service_account_email', sa_email) or sa_email
+                creds.refresh(GoogleAuthRequest())
+                auth_headers = {'Authorization': f'Bearer {creds.token}'}
+
+                # 1a. Try authenticated gviz CSV export by sheet_name
+                if sheet_name:
+                    gviz_url = f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}/gviz/tq?tqx=out:csv&sheet={urllib.parse.quote(sheet_name)}"
+                    resp = requests.get(gviz_url, headers=auth_headers, timeout=20)
+                    if _is_valid_csv_response(resp):
+                        rows = _parse_csv_bytes(resp.content)
+
+                # 1b. Try authenticated export CSV by gid
+                if rows is None and gid:
+                    export_url = f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}/export?format=csv&gid={gid}"
+                    resp = requests.get(export_url, headers=auth_headers, timeout=20)
+                    if _is_valid_csv_response(resp):
+                        rows = _parse_csv_bytes(resp.content)
+
+                # 1c. Try Google Drive API .xlsx export and parse exact sheet tab via openpyxl
+                if rows is None:
+                    drive_export_url = (
+                        f"https://www.googleapis.com/drive/v3/files/{spreadsheet_id}/export"
+                        f"?mimeType=application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    )
+                    resp = requests.get(drive_export_url, headers=auth_headers, timeout=30)
+                    if resp.status_code == 200:
+                        wb = openpyxl.load_workbook(io.BytesIO(resp.content), data_only=True)
+                        target_ws = None
+                        if sheet_name:
+                            for name in wb.sheetnames:
+                                if name.strip().lower() == sheet_name.strip().lower():
+                                    target_ws = wb[name]
+                                    break
+                            if target_ws is None:
+                                return Response(
+                                    {
+                                        'detail': (
+                                            f"Tab '{sheet_name}' tidak ditemukan di Google Sheet. "
+                                            f"Tab yang tersedia: {', '.join(wb.sheetnames)}"
+                                        )
+                                    },
+                                    status=status.HTTP_400_BAD_REQUEST
+                                )
+                        else:
+                            target_ws = wb.active
+
+                        rows = [
+                            [str(cell).strip() if cell is not None else '' for cell in row]
+                            for row in target_ws.iter_rows(values_only=True)
+                        ]
+                    else:
+                        fetch_error_details.append(f"Drive API HTTP {resp.status_code}")
+            except Exception as sa_exc:
+                logger.warning(f"Service account Google Sheet fetch warning: {sa_exc}")
+                fetch_error_details.append(str(sa_exc))
+
+        # 2. Fallback: Try Public / Anyone-with-link CSV export
+        if rows is None:
+            try:
+                if sheet_name:
+                    pub_gviz_url = f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}/gviz/tq?tqx=out:csv&sheet={urllib.parse.quote(sheet_name)}"
+                    resp = requests.get(pub_gviz_url, timeout=20, allow_redirects=True)
+                    if _is_valid_csv_response(resp):
+                        rows = _parse_csv_bytes(resp.content)
+
+                if rows is None and gid:
+                    pub_export_url = f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}/export?format=csv&gid={gid}"
+                    resp = requests.get(pub_export_url, timeout=20, allow_redirects=True)
+                    if _is_valid_csv_response(resp):
+                        rows = _parse_csv_bytes(resp.content)
+            except Exception as pub_exc:
+                logger.warning(f"Public Google Sheet fetch warning: {pub_exc}")
+                fetch_error_details.append(str(pub_exc))
+
+        if rows is None:
+            return Response(
+                {
+                    'detail': (
+                        f"Gagal mengakses Google Sheet (Tab '{sheet_name}'). "
+                        f"Pastikan file Google Sheet telah di-share (Viewer) ke email Service Account: "
+                        f"{sa_email} atau atur General Access menjadi 'Anyone with the link can view'."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if not rows:
+            return Response(
+                {'detail': f"Data pada tab '{sheet_name}' di Google Sheet kosong."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Locate the header row within the first 15 rows
+        header_row_idx = None
+        ship_to_idx = None
+        email_indices = []
+
+        ship_to_aliases = {
+            'ship_to', 'shipto', 'ship_to_code', 'ship_to_id', 'ship_to_no',
+            'shiptord', 'ship_to_rd', 'shipto_rd', 'kode_shipto', 'kode_ship_to', 'id_shipto',
+            'rd_code', 'kode_rd', 'customer_code', 'cust_id', 'rd'
+        }
+        email_aliases = {
+            'email', 'emails', 'cc_email', 'cc_emails', 'email_address',
+            'email_addresses', 'email_rd', 'pic_email', 'alamat_email',
+            'email_cc', 'email_distributor', 'email_pic',
+            'eorder_notification', 'eorder_notifications', 'notification', 'notifications',
+            'eorder_notif', 'eorder_notification_email'
+        }
+
+        for r_idx, row in enumerate(rows[:15]):
+            cand_ship_to = None
+            cand_emails = []
+            for c_idx, cell in enumerate(row):
+                cleaned = re.sub(r'[^a-z0-9]+', '_', str(cell).strip().lower()).strip('_')
+                if not cleaned:
+                    continue
+                if cand_ship_to is None and (
+                    cleaned in ship_to_aliases
+                    or ('ship' in cleaned and 'to' in cleaned)
+                    or 'shipto' in cleaned
+                    or (c_idx == 0 and ('shipto' in cleaned or 'rd' in cleaned or 'ship' in cleaned))
+                ):
+                    cand_ship_to = c_idx
+                elif (
+                    cleaned in email_aliases
+                    or 'email' in cleaned
+                    or 'e_mail' in cleaned
+                    or 'notification' in cleaned
+                    or 'notif' in cleaned
+                    or (c_idx == 4 and ('eorder' in cleaned or 'notif' in cleaned))
+                ):
+                    cand_emails.append(c_idx)
+
+            if cand_ship_to is not None and cand_emails:
+                header_row_idx = r_idx
+                ship_to_idx = cand_ship_to
+                email_indices = cand_emails
+                break
+
+        # Fallback specifically for tab Distributor or 5+ columns with Kolom A (Ship To) & Kolom E (eOrder Notification)
+        if (header_row_idx is None or ship_to_idx is None or not email_indices) and rows:
+            for r_idx, row in enumerate(rows[:15]):
+                if len(row) > 4:
+                    col_a = re.sub(r'[^a-z0-9]+', '_', str(row[0]).strip().lower()).strip('_')
+                    col_e = re.sub(r'[^a-z0-9]+', '_', str(row[4]).strip().lower()).strip('_')
+                    if ('shipto' in col_a or 'rd' in col_a or 'ship' in col_a) and (
+                        'notif' in col_e or 'eorder' in col_e or 'mail' in col_e
+                    ):
+                        header_row_idx = r_idx
+                        ship_to_idx = 0
+                        email_indices = [4]
+                        break
+
+            # Fallback if first row is header and has at least 5 columns
+            if header_row_idx is None and len(rows) > 1 and len(rows[0]) > 4:
+                first_cell = str(rows[0][0]).strip()
+                if not first_cell.isdigit():
+                    header_row_idx = 0
+                    ship_to_idx = 0
+                    email_indices = [4]
+
+        if header_row_idx is None or ship_to_idx is None or not email_indices:
+            first_non_empty = next((r for r in rows[:5] if any(str(c).strip() for c in r)), [])
+            return Response(
+                {
+                    'detail': (
+                        f"Header kolom pada tab '{sheet_name}' tidak dikenali. "
+                        f"Pastikan terdapat Kolom A (Ship To RD) dan Kolom E (eOrder Notification). "
+                        f"(Header terdeteksi: {', '.join([str(c) for c in first_non_empty if str(c).strip()]) or 'Kosong'})"
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        created_count = 0
+        updated_count = 0
+        deleted_count = 0
+        skipped_count = 0
+        errors = []
+        synced_keys = set()
+
+        email_regex = re.compile(r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$')
+
+        try:
+            with transaction.atomic():
+                for offset, row in enumerate(rows[header_row_idx + 1:], start=header_row_idx + 2):
+                    if not row or ship_to_idx >= len(row):
+                        continue
+
+                    ship_to_raw = str(row[ship_to_idx]).strip()
+                    if re.match(r'^\d+\.0$', ship_to_raw):
+                        ship_to_raw = ship_to_raw[:-2]
+                    if ship_to_raw.lower() in ('none', 'null', 'nan', '-'):
+                        ship_to_raw = ''
+
+                    ship_to_val = ship_to_raw if ship_to_raw else None
+
+                    raw_email_parts = []
+                    for e_idx in email_indices:
+                        if e_idx < len(row) and row[e_idx] is not None:
+                            cell_val = str(row[e_idx]).strip()
+                            if cell_val and cell_val.lower() not in ('none', 'null', 'nan', '-'):
+                                raw_email_parts.append(cell_val)
+
+                    if not raw_email_parts:
+                        continue
+
+                    combined_emails = ','.join(raw_email_parts)
+                    email_list = re.split(r'[,;\n\r]+', combined_emails)
+
+                    for raw_item in email_list:
+                        clean_email = raw_item.strip().lower()
+                        if not clean_email or clean_email in ('-', 'n/a', 'none', 'null'):
+                            continue
+
+                        if not email_regex.match(clean_email):
+                            errors.append(f"Baris {offset}: Email '{clean_email}' (Ship To: {ship_to_val or 'ALL'}) format tidak valid.")
+                            skipped_count += 1
+                            continue
+
+                        synced_keys.add((ship_to_val, clean_email))
+
+                        config, created = CCEmailConfig.objects.get_or_create(
+                            email=clean_email,
+                            subject=subject_val,
+                            ship_to=ship_to_val,
+                            defaults={
+                                'is_active': True,
+                                'created_by': request.user if request.user.is_authenticated else None
+                            }
+                        )
+                        if created:
+                            created_count += 1
+                        else:
+                            if not config.is_active:
+                                config.is_active = True
+                                config.save(update_fields=['is_active'])
+                            updated_count += 1
+
+                if sync_mode == 'mirror' and synced_keys:
+                    existing_configs = CCEmailConfig.objects.filter(subject=subject_val)
+                    ids_to_delete = [
+                        cfg.id for cfg in existing_configs
+                        if (cfg.ship_to, cfg.email.strip().lower()) not in synced_keys
+                    ]
+                    if ids_to_delete:
+                        deleted_count = len(ids_to_delete)
+                        CCEmailConfig.objects.filter(id__in=ids_to_delete).delete()
+
+            return Response({
+                'success': True,
+                'message': (
+                    f"Sinkronisasi tab '{sheet_name}' selesai. "
+                    f"{created_count} ditambahkan, {updated_count} diperbarui"
+                    + (f", {deleted_count} dihapus (mirror sync)." if sync_mode == 'mirror' else ".")
+                ),
+                'sheet_name': sheet_name,
+                'sync_mode': sync_mode,
+                'created_count': created_count,
+                'updated_count': updated_count,
+                'deleted_count': deleted_count,
+                'skipped_count': skipped_count,
+                'errors': errors
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            logger.exception("Error syncing CC email from Google Sheet")
+            return Response(
+                {'detail': f'Terjadi kesalahan saat sinkronisasi Google Sheet: {str(e)}'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 

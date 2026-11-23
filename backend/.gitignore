@@ -25,3 +25,7 @@ Thumbs.db
 
 
 .env
+*credentials*.json
+*service-account*.json
+distributor-file-*.json
+
