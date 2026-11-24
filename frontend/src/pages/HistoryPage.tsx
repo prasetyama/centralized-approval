@@ -58,7 +58,7 @@ export const HistoryPage = () => {
     }));
 
     const moduleOptions = [
-        { value: '', label: 'Semua Modul' },
+        { value: '', label: 'All Modules' },
         ...(dynamicModules.length > 0
             ? dynamicModules
             : [
@@ -70,7 +70,7 @@ export const HistoryPage = () => {
     ];
 
     const statusOptions = [
-        { value: '', label: 'Semua Status' },
+        { value: '', label: 'All Status' },
         { value: 'APPROVED', label: 'Approved' },
         { value: 'REJECTED', label: 'Rejected' },
         { value: 'IN_PROGRESS', label: 'In Progress' },
@@ -201,7 +201,7 @@ export const HistoryPage = () => {
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
                         {/* Search Input */}
                         <div className="sm:col-span-2 lg:col-span-2">
-                            <label className="text-sm font-semibold text-slate-700 block mb-1.5">Cari Request</label>
+                            <label className="text-sm font-semibold text-slate-700 block mb-1.5">Search</label>
                             <div className="relative">
                                 <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                                 <input
@@ -211,7 +211,7 @@ export const HistoryPage = () => {
                                         setSearch(e.target.value);
                                         setPage(1);
                                     }}
-                                    placeholder="Judul, No. Ref, atau Pemohon..."
+                                    placeholder="Title, Ref No., or Requester..."
                                     className="h-9 w-full pl-9 pr-8 text-sm bg-white border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400"
                                 />
                                 {search && (
@@ -227,7 +227,7 @@ export const HistoryPage = () => {
 
                         {/* Module Dropdown */}
                         <div>
-                            <label className="text-sm font-semibold text-slate-700 block mb-1.5">Modul</label>
+                            <label className="text-sm font-semibold text-slate-700 block mb-1.5">Module</label>
                             <select
                                 value={moduleFilter}
                                 onChange={(e) => {
@@ -261,7 +261,7 @@ export const HistoryPage = () => {
 
                         {/* Start Date */}
                         <div>
-                            <label className="text-sm font-semibold text-slate-700 block mb-1.5">Dari Tanggal</label>
+                            <label className="text-sm font-semibold text-slate-700 block mb-1.5">From Date</label>
                             <input
                                 type="date"
                                 value={startDate}
@@ -275,7 +275,7 @@ export const HistoryPage = () => {
 
                         {/* End Date */}
                         <div>
-                            <label className="text-sm font-semibold text-slate-700 block mb-1.5">Sampai Tanggal</label>
+                            <label className="text-sm font-semibold text-slate-700 block mb-1.5">To Date</label>
                             <input
                                 type="date"
                                 value={endDate}
@@ -291,7 +291,7 @@ export const HistoryPage = () => {
                     {/* Filter Actions */}
                     <div className="flex justify-between items-center pt-3 border-t border-slate-200/80 mt-4">
                         <span className="text-sm text-slate-500">
-                            {activeFiltersCount > 0 ? `${activeFiltersCount} filter diterapkan` : 'Belum ada filter diterapkan'}
+                            {activeFiltersCount > 0 ? `${activeFiltersCount} filter is applied` : 'No filters applied'}
                         </span>
                         <Button
                             variant="ghost"
@@ -310,10 +310,10 @@ export const HistoryPage = () => {
             {/* Active Filter Chips */}
             {activeFiltersCount > 0 && (
                 <div className="flex flex-wrap items-center gap-2 text-sm">
-                    <span className="text-slate-500 font-medium">Filter Aktif:</span>
+                    <span className="text-slate-500 font-medium">Active Filter:</span>
                     {search && (
                         <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
-                            Cari: "{search}"
+                            Search: "{search}"
                             <button onClick={() => { setSearch(''); setPage(1); }} className="hover:text-blue-900">
                                 <X size={12} />
                             </button>
@@ -321,7 +321,7 @@ export const HistoryPage = () => {
                     )}
                     {moduleFilter && (
                         <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
-                            Modul: {moduleOptions.find((o) => o.value === moduleFilter)?.label || moduleFilter}
+                            Module: {moduleOptions.find((o) => o.value === moduleFilter)?.label || moduleFilter}
                             <button onClick={() => { setModuleFilter(''); setPage(1); }} className="hover:text-blue-900">
                                 <X size={12} />
                             </button>
@@ -337,7 +337,7 @@ export const HistoryPage = () => {
                     )}
                     {startDate && (
                         <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
-                            Dari: {startDate}
+                            From: {startDate}
                             <button onClick={() => { setStartDate(''); setPage(1); }} className="hover:text-blue-900">
                                 <X size={12} />
                             </button>
@@ -345,7 +345,7 @@ export const HistoryPage = () => {
                     )}
                     {endDate && (
                         <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
-                            Sampai: {endDate}
+                            To: {endDate}
                             <button onClick={() => { setEndDate(''); setPage(1); }} className="hover:text-blue-900">
                                 <X size={12} />
                             </button>
@@ -355,7 +355,7 @@ export const HistoryPage = () => {
                         onClick={handleResetFilters}
                         className="text-sm text-blue-600 hover:text-blue-800 font-semibold underline ml-1"
                     >
-                        Hapus Semua
+                        Clear All Filters
                     </button>
                 </div>
             )}
@@ -467,11 +467,11 @@ export const HistoryPage = () => {
                                             <div className="flex flex-col items-center justify-center text-slate-400">
                                                 <Inbox className="h-12 w-12 opacity-10 mb-4" />
                                                 <p className="text-lg font-medium">
-                                                    {activeFiltersCount > 0 ? 'Data Tidak Ditemukan' : 'No history'}
+                                                    {activeFiltersCount > 0 ? 'Data Not Found' : 'No history'}
                                                 </p>
                                                 <p className="text-sm mt-1 max-w-sm">
                                                     {activeFiltersCount > 0
-                                                        ? 'Tidak ada approval history yang cocok dengan filter atau kata kunci pencarian Anda.'
+                                                        ? 'No approval history found matching your filters or search term.'
                                                         : "You haven't processed any approval requests yet."}
                                                 </p>
                                                 {activeFiltersCount > 0 && (
