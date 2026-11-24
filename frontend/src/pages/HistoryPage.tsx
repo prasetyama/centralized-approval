@@ -163,7 +163,7 @@ export const HistoryPage = () => {
                 <div className="flex flex-wrap items-center gap-3">
                     {/* Sort Dropdown */}
                     <div className="flex items-center gap-1.5">
-                        <span className="text-sm font-semibold text-slate-500 hidden sm:inline">Urutkan:</span>
+                        <span className="text-sm font-semibold text-slate-500 hidden sm:inline">Sort by:</span>
                         <select
                             value={ordering}
                             onChange={(e) => {
