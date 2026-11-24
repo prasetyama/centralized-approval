@@ -78,18 +78,10 @@ export const HistoryPage = () => {
     ];
 
     const sortOptions = [
-        { value: '-created_at', label: 'Tanggal: Terbaru (Default)' },
-        { value: 'created_at', label: 'Tanggal: Terlama' },
-        { value: 'title', label: 'Judul: A - Z' },
-        { value: '-title', label: 'Judul: Z - A' },
-        { value: 'reference_id', label: 'No. Referensi: A - Z' },
-        { value: '-reference_id', label: 'No. Referensi: Z - A' },
-        { value: 'status', label: 'Status: A - Z' },
-        { value: '-status', label: 'Status: Z - A' },
-        { value: 'module', label: 'Modul: A - Z' },
-        { value: '-module', label: 'Modul: Z - A' },
-        { value: 'requester', label: 'Pemohon: A - Z' },
-        { value: '-requester', label: 'Pemohon: Z - A' },
+        { value: '-created_at', label: 'Date: Newest' },
+        { value: 'created_at', label: 'Date: Oldest' },
+        { value: 'reference_id', label: 'Ref Number: A - Z' },
+        { value: '-reference_id', label: 'Ref Number: Z - A' }
     ];
 
     const activeFiltersCount = [search, moduleFilter, statusFilter, startDate, endDate].filter(Boolean).length;
@@ -124,7 +116,7 @@ export const HistoryPage = () => {
         return <ArrowUpDown size={13} className="text-slate-400 opacity-40 group-hover:opacity-100 ml-1 inline transition-opacity" />;
     };
 
-    const { data: history, isLoading, refetch, isFetching } = useQuery<any>({
+    const { data: history, isLoading } = useQuery<any>({
         queryKey: ['history', page, pageSize, search, moduleFilter, statusFilter, startDate, endDate, ordering],
         queryFn: () => api.get('/history', {
             params: {
@@ -199,17 +191,6 @@ export const HistoryPage = () => {
                                 {activeFiltersCount}
                             </span>
                         )}
-                    </Button>
-
-                    {/* Refresh Button */}
-                    <Button
-                        variant="outline"
-                        onClick={() => refetch()}
-                        disabled={isFetching}
-                        className="gap-2"
-                    >
-                        <RotateCw size={15} className={isFetching ? 'animate-spin' : ''} />
-                        Refresh
                     </Button>
                 </div>
             </div>
