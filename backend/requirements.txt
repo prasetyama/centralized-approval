@@ -7,3 +7,7 @@ typing-extensions
 django-filter
 django-environ
 python-dotenv
+google-auth 
+google-auth-oauthlib
+openpyxl
+requests
