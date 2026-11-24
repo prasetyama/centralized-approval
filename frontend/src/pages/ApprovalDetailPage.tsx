@@ -542,8 +542,8 @@ export const ApprovalDetailPage = () => {
                     <div className="space-y-1">
                         <p className="text-sm font-bold text-amber-900">
                             {detail?.status === 'REVISED'
-                                ? 'Perhatian: Pengajuan Memerlukan Revisi dari Pemohon (Requester)'
-                                : 'Perhatian: Pengajuan Memerlukan Revisi Quotation'}
+                                ? 'Attention: The request requires revision from the requester'
+                                : 'Attention: This request requires revision from the quotation team'}
                         </p>
                         <p className="text-xs text-amber-800 leading-relaxed">{lastRevisedLog.details}</p>
                     </div>
@@ -562,7 +562,7 @@ export const ApprovalDetailPage = () => {
                         <Card className="border-slate-100 bg-white shadow-sm overflow-hidden p-6">
                             <AttachmentList
                                 attachments={allAttachments}
-                                title="Lampiran"
+                                title="Attachment"
                                 selectedQuotation={selectedQuotation}
                             />
                         </Card>
