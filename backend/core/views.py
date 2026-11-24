@@ -534,12 +534,59 @@ class InboxView(generics.ListAPIView):
             if priority:
                 queryset = queryset.filter(priority=priority)
 
+            status_param = self.request.query_params.get('status')
+            if status_param:
+                queryset = queryset.filter(status=status_param)
+
+            from django.utils.dateparse import parse_date
+            from datetime import datetime as dt, time as dt_time
+
+            start_date = self.request.query_params.get('start_date')
+            if start_date:
+                parsed_start = parse_date(start_date)
+                if parsed_start:
+                    dt_start = timezone.make_aware(dt.combine(parsed_start, dt_time.min))
+                    queryset = queryset.filter(created_at__gte=dt_start)
+
+            end_date = self.request.query_params.get('end_date')
+            if end_date:
+                parsed_end = parse_date(end_date)
+                if parsed_end:
+                    dt_end = timezone.make_aware(dt.combine(parsed_end, dt_time.max))
+                    queryset = queryset.filter(created_at__lte=dt_end)
+
             search = self.request.query_params.get('search')
             if search:
                 queryset = queryset.filter(
                     Q(title__icontains=search) |
-                    Q(reference_id__icontains=search)
+                    Q(reference_id__icontains=search) |
+                    Q(requester__first_name__icontains=search) |
+                    Q(requester__last_name__icontains=search) |
+                    Q(requester__username__icontains=search)
                 )
+
+            # Ordering / Sorting
+            ordering = self.request.query_params.get('ordering')
+            allowed_ordering = {
+                'created_at': 'created_at',
+                '-created_at': '-created_at',
+                'title': 'title',
+                '-title': '-title',
+                'reference_id': 'reference_id',
+                '-reference_id': '-reference_id',
+                'status': 'status',
+                '-status': '-status',
+                'priority': 'priority',
+                '-priority': '-priority',
+                'module': 'module__name',
+                '-module': '-module__name',
+                'requester': 'requester__first_name',
+                '-requester': '-requester__first_name',
+            }
+            if ordering and ordering in allowed_ordering:
+                queryset = queryset.order_by(allowed_ordering[ordering])
+            else:
+                queryset = queryset.order_by('-created_at')
 
             return queryset
 
