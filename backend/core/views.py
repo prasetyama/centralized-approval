@@ -379,7 +379,7 @@ class WorkflowReviseView(generics.GenericAPIView):
             serializer.is_valid(raise_exception=True)
             comments = serializer.validated_data.get('comments', '')
             if not comments.strip():
-                raise ValidationError("Komentar alasan revisi wajib diisi.")
+                raise ValidationError("Revision comments are required.")
 
             try:
                 approval_request = WorkflowEngine.revise_step(
@@ -393,15 +393,15 @@ class WorkflowReviseView(generics.GenericAPIView):
                     "[Core.Views] Failed to revise workflow %s by user %s: %s",
                     pk, request.user.username, str(e), exc_info=True
                 )
-                raise ValidationError(f"Gagal melakukan revisi: {str(e)}")
+                raise ValidationError(f"Failed to revise request: {str(e)}")
 
             return Response({
                 'success': True,
                 'data': ApprovalRequestDetailSerializer(approval_request).data,
                 'message': (
-                    'Pengajuan berhasil dikembalikan ke pemohon untuk revisi formulir PR.'
+                    'Request successfully returned to the requester for PR form revision.'
                     if approval_request.status == ApprovalRequest.Status.REVISED
-                    else 'Pengajuan berhasil dikembalikan ke step upload quotation untuk revisi.'
+                    else 'Request successfully returned to quotation upload step for revision.'
                 ),
             })
         elif req_obj.status in (ApprovalRequest.Status.REJECTED, ApprovalRequest.Status.REVISED):
@@ -418,7 +418,7 @@ class WorkflowReviseView(generics.GenericAPIView):
                     "[Core.Views] Failed to resubmit revised workflow %s by user %s: %s",
                     pk, request.user.username, str(e), exc_info=True
                 )
-                raise ValidationError(f"Gagal submit revisi: {str(e)}")
+                raise ValidationError(f"Failed to submit revision: {str(e)}")
 
             return Response({
                 'success': True,
@@ -2075,7 +2075,7 @@ class PRNonTradeViewSet(viewsets.ModelViewSet):
                 request=approval_request,
                 actor=user,
                 action=AuditLog.Action.SUBMITTED,
-                details=f"PR Form telah direvisi dan disubmit ulang oleh pemohon ({user.get_full_name() or user.username}).",
+                details=f"PR Form has been revised and resubmitted by the requester ({user.get_full_name() or user.username}).",
                 ip_address=_get_client_ip(request),
                 payload_snapshot=approval_request.payload,
             )

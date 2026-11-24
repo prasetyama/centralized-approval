@@ -932,10 +932,10 @@ class WorkflowEngine:
         if current_step.is_locked_by_other(approver):
             locker_name = (
                 (current_step.locked_by.get_full_name() or current_step.locked_by.username)
-                if current_step.locked_by else "user lain"
+                if current_step.locked_by else "another user"
             )
             raise ValidationError(
-                f"Pengajuan ini sedang dibuka/diproses oleh {locker_name}. Silakan tunggu hingga selesai."
+                f"This request is currently being opened/processed by {locker_name}. Please wait until completed."
             )
 
         # Validate required_inputs if defined for this step
@@ -950,7 +950,7 @@ class WorkflowEngine:
                 if field_key in ('approval_quotation', 'selected_quotation') and (not comments or not comments.strip()):
                     missing_fields.append('Remark')
             if missing_fields:
-                raise ValidationError(f"Data wajib berikut harus diisi sebelum Approve: {', '.join(missing_fields)}")
+                raise ValidationError(f"The following required fields must be filled before approval: {', '.join(missing_fields)}")
 
         acted_step = current_step
 
@@ -963,7 +963,7 @@ class WorkflowEngine:
         adhoc_user = None
         if use_adhoc or adhoc_approver_id:
             if not current_step.allow_adhoc or current_step.is_adhoc:
-                raise ValidationError("Step ini tidak mengizinkan penambahan Ad-Hoc Approver.")
+                raise ValidationError("This step does not allow adding an Ad-Hoc Approver.")
             adhoc_user = current_step.adhoc_user
             if not adhoc_user:
                 step_def_adhoc = approval_request.workflow.steps.filter(
@@ -972,9 +972,9 @@ class WorkflowEngine:
                 if step_def_adhoc:
                     adhoc_user = step_def_adhoc.adhoc_user
             if not adhoc_user:
-                raise ValidationError("User Ad-Hoc Approver belum ditentukan pada konfigurasi Admin Workflow.")
+                raise ValidationError("Ad-Hoc Approver user has not been configured in the Workflow Admin.")
             if not adhoc_user.is_active:
-                raise ValidationError("User Ad-Hoc Approver yang ditentukan pada Admin Workflow sedang tidak aktif.")
+                raise ValidationError("The Ad-Hoc Approver configured in Workflow Admin is inactive.")
 
         if dlvdate or step_data:
             if not isinstance(approval_request.payload, dict):
@@ -1024,9 +1024,9 @@ class WorkflowEngine:
                 actor=approver,
                 action=AuditLog.Action.ADHOC_ADDED,
                 details=(
-                    f"Ad-Hoc Approval ({adhoc_step.name}) ditambahkan pada Step {adhoc_step.step_order} "
-                    f"untuk {adhoc_user.get_full_name() or adhoc_user.username}."
-                    f"{f' Catatan: {adhoc_notes}' if adhoc_notes else ''}"
+                    f"Ad-Hoc Approval ({adhoc_step.name}) added at Step {adhoc_step.step_order} "
+                    f"for {adhoc_user.get_full_name() or adhoc_user.username}."
+                    f"{f' Notes: {adhoc_notes}' if adhoc_notes else ''}"
                 ),
                 ip_address=ip_address,
                 payload_snapshot=approval_request.payload,
@@ -1090,10 +1090,10 @@ class WorkflowEngine:
         if current_step.is_locked_by_other(approver):
             locker_name = (
                 (current_step.locked_by.get_full_name() or current_step.locked_by.username)
-                if current_step.locked_by else "user lain"
+                if current_step.locked_by else "another user"
             )
             raise ValidationError(
-                f"Pengajuan ini sedang dibuka/diproses oleh {locker_name}. Silakan tunggu hingga selesai."
+                f"This request is currently being opened/processed by {locker_name}. Please wait until completed."
             )
 
         # Reject the step
@@ -1279,14 +1279,14 @@ class WorkflowEngine:
         if current_step.is_locked_by_other(approver):
             locker_name = (
                 (current_step.locked_by.get_full_name() or current_step.locked_by.username)
-                if current_step.locked_by else "user lain"
+                if current_step.locked_by else "another user"
             )
             raise ValidationError(
-                f"Pengajuan ini sedang dibuka/diproses oleh {locker_name}. Silakan tunggu hingga selesai."
+                f"This request is currently being opened/processed by {locker_name}. Please wait until completed."
             )
 
         if not comments or not comments.strip():
-            raise ValidationError("Alasan revisi wajib diisi.")
+            raise ValidationError("Revision reason is required.")
 
         current_step.locked_by = None
         current_step.locked_at = None
@@ -1356,7 +1356,7 @@ class WorkflowEngine:
                 approval_request.save(update_fields=['current_step', 'updated_at'])
 
             # Create AuditLog entry
-            log_details = f"Step {rev_step_order} ({rev_step_name}) direvisi oleh {approver.get_full_name() or approver.username} kembali ke Step {quotation_step.step_order} ({quotation_step.name}). Alasan: {comments.strip()}"
+            log_details = f"Step {rev_step_order} ({rev_step_name}) revised by {approver.get_full_name() or approver.username} back to Step {quotation_step.step_order} ({quotation_step.name}). Reason: {comments.strip()}"
             AuditLog.objects.create(
                 request=approval_request,
                 step=audit_step_ref,
@@ -1424,9 +1424,9 @@ class WorkflowEngine:
             # Create AuditLog entry
             requester_name = approval_request.requester.get_full_name() or approval_request.requester.username
             log_details = (
-                f"Step {rev_step_order} ({rev_step_name}) direvisi oleh "
-                f"{approver.get_full_name() or approver.username}. Alasan: {comments.strip()}. "
-                f"Status PR Form diubah menjadi REVISE untuk diedit kembali oleh pemohon ({requester_name})."
+                f"Step {rev_step_order} ({rev_step_name}) revised by "
+                f"{approver.get_full_name() or approver.username}. Reason: {comments.strip()}. "
+                f"PR Form status changed to REVISE to be re-edited by requester ({requester_name})."
             )
             AuditLog.objects.create(
                 request=approval_request,
