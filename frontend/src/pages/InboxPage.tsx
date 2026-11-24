@@ -70,7 +70,7 @@ export const InboxPage = () => {
     }));
 
     const moduleOptions = [
-        { value: '', label: 'Semua Modul' },
+        { value: '', label: 'All Modules' },
         ...(dynamicModules.length > 0
             ? dynamicModules
             : [
@@ -82,7 +82,7 @@ export const InboxPage = () => {
     ];
 
     const statusOptions = [
-        { value: '', label: 'Semua Status' },
+        { value: '', label: 'All Status' },
         { value: 'IN_PROGRESS', label: 'In Progress' },
         { value: 'APPROVED', label: 'Approved' },
         { value: 'REJECTED', label: 'Rejected' },
@@ -157,16 +157,6 @@ export const InboxPage = () => {
         }
     };
 
-    const getPriorityBadge = (priority: string) => {
-        switch (priority) {
-            case 'URGENT': return <Badge variant="error" className="text-[10px] px-1.5 py-0 font-bold">URGENT</Badge>;
-            case 'HIGH': return <Badge variant="warning" className="text-[10px] px-1.5 py-0 font-bold">HIGH</Badge>;
-            case 'MEDIUM': return <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-slate-600">MED</Badge>;
-            case 'LOW': return <Badge variant="secondary" className="text-[10px] px-1.5 py-0 text-slate-500">LOW</Badge>;
-            default: return null;
-        }
-    };
-
     const getStatusBadge = (status: string) => {
         switch (status) {
             case 'APPROVED': return <Badge variant="success">Approved</Badge>;
@@ -218,14 +208,14 @@ export const InboxPage = () => {
                 <div className="flex flex-wrap items-center gap-3">
                     {/* Sort Dropdown */}
                     <div className="flex items-center gap-1.5">
-                        <span className="text-xs font-semibold text-slate-500 hidden sm:inline">Urutkan:</span>
+                        <span className="text-sm font-semibold text-slate-500 hidden sm:inline">Sort by:</span>
                         <select
                             value={ordering}
                             onChange={(e) => {
                                 setOrdering(e.target.value);
                                 setPage(1);
                             }}
-                            className="h-10 text-xs font-medium bg-white border border-slate-200 rounded-md px-3 py-2 text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all cursor-pointer shadow-sm"
+                            className="h-10 text-sm font-medium bg-white border border-slate-200 rounded-md px-3 py-2 text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all cursor-pointer shadow-sm"
                         >
                             {sortOptions.map((opt) => (
                                 <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -242,7 +232,7 @@ export const InboxPage = () => {
                         <Filter size={16} />
                         Filters
                         {activeFiltersCount > 0 && (
-                            <span className={`inline-flex items-center justify-center px-1.5 py-0.5 text-xs font-bold rounded-full ${showFilters || activeFiltersCount > 0 ? 'bg-white text-blue-600' : 'bg-blue-600 text-white'}`}>
+                            <span className={`inline-flex items-center justify-center px-1.5 py-0.5 text-sm font-bold rounded-full ${showFilters || activeFiltersCount > 0 ? 'bg-white text-blue-600' : 'bg-blue-600 text-white'}`}>
                                 {activeFiltersCount}
                             </span>
                         )}
@@ -256,7 +246,7 @@ export const InboxPage = () => {
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
                         {/* Search Input */}
                         <div className="sm:col-span-2 lg:col-span-2">
-                            <label className="text-xs font-semibold text-slate-700 block mb-1.5">Cari Request</label>
+                            <label className="text-sm font-semibold text-slate-700 block mb-1.5">Search</label>
                             <div className="relative">
                                 <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                                 <input
@@ -266,8 +256,8 @@ export const InboxPage = () => {
                                         setSearch(e.target.value);
                                         setPage(1);
                                     }}
-                                    placeholder="Judul, No. Ref, atau Pemohon..."
-                                    className="h-9 w-full pl-9 pr-8 text-xs bg-white border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400"
+                                    placeholder="Search, Ref Number, or Requester..."
+                                    className="h-9 w-full pl-9 pr-8 text-sm bg-white border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400"
                                 />
                                 {search && (
                                     <button
@@ -282,14 +272,14 @@ export const InboxPage = () => {
 
                         {/* Module Dropdown */}
                         <div>
-                            <label className="text-xs font-semibold text-slate-700 block mb-1.5">Modul</label>
+                            <label className="text-sm font-semibold text-slate-700 block mb-1.5">Module</label>
                             <select
                                 value={moduleFilter}
                                 onChange={(e) => {
                                     setModuleFilter(e.target.value);
                                     setPage(1);
                                 }}
-                                className="h-9 w-full text-xs bg-white border border-slate-200 rounded-md px-2.5 text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                className="h-9 w-full text-sm bg-white border border-slate-200 rounded-md px-2.5 text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
                             >
                                 {moduleOptions.map((opt) => (
                                     <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -300,14 +290,14 @@ export const InboxPage = () => {
                         {/* Status Dropdown (Watching Tab only) */}
                         {activeTab === 'watching' ? (
                             <div>
-                                <label className="text-xs font-semibold text-slate-700 block mb-1.5">Status</label>
+                                <label className="text-sm font-semibold text-slate-700 block mb-1.5">Status</label>
                                 <select
                                     value={statusFilter}
                                     onChange={(e) => {
                                         setStatusFilter(e.target.value);
                                         setPage(1);
                                     }}
-                                    className="h-9 w-full text-xs bg-white border border-slate-200 rounded-md px-2.5 text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    className="h-9 w-full text-sm bg-white border border-slate-200 rounded-md px-2.5 text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 >
                                     {statusOptions.map((opt) => (
                                         <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -318,7 +308,7 @@ export const InboxPage = () => {
 
                         {/* Start Date */}
                         <div>
-                            <label className="text-xs font-semibold text-slate-700 block mb-1.5">Dari Tanggal</label>
+                            <label className="text-sm font-semibold text-slate-700 block mb-1.5">From Date</label>
                             <input
                                 type="date"
                                 value={startDate}
@@ -326,13 +316,13 @@ export const InboxPage = () => {
                                     setStartDate(e.target.value);
                                     setPage(1);
                                 }}
-                                className="h-9 w-full text-xs bg-white border border-slate-200 rounded-md px-2.5 text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                className="h-9 w-full text-sm bg-white border border-slate-200 rounded-md px-2.5 text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
                             />
                         </div>
 
                         {/* End Date */}
                         <div>
-                            <label className="text-xs font-semibold text-slate-700 block mb-1.5">Sampai Tanggal</label>
+                            <label className="text-sm font-semibold text-slate-700 block mb-1.5">To Date</label>
                             <input
                                 type="date"
                                 value={endDate}
@@ -340,22 +330,22 @@ export const InboxPage = () => {
                                     setEndDate(e.target.value);
                                     setPage(1);
                                 }}
-                                className="h-9 w-full text-xs bg-white border border-slate-200 rounded-md px-2.5 text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                className="h-9 w-full text-sm bg-white border border-slate-200 rounded-md px-2.5 text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
                             />
                         </div>
                     </div>
 
                     {/* Filter Actions */}
                     <div className="flex justify-between items-center pt-3 border-t border-slate-200/80 mt-4">
-                        <span className="text-xs text-slate-500">
-                            {activeFiltersCount > 0 ? `${activeFiltersCount} filter diterapkan` : 'Belum ada filter diterapkan'}
+                        <span className="text-sm text-slate-500">
+                            {activeFiltersCount > 0 ? `${activeFiltersCount} filter applied` : 'No filter applied'}
                         </span>
                         <Button
                             variant="ghost"
                             size="sm"
                             onClick={handleResetFilters}
                             disabled={activeFiltersCount === 0}
-                            className="gap-1.5 text-xs text-slate-600 hover:text-slate-900"
+                            className="gap-1.5 text-sm text-slate-600 hover:text-slate-900"
                         >
                             <RotateCw size={13} />
                             Reset Filter
@@ -366,11 +356,11 @@ export const InboxPage = () => {
 
             {/* Active Filter Chips */}
             {activeFiltersCount > 0 && (
-                <div className="flex flex-wrap items-center gap-2 text-xs">
-                    <span className="text-slate-500 font-medium">Filter Aktif:</span>
+                <div className="flex flex-wrap items-center gap-2 text-sm">
+                    <span className="text-slate-500 font-medium">Active Filter:</span>
                     {search && (
                         <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
-                            Cari: "{search}"
+                            Search: "{search}"
                             <button onClick={() => { setSearch(''); setPage(1); }} className="hover:text-blue-900">
                                 <X size={12} />
                             </button>
@@ -378,16 +368,8 @@ export const InboxPage = () => {
                     )}
                     {moduleFilter && (
                         <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
-                            Modul: {moduleOptions.find((o) => o.value === moduleFilter)?.label || moduleFilter}
+                            Module: {moduleOptions.find((o) => o.value === moduleFilter)?.label || moduleFilter}
                             <button onClick={() => { setModuleFilter(''); setPage(1); }} className="hover:text-blue-900">
-                                <X size={12} />
-                            </button>
-                        </span>
-                    )}
-                    {priorityFilter && (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
-                            Prioritas: {priorityFilter}
-                            <button onClick={() => { setPriorityFilter(''); setPage(1); }} className="hover:text-blue-900">
                                 <X size={12} />
                             </button>
                         </span>
@@ -402,7 +384,7 @@ export const InboxPage = () => {
                     )}
                     {startDate && (
                         <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
-                            Dari: {startDate}
+                            From: {startDate}
                             <button onClick={() => { setStartDate(''); setPage(1); }} className="hover:text-blue-900">
                                 <X size={12} />
                             </button>
@@ -410,7 +392,7 @@ export const InboxPage = () => {
                     )}
                     {endDate && (
                         <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
-                            Sampai: {endDate}
+                            To: {endDate}
                             <button onClick={() => { setEndDate(''); setPage(1); }} className="hover:text-blue-900">
                                 <X size={12} />
                             </button>
@@ -418,9 +400,9 @@ export const InboxPage = () => {
                     )}
                     <button
                         onClick={handleResetFilters}
-                        className="text-xs text-blue-600 hover:text-blue-800 font-semibold underline ml-1"
+                        className="text-sm text-blue-600 hover:text-blue-800 font-semibold underline ml-1"
                     >
-                        Hapus Semua
+                        Clear All Filters
                     </button>
                 </div>
             )}
@@ -493,17 +475,16 @@ export const InboxPage = () => {
                                                 <div className="h-8 w-8 rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-center">
                                                     {getModuleIcon(item.module_code)}
                                                 </div>
-                                                <span className="font-medium text-xs text-slate-600">{item.module_name}</span>
+                                                <span className="font-medium text-sm text-slate-600">{item.module_name}</span>
                                             </div>
                                         </TableCell>
                                         <TableCell>
                                             <div className="space-y-1">
                                                 <div className="flex items-center gap-2">
                                                     <p className="font-semibold text-slate-900">{item.title}</p>
-                                                    {getPriorityBadge(item.priority)}
                                                 </div>
                                                 <div className="flex flex-wrap items-center gap-2">
-                                                    <p className="text-xs text-slate-500">Ref: {item.reference_id}</p>
+                                                    <p className="text-sm text-slate-500">Ref: {item.reference_id}</p>
                                                     {item.locked_by_name && (
                                                         <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 border border-amber-200 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
                                                             <Lock size={11} className="text-amber-600" />
@@ -526,7 +507,7 @@ export const InboxPage = () => {
                                                 {getStatusBadge(item.status)}
                                             </TableCell>
                                         )}
-                                        <TableCell className="text-slate-500 text-xs">
+                                        <TableCell className="text-slate-500 text-sm">
                                             {formatDate(item.created_at)}
                                         </TableCell>
                                         <TableCell className="text-right">
@@ -544,11 +525,11 @@ export const InboxPage = () => {
                                             <div className="flex flex-col items-center justify-center text-slate-400">
                                                 <Inbox className="h-12 w-12 opacity-10 mb-4" />
                                                 <p className="text-lg font-medium">
-                                                    {activeFiltersCount > 0 ? 'Data Tidak Ditemukan' : 'All caught up!'}
+                                                    {activeFiltersCount > 0 ? 'Data Not Found' : 'All caught up!'}
                                                 </p>
                                                 <p className="text-sm mt-1 max-w-sm">
                                                     {activeFiltersCount > 0
-                                                        ? 'Tidak ada approval task yang cocok dengan filter atau kata kunci pencarian Anda.'
+                                                        ? 'No approval task found matching your filters or search term.'
                                                         : (activeTab === 'inbox'
                                                             ? 'You have no pending approval tasks.'
                                                             : 'You are not watching any requests.')}
