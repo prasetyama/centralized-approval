@@ -2112,7 +2112,7 @@ class MasterAssetViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [IsAuthenticated]
     pagination_class = StandardResultsSetPagination
     filter_backends = [DjangoFilterBackend, SearchFilter]
-    search_fields = ['code', 'name', 'category', 'description']
+    search_fields = ['code', 'category', 'description']
 
 
 class MasterWBSViewSet(viewsets.ReadOnlyModelViewSet):
@@ -2130,7 +2130,7 @@ class MasterEquipmentViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [IsAuthenticated]
     pagination_class = StandardResultsSetPagination
     filter_backends = [DjangoFilterBackend, SearchFilter]
-    search_fields = ['code', 'plant', 'company_id']
+    search_fields = ['code', 'description', 'plant']
 
 
 class MasterGoodsViewSet(viewsets.ReadOnlyModelViewSet):
