@@ -1150,7 +1150,7 @@ class MasterAsset(models.Model):
         ordering = ['code']
 
     def __str__(self):
-        return f"{self.code} - {self.name}"
+        return f"{self.code} - {self.description or self.category}"
 
 
 class MasterWBS(models.Model):

@@ -50,10 +50,14 @@ export const PRNonTradeFormPage: React.FC = () => {
     const [goodsServiceType, setGoodsServiceType] = useState<'lumpsum' | 'not_lumpsum'>('not_lumpsum');
     const [purchaseType, setPurchaseType] = useState<'asset' | 'non_asset'>('non_asset');
     const [carTbrNo, setCarTbrNo] = useState('');
+    const [carTbrDesc, setCarTbrDesc] = useState('');
     const [assetType, setAssetType] = useState<'non_wbs' | 'wbs'>('non_wbs');
     const [assetNo, setAssetNo] = useState('');
+    const [assetDesc, setAssetDesc] = useState('');
     const [wbsNo, setWbsNo] = useState('');
+    const [wbsDesc, setWbsDesc] = useState('');
     const [equipmentName, setEquipmentName] = useState('');
+    const [equipmentDesc, setEquipmentDesc] = useState('');
     const [submissionRemark, setSubmissionRemark] = useState('');
 
     // Items list
@@ -70,7 +74,7 @@ export const PRNonTradeFormPage: React.FC = () => {
     });
 
     // Master Data Modal state
-    const [modalType, setModalType] = useState<'asset' | 'wbs' | 'equipment' | 'goods' | null>(null);
+    const [modalType, setModalType] = useState<'asset' | 'wbs' | 'equipment' | 'goods' | 'car_number' | null>(null);
 
     // Sync user info if user changes
     useEffect(() => {
@@ -103,6 +107,36 @@ export const PRNonTradeFormPage: React.FC = () => {
                 setEquipmentName(data.equipment_name || '');
                 setSubmissionRemark(data.submission_remark || '');
                 setItems(data.items || []);
+
+                // Auto-resolve descriptions for master data
+                if (data.car_tbr_no) {
+                    prNonTradeService.searchCarNumbers(data.car_tbr_no).then(res => {
+                        const list = Array.isArray(res) ? res : res.results || [];
+                        const match = list.find(i => String(i.code).trim() === String(data.car_tbr_no).trim()) || list[0];
+                        if (match) setCarTbrDesc(match.description || match.name || '');
+                    }).catch(() => {});
+                }
+                if (data.asset_no) {
+                    prNonTradeService.searchAssets(data.asset_no).then(res => {
+                        const list = Array.isArray(res) ? res : res.results || [];
+                        const match = list.find(i => String(i.code).trim() === String(data.asset_no).trim()) || list[0];
+                        if (match) setAssetDesc(match.description || match.name || match.category || '');
+                    }).catch(() => {});
+                }
+                if (data.wbs_no) {
+                    prNonTradeService.searchWBS(data.wbs_no).then(res => {
+                        const list = Array.isArray(res) ? res : res.results || [];
+                        const match = list.find(i => String(i.code).trim() === String(data.wbs_no).trim()) || list[0];
+                        if (match) setWbsDesc(match.description || match.name || '');
+                    }).catch(() => {});
+                }
+                if (data.equipment_name) {
+                    prNonTradeService.searchEquipments(data.equipment_name).then(res => {
+                        const list = Array.isArray(res) ? res : res.results || [];
+                        const match = list.find(i => String(i.code).trim() === String(data.equipment_name).trim() || (i.name && i.name.trim() === String(data.equipment_name).trim())) || list[0];
+                        if (match) setEquipmentDesc(match.description || (match.plant ? `Plant: ${match.plant}` : '') || '');
+                    }).catch(() => {});
+                }
             } catch (err: any) {
                 toast.error('Gagal memuat data draft PR Non-Trade.');
             } finally {
@@ -232,21 +266,28 @@ export const PRNonTradeFormPage: React.FC = () => {
     const handleSelectMasterItem = (item: MasterItem) => {
         if (modalType === 'asset') {
             setAssetNo(item.code);
-            toast.info(`Asset dipilih: ${item.code} - ${item.name}`);
+            setAssetDesc(item.description || item.name || item.category || '');
+            toast.info(`Asset dipilih: ${item.code} - ${item.description || item.name || item.category || ''}`);
         } else if (modalType === 'wbs') {
             setWbsNo(item.code);
-            toast.info(`WBS dipilih: ${item.code} - ${item.description}`);
+            setWbsDesc(item.description || item.name || '');
+            toast.info(`WBS dipilih: ${item.code} - ${item.description || item.name || ''}`);
         } else if (modalType === 'equipment') {
             setEquipmentName(item.name || item.code);
+            setEquipmentDesc(item.description || (item.plant ? `Plant: ${item.plant}` : '') || (item.code !== item.name ? item.code : '') || '');
             toast.info(`Equipment dipilih: ${item.name || item.code}`);
         } else if (modalType === 'goods') {
             setItemForm((prev) => ({
                 ...prev,
                 goods_code: item.code,
-                goods_name: item.name || '',
+                goods_name: item.name || item.description || '',
                 unit: item.unit || 'PCS'
             }));
-            toast.info(`Goods dipilih: ${item.code} - ${item.name}`);
+            toast.info(`Goods dipilih: ${item.code} - ${item.name || item.description || ''}`);
+        } else if (modalType === 'car_number') {
+            setCarTbrNo(item.code);
+            setCarTbrDesc(item.description || item.name || '');
+            toast.info(`CAR / TBR dipilih: ${item.code}${item.description ? ` - ${item.description}` : ''}`);
         }
     };
 
@@ -255,6 +296,7 @@ export const PRNonTradeFormPage: React.FC = () => {
         if (modalType === 'wbs') return prNonTradeService.searchWBS;
         if (modalType === 'equipment') return prNonTradeService.searchEquipments;
         if (modalType === 'goods') return prNonTradeService.searchGoods;
+        if (modalType === 'car_number') return prNonTradeService.searchCarNumbers;
         return async () => [];
     };
 
@@ -263,6 +305,7 @@ export const PRNonTradeFormPage: React.FC = () => {
         if (modalType === 'wbs') return 'Pencarian Master WBS';
         if (modalType === 'equipment') return 'Pencarian Master Equipment';
         if (modalType === 'goods') return 'Pencarian Master Goods / Barang';
+        if (modalType === 'car_number') return 'Pencarian Master CAR / TBR No';
         return '';
     };
 
@@ -496,14 +539,34 @@ export const PRNonTradeFormPage: React.FC = () => {
                                 <label className="block text-sm font-semibold text-slate-700 mb-2">
                                     CAR / TBR No <span className="text-red-500">*</span>
                                 </label>
-                                <input
-                                    type="text"
-                                    required
-                                    placeholder="Masukkan CAR/TBR No..."
-                                    value={carTbrNo}
-                                    onChange={(e) => setCarTbrNo(e.target.value)}
-                                    className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 shadow-sm"
-                                />
+                                <div className="flex gap-2">
+                                    <input
+                                        type="text"
+                                        required
+                                        placeholder="Cari / masukkan CAR/TBR No..."
+                                        value={carTbrNo}
+                                        onChange={(e) => {
+                                            setCarTbrNo(e.target.value);
+                                            if (!e.target.value) setCarTbrDesc('');
+                                        }}
+                                        className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 shadow-sm"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => setModalType('car_number')}
+                                        className="px-3.5 py-2.5 bg-blue-600 text-white hover:bg-blue-700 border border-transparent rounded-xl transition-colors cursor-pointer shrink-0 font-medium text-xs flex items-center gap-1.5 shadow-xs"
+                                        title="Cari Master CAR / TBR No"
+                                    >
+                                        <Search size={16} />
+                                        <span>Cari</span>
+                                    </button>
+                                </div>
+                                {carTbrDesc && (
+                                    <div className="mt-1.5 flex items-center gap-1.5 text-xs bg-slate-50 border border-slate-200/80 px-2.5 py-1 rounded-lg text-slate-700 animate-fade-in">
+                                        <span className="text-slate-400 font-medium shrink-0">Description:</span>
+                                        <span className="font-semibold text-slate-800 truncate" title={carTbrDesc}>{carTbrDesc}</span>
+                                    </div>
+                                )}
                             </div>
 
                             {/* Radio Selection Group Row */}
@@ -642,7 +705,10 @@ export const PRNonTradeFormPage: React.FC = () => {
                                                         required
                                                         placeholder="Cari / masukkan Asset No..."
                                                         value={assetNo}
-                                                        onChange={(e) => setAssetNo(e.target.value)}
+                                                        onChange={(e) => {
+                                                            setAssetNo(e.target.value);
+                                                            if (!e.target.value) setAssetDesc('');
+                                                        }}
                                                         className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 shadow-sm"
                                                     />
                                                     <button
@@ -655,6 +721,12 @@ export const PRNonTradeFormPage: React.FC = () => {
                                                         <span>Cari</span>
                                                     </button>
                                                 </div>
+                                                {assetDesc && (
+                                                    <div className="mt-1.5 flex items-center gap-1.5 text-xs bg-slate-50 border border-slate-200/80 px-2.5 py-1 rounded-lg text-slate-700 animate-fade-in">
+                                                        <span className="text-slate-400 font-medium shrink-0">Description:</span>
+                                                        <span className="font-semibold text-slate-800 truncate" title={assetDesc}>{assetDesc}</span>
+                                                    </div>
+                                                )}
                                             </div>
                                         )}
 
@@ -670,7 +742,10 @@ export const PRNonTradeFormPage: React.FC = () => {
                                                         required
                                                         placeholder="Cari / masukkan WBS No..."
                                                         value={wbsNo}
-                                                        onChange={(e) => setWbsNo(e.target.value)}
+                                                        onChange={(e) => {
+                                                            setWbsNo(e.target.value);
+                                                            if (!e.target.value) setWbsDesc('');
+                                                        }}
                                                         className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 shadow-sm font-mono"
                                                     />
                                                     <button
@@ -683,6 +758,12 @@ export const PRNonTradeFormPage: React.FC = () => {
                                                         <span>Cari</span>
                                                     </button>
                                                 </div>
+                                                {wbsDesc && (
+                                                    <div className="mt-1.5 flex items-center gap-1.5 text-xs bg-slate-50 border border-slate-200/80 px-2.5 py-1 rounded-lg text-slate-700 animate-fade-in">
+                                                        <span className="text-slate-400 font-medium shrink-0">Description:</span>
+                                                        <span className="font-semibold text-slate-800 truncate" title={wbsDesc}>{wbsDesc}</span>
+                                                    </div>
+                                                )}
                                             </div>
                                         )}
 
@@ -697,7 +778,10 @@ export const PRNonTradeFormPage: React.FC = () => {
                                                     placeholder="Cari / nama peralatan aset..."
                                                     required
                                                     value={equipmentName}
-                                                    onChange={(e) => setEquipmentName(e.target.value)}
+                                                    onChange={(e) => {
+                                                        setEquipmentName(e.target.value);
+                                                        if (!e.target.value) setEquipmentDesc('');
+                                                    }}
                                                     className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 shadow-sm"
                                                 />
                                                 <button
@@ -709,6 +793,12 @@ export const PRNonTradeFormPage: React.FC = () => {
                                                     <Search size={16} />
                                                 </button>
                                             </div>
+                                            {equipmentDesc && (
+                                                <div className="mt-1.5 flex items-center gap-1.5 text-xs bg-slate-50 border border-slate-200/80 px-2.5 py-1 rounded-lg text-slate-700 animate-fade-in">
+                                                    <span className="text-slate-400 font-medium shrink-0">Description:</span>
+                                                    <span className="font-semibold text-slate-800 truncate" title={equipmentDesc}>{equipmentDesc}</span>
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                 </div>
@@ -727,7 +817,10 @@ export const PRNonTradeFormPage: React.FC = () => {
                                                 type="text"
                                                 placeholder="Nama peralatan operasional (opsional)..."
                                                 value={equipmentName}
-                                                onChange={(e) => setEquipmentName(e.target.value)}
+                                                onChange={(e) => {
+                                                    setEquipmentName(e.target.value);
+                                                    if (!e.target.value) setEquipmentDesc('');
+                                                }}
                                                 className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 shadow-sm"
                                             />
                                             <button
@@ -739,6 +832,12 @@ export const PRNonTradeFormPage: React.FC = () => {
                                                 <Search size={16} />
                                             </button>
                                         </div>
+                                        {equipmentDesc && (
+                                            <div className="mt-1.5 flex items-center gap-1.5 text-xs bg-slate-50 border border-slate-200/80 px-2.5 py-1 rounded-lg text-slate-700 animate-fade-in">
+                                                <span className="text-slate-400 font-medium shrink-0">Description:</span>
+                                                <span className="font-semibold text-slate-800 truncate" title={equipmentDesc}>{equipmentDesc}</span>
+                                            </div>
+                                        )}
                                     </div>
                                 )}
                             </div>
