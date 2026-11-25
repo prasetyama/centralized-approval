@@ -1841,6 +1841,9 @@ class PRNonTradeViewSet(viewsets.ModelViewSet):
             response.data['rejected_count'] = base_qs.filter(
                 Q(status='REJECTED') | Q(approval_request__status='REJECTED')
             ).exclude(status__in=['DRAFT', 'CANCELLED']).count()
+            response.data['revised_count'] = base_qs.filter(
+                Q(status='REVISED') | Q(approval_request__status='REVISED')
+            ).exclude(status__in=['DRAFT', 'CANCELLED']).count()
         return response
 
     def perform_create(self, serializer):
