@@ -79,7 +79,7 @@ export const AdminOrgStructurePage = () => {
 
     const { data: usersData } = useQuery<any>({
         queryKey: ['admin-users'],
-        queryFn: () => api.get('/admin/users', { params: { is_active: true, page_size: 1000 } }),
+        queryFn: () => api.get('/admin/users', { params: { is_active: true, page_size: 1000, same_company: true } }),
     });
 
     const { data: orgStructuresData, isLoading: isOrgLoading } = useQuery<any>({
