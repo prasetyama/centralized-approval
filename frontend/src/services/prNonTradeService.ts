@@ -42,6 +42,7 @@ export interface MasterItem {
     unit?: string;
     category?: string;
     sloc?: string;
+    plant?: string;
     project_name?: string;
 }
 
