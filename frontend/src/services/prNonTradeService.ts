@@ -41,6 +41,7 @@ export interface MasterItem {
     description?: string;
     unit?: string;
     category?: string;
+    sloc?: string;
     project_name?: string;
 }
 
@@ -83,19 +84,23 @@ export const prNonTradeService = {
     },
 
     // Master Data Search APIs
-    searchAssets: async (q: string = ''): Promise<{ results?: MasterItem[] } | MasterItem[]> => {
-        return api.get(`/master/assets/`, { params: { search: q } });
+    searchAssets: async (q: string = '', page: number = 1, pageSize: number = 10): Promise<{ count?: number; results?: MasterItem[] } | MasterItem[]> => {
+        return api.get(`/master/assets/`, { params: { search: q, page, page_size: pageSize } });
     },
 
-    searchWBS: async (q: string = ''): Promise<{ results?: MasterItem[] } | MasterItem[]> => {
-        return api.get(`/master/wbs/`, { params: { search: q } });
+    searchWBS: async (q: string = '', page: number = 1, pageSize: number = 10): Promise<{ count?: number; results?: MasterItem[] } | MasterItem[]> => {
+        return api.get(`/master/wbs/`, { params: { search: q, page, page_size: pageSize } });
     },
 
-    searchEquipments: async (q: string = ''): Promise<{ results?: MasterItem[] } | MasterItem[]> => {
-        return api.get(`/master/equipments/`, { params: { search: q } });
+    searchEquipments: async (q: string = '', page: number = 1, pageSize: number = 10): Promise<{ count?: number; results?: MasterItem[] } | MasterItem[]> => {
+        return api.get(`/master/equipments/`, { params: { search: q, page, page_size: pageSize } });
     },
 
-    searchGoods: async (q: string = ''): Promise<{ results?: MasterItem[] } | MasterItem[]> => {
-        return api.get(`/master/goods/`, { params: { search: q } });
+    searchGoods: async (q: string = '', page: number = 1, pageSize: number = 10): Promise<{ count?: number; results?: MasterItem[] } | MasterItem[]> => {
+        return api.get(`/master/goods/`, { params: { search: q, page, page_size: pageSize } });
+    },
+
+    searchCarNumbers: async (q: string = '', page: number = 1, pageSize: number = 10): Promise<{ count?: number; results?: MasterItem[] } | MasterItem[]> => {
+        return api.get(`/master/car-numbers/`, { params: { search: q, page, page_size: pageSize } });
     },
 };

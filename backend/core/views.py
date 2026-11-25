@@ -2110,6 +2110,7 @@ class MasterAssetViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = MasterAsset.objects.all()
     serializer_class = MasterAssetSerializer
     permission_classes = [IsAuthenticated]
+    pagination_class = StandardResultsSetPagination
     filter_backends = [DjangoFilterBackend, SearchFilter]
     search_fields = ['code', 'name', 'category', 'description']
 
@@ -2118,6 +2119,7 @@ class MasterWBSViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = MasterWBS.objects.all()
     serializer_class = MasterWBSSerializer
     permission_classes = [IsAuthenticated]
+    pagination_class = StandardResultsSetPagination
     filter_backends = [DjangoFilterBackend, SearchFilter]
     search_fields = ['code', 'description']
 
@@ -2126,6 +2128,7 @@ class MasterEquipmentViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = MasterEquipment.objects.all()
     serializer_class = MasterEquipmentSerializer
     permission_classes = [IsAuthenticated]
+    pagination_class = StandardResultsSetPagination
     filter_backends = [DjangoFilterBackend, SearchFilter]
     search_fields = ['code', 'plant', 'company_id']
 
@@ -2134,6 +2137,7 @@ class MasterGoodsViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = MasterGoods.objects.all()
     serializer_class = MasterGoodsSerializer
     permission_classes = [IsAuthenticated]
+    pagination_class = StandardResultsSetPagination
     filter_backends = [DjangoFilterBackend, SearchFilter]
     search_fields = ['code', 'description', 'unit']
 
@@ -2142,6 +2146,7 @@ class MasterCarNumberViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = MasterCarNumber.objects.all()
     serializer_class = MasterCarNumberSerializer
     permission_classes = [IsAuthenticated]
+    pagination_class = StandardResultsSetPagination
     filter_backends = [DjangoFilterBackend, SearchFilter]
     search_fields = ['code', 'description']
     filterset_fields = ['company_id']
