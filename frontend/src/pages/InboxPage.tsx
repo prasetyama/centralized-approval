@@ -134,7 +134,9 @@ export const InboxPage = () => {
         { value: 'asset_type', label: 'Asset Type: A - Z' },
         { value: '-asset_type', label: 'Asset Type: Z - A' },
         { value: 'reference_id', label: 'Ref Number: A - Z' },
-        { value: '-reference_id', label: 'Ref Number: Z - A' }
+        { value: '-reference_id', label: 'Ref Number: Z - A' },
+        { value: 'updated_at', label: 'Last Updated: Oldest' },
+        { value: '-updated_at', label: 'Last Updated: Newest' },
     ];
 
     const activeFiltersCount = [
@@ -598,6 +600,14 @@ export const InboxPage = () => {
                                     Date Received {renderSortIndicator('created_at')}
                                 </div>
                             </TableHead>
+                            <TableHead
+                                className="cursor-pointer select-none group hover:text-blue-600 transition-colors"
+                                onClick={() => handleSort('updated_at')}
+                            >
+                                <div className="flex items-center">
+                                    Last Updated {renderSortIndicator('updated_at')}
+                                </div>
+                            </TableHead>
                             <TableHead className="text-right">Action</TableHead>
                         </TableRow>
                     </TableHeader>
@@ -629,20 +639,18 @@ export const InboxPage = () => {
                                                 <div className="flex flex-wrap items-center gap-2">
                                                     <p className="text-sm text-slate-500">Ref: {item.reference_id}</p>
                                                     {item.purchase_type && (
-                                                        <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${
-                                                            item.purchase_type === 'asset'
-                                                                ? 'bg-blue-50 border-blue-200 text-blue-700'
-                                                                : 'bg-slate-100 border-slate-200 text-slate-700'
-                                                        }`}>
+                                                        <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${item.purchase_type === 'asset'
+                                                            ? 'bg-blue-50 border-blue-200 text-blue-700'
+                                                            : 'bg-slate-100 border-slate-200 text-slate-700'
+                                                            }`}>
                                                             {item.purchase_type === 'asset' ? 'Asset' : 'Non Asset'}
                                                         </span>
                                                     )}
                                                     {item.asset_type && (
-                                                        <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${
-                                                            item.asset_type === 'wbs'
-                                                                ? 'bg-indigo-50 border-indigo-200 text-indigo-700'
-                                                                : 'bg-purple-50 border-purple-200 text-purple-700'
-                                                        }`}>
+                                                        <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${item.asset_type === 'wbs'
+                                                            ? 'bg-indigo-50 border-indigo-200 text-indigo-700'
+                                                            : 'bg-purple-50 border-purple-200 text-purple-700'
+                                                            }`}>
                                                             {item.asset_type === 'wbs' ? 'WBS' : 'Non WBS'}
                                                         </span>
                                                     )}
@@ -673,6 +681,9 @@ export const InboxPage = () => {
                                         )}
                                         <TableCell className="text-slate-500 text-sm">
                                             {formatDate(item.created_at)}
+                                        </TableCell>
+                                        <TableCell className="text-slate-500 text-sm">
+                                            {formatDate(item.updated_at)}
                                         </TableCell>
                                         <TableCell className="text-right">
                                             <Link to={`/workflow/${item.id}`}>
