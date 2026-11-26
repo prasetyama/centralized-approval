@@ -471,6 +471,131 @@ class WorkflowDelegateView(generics.GenericAPIView):
 # Inbox Endpoint
 # ─────────────────────────────────────────────
 
+def _apply_approval_request_filters_and_sort(queryset, query_params):
+    """
+    Shared annotation, filtering, and sorting for InboxView and HistoryView.
+    """
+    from django.db.models import OuterRef, Subquery, Value, CharField, Case, When
+    from django.db.models.functions import Coalesce, NullIf
+    from django.db.models.fields.json import KeyTextTransform
+    from django.utils.dateparse import parse_date
+    from datetime import datetime as dt, time as dt_time
+
+    first_org_dept = Subquery(
+        OrganizationStructure.objects.filter(
+            user=OuterRef('requester_id')
+        ).values('department__name')[:1],
+        output_field=CharField()
+    )
+    queryset = queryset.annotate(
+        dept_sort=Coalesce(
+            NullIf(KeyTextTransform('requester_department', 'payload'), Value('')),
+            NullIf(KeyTextTransform('department', 'payload'), Value('')),
+            first_org_dept,
+            Value(''),
+            output_field=CharField()
+        ),
+        purchase_type_sort=Coalesce(
+            NullIf(KeyTextTransform('purchase_type', 'payload'), Value('')),
+            Value(''),
+            output_field=CharField()
+        ),
+        asset_type_sort=Case(
+            When(
+                purchase_type_sort='non_asset',
+                then=Value('')
+            ),
+            default=Coalesce(
+                NullIf(KeyTextTransform('asset_type', 'payload'), Value('')),
+                Value(''),
+                output_field=CharField()
+            ),
+            output_field=CharField()
+        ),
+    )
+
+    # Filtering
+    module_code = query_params.get('module')
+    if module_code:
+        queryset = queryset.filter(module__code=module_code)
+
+    priority = query_params.get('priority')
+    if priority:
+        queryset = queryset.filter(priority=priority)
+
+    status_param = query_params.get('status')
+    if status_param:
+        queryset = queryset.filter(status=status_param)
+
+    department = query_params.get('department')
+    if department:
+        queryset = queryset.filter(dept_sort__iexact=department)
+
+    purchase_type = query_params.get('purchase_type')
+    if purchase_type:
+        queryset = queryset.filter(purchase_type_sort=purchase_type)
+
+    asset_type = query_params.get('asset_type')
+    if asset_type:
+        queryset = queryset.filter(asset_type_sort=asset_type)
+
+    start_date = query_params.get('start_date')
+    if start_date:
+        parsed_start = parse_date(start_date)
+        if parsed_start:
+            dt_start = timezone.make_aware(dt.combine(parsed_start, dt_time.min))
+            queryset = queryset.filter(created_at__gte=dt_start)
+
+    end_date = query_params.get('end_date')
+    if end_date:
+        parsed_end = parse_date(end_date)
+        if parsed_end:
+            dt_end = timezone.make_aware(dt.combine(parsed_end, dt_time.max))
+            queryset = queryset.filter(created_at__lte=dt_end)
+
+    search = query_params.get('search')
+    if search:
+        queryset = queryset.filter(
+            Q(title__icontains=search) |
+            Q(reference_id__icontains=search) |
+            Q(requester__first_name__icontains=search) |
+            Q(requester__last_name__icontains=search) |
+            Q(requester__username__icontains=search) |
+            Q(dept_sort__icontains=search)
+        )
+
+    # Ordering / Sorting
+    ordering = query_params.get('ordering')
+    allowed_ordering = {
+        'created_at': 'created_at',
+        '-created_at': '-created_at',
+        'title': 'title',
+        '-title': '-title',
+        'reference_id': 'reference_id',
+        '-reference_id': '-reference_id',
+        'status': 'status',
+        '-status': '-status',
+        'priority': 'priority',
+        '-priority': '-priority',
+        'module': 'module__name',
+        '-module': '-module__name',
+        'requester': 'requester__first_name',
+        '-requester': '-requester__first_name',
+        'department': 'dept_sort',
+        '-department': '-dept_sort',
+        'purchase_type': 'purchase_type_sort',
+        '-purchase_type': '-purchase_type_sort',
+        'asset_type': 'asset_type_sort',
+        '-asset_type': '-asset_type_sort',
+    }
+    if ordering and ordering in allowed_ordering:
+        queryset = queryset.order_by(allowed_ordering[ordering])
+    else:
+        queryset = queryset.order_by('-created_at')
+
+    return queryset
+
+
 class InboxView(generics.ListAPIView):
     """
     GET /api/v1/inbox
@@ -524,71 +649,7 @@ class InboxView(generics.ListAPIView):
                 )
 
             queryset = queryset.select_related('module', 'requester').distinct()
-
-            # Filtering
-            module_code = self.request.query_params.get('module')
-            if module_code:
-                queryset = queryset.filter(module__code=module_code)
-
-            priority = self.request.query_params.get('priority')
-            if priority:
-                queryset = queryset.filter(priority=priority)
-
-            status_param = self.request.query_params.get('status')
-            if status_param:
-                queryset = queryset.filter(status=status_param)
-
-            from django.utils.dateparse import parse_date
-            from datetime import datetime as dt, time as dt_time
-
-            start_date = self.request.query_params.get('start_date')
-            if start_date:
-                parsed_start = parse_date(start_date)
-                if parsed_start:
-                    dt_start = timezone.make_aware(dt.combine(parsed_start, dt_time.min))
-                    queryset = queryset.filter(created_at__gte=dt_start)
-
-            end_date = self.request.query_params.get('end_date')
-            if end_date:
-                parsed_end = parse_date(end_date)
-                if parsed_end:
-                    dt_end = timezone.make_aware(dt.combine(parsed_end, dt_time.max))
-                    queryset = queryset.filter(created_at__lte=dt_end)
-
-            search = self.request.query_params.get('search')
-            if search:
-                queryset = queryset.filter(
-                    Q(title__icontains=search) |
-                    Q(reference_id__icontains=search) |
-                    Q(requester__first_name__icontains=search) |
-                    Q(requester__last_name__icontains=search) |
-                    Q(requester__username__icontains=search)
-                )
-
-            # Ordering / Sorting
-            ordering = self.request.query_params.get('ordering')
-            allowed_ordering = {
-                'created_at': 'created_at',
-                '-created_at': '-created_at',
-                'title': 'title',
-                '-title': '-title',
-                'reference_id': 'reference_id',
-                '-reference_id': '-reference_id',
-                'status': 'status',
-                '-status': '-status',
-                'priority': 'priority',
-                '-priority': '-priority',
-                'module': 'module__name',
-                '-module': '-module__name',
-                'requester': 'requester__first_name',
-                '-requester': '-requester__first_name',
-            }
-            if ordering and ordering in allowed_ordering:
-                queryset = queryset.order_by(allowed_ordering[ordering])
-            else:
-                queryset = queryset.order_by('-created_at')
-
-            return queryset
+            return _apply_approval_request_filters_and_sort(queryset, self.request.query_params)
 
         except Exception as e:
             logging.getLogger(__name__).error(
@@ -626,64 +687,7 @@ class HistoryView(generics.ListAPIView):
                 id__in=request_ids
             ).select_related('module', 'requester')
 
-            # Filtering
-            module_code = self.request.query_params.get('module')
-            if module_code:
-                queryset = queryset.filter(module__code=module_code)
-
-            status_param = self.request.query_params.get('status')
-            if status_param:
-                queryset = queryset.filter(status=status_param)
-
-            from django.utils.dateparse import parse_date
-            from datetime import datetime as dt, time as dt_time
-
-            start_date = self.request.query_params.get('start_date')
-            if start_date:
-                parsed_start = parse_date(start_date)
-                if parsed_start:
-                    dt_start = timezone.make_aware(dt.combine(parsed_start, dt_time.min))
-                    queryset = queryset.filter(created_at__gte=dt_start)
-
-            end_date = self.request.query_params.get('end_date')
-            if end_date:
-                parsed_end = parse_date(end_date)
-                if parsed_end:
-                    dt_end = timezone.make_aware(dt.combine(parsed_end, dt_time.max))
-                    queryset = queryset.filter(created_at__lte=dt_end)
-
-            search = self.request.query_params.get('search')
-            if search:
-                queryset = queryset.filter(
-                    Q(title__icontains=search) |
-                    Q(reference_id__icontains=search) |
-                    Q(requester__first_name__icontains=search) |
-                    Q(requester__last_name__icontains=search) |
-                    Q(requester__username__icontains=search)
-                )
-
-            # Ordering / Sorting
-            ordering = self.request.query_params.get('ordering')
-            allowed_ordering = {
-                'created_at': 'created_at',
-                '-created_at': '-created_at',
-                'title': 'title',
-                '-title': '-title',
-                'reference_id': 'reference_id',
-                '-reference_id': '-reference_id',
-                'status': 'status',
-                '-status': '-status',
-                'module': 'module__name',
-                '-module': '-module__name',
-                'requester': 'requester__first_name',
-                '-requester': '-requester__first_name',
-            }
-            if ordering and ordering in allowed_ordering:
-                queryset = queryset.order_by(allowed_ordering[ordering])
-            else:
-                queryset = queryset.order_by('-created_at')
-
-            return queryset
+            return _apply_approval_request_filters_and_sort(queryset, self.request.query_params)
 
         except Exception as e:
             logging.getLogger(__name__).error(

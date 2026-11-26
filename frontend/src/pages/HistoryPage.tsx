@@ -38,6 +38,9 @@ export const HistoryPage = () => {
     const [showFilters, setShowFilters] = useState(false);
     const [search, setSearch] = useState('');
     const [moduleFilter, setModuleFilter] = useState('');
+    const [departmentFilter, setDepartmentFilter] = useState('');
+    const [purchaseTypeFilter, setPurchaseTypeFilter] = useState('');
+    const [assetTypeFilter, setAssetTypeFilter] = useState('');
     const [statusFilter, setStatusFilter] = useState('');
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
@@ -52,10 +55,42 @@ export const HistoryPage = () => {
         staleTime: 5 * 60 * 1000,
     });
 
+    // Fetch dynamic departments list
+    const { data: deptData } = useQuery<any>({
+        queryKey: ['admin-departments-history'],
+        queryFn: () => api.get('/admin/departments', { params: { page_size: 100 } }),
+        staleTime: 5 * 60 * 1000,
+    });
+
     const dynamicModules = (moduleData?.results || []).map((m: any) => ({
         value: m.code,
         label: m.name,
     }));
+
+    const dynamicDepts = Array.from(
+        new Set(
+            ((deptData?.results || deptData || []) as any[])
+                .map((d: any) => d.name)
+                .filter(Boolean)
+        )
+    ).map((name: string) => ({ value: name, label: name }));
+
+    const departmentOptions = [
+        { value: '', label: 'All Departments' },
+        ...dynamicDepts,
+    ];
+
+    const purchaseTypeOptions = [
+        { value: '', label: 'All Purchase Types' },
+        { value: 'asset', label: 'Asset' },
+        { value: 'non_asset', label: 'Non Asset' },
+    ];
+
+    const assetTypeOptions = [
+        { value: '', label: 'All Asset Types' },
+        { value: 'non_wbs', label: 'Non WBS' },
+        { value: 'wbs', label: 'WBS' },
+    ];
 
     const moduleOptions = [
         { value: '', label: 'All Modules' },
@@ -80,15 +115,33 @@ export const HistoryPage = () => {
     const sortOptions = [
         { value: '-created_at', label: 'Date: Newest' },
         { value: 'created_at', label: 'Date: Oldest' },
+        { value: 'department', label: 'Department: A - Z' },
+        { value: '-department', label: 'Department: Z - A' },
+        { value: 'purchase_type', label: 'Purchase Type: A - Z' },
+        { value: '-purchase_type', label: 'Purchase Type: Z - A' },
+        { value: 'asset_type', label: 'Asset Type: A - Z' },
+        { value: '-asset_type', label: 'Asset Type: Z - A' },
         { value: 'reference_id', label: 'Ref Number: A - Z' },
         { value: '-reference_id', label: 'Ref Number: Z - A' }
     ];
 
-    const activeFiltersCount = [search, moduleFilter, statusFilter, startDate, endDate].filter(Boolean).length;
+    const activeFiltersCount = [
+        search,
+        moduleFilter,
+        departmentFilter,
+        purchaseTypeFilter,
+        assetTypeFilter,
+        statusFilter,
+        startDate,
+        endDate,
+    ].filter(Boolean).length;
 
     const handleResetFilters = () => {
         setSearch('');
         setModuleFilter('');
+        setDepartmentFilter('');
+        setPurchaseTypeFilter('');
+        setAssetTypeFilter('');
         setStatusFilter('');
         setStartDate('');
         setEndDate('');
@@ -117,13 +170,16 @@ export const HistoryPage = () => {
     };
 
     const { data: history, isLoading } = useQuery<any>({
-        queryKey: ['history', page, pageSize, search, moduleFilter, statusFilter, startDate, endDate, ordering],
+        queryKey: ['history', page, pageSize, search, moduleFilter, departmentFilter, purchaseTypeFilter, assetTypeFilter, statusFilter, startDate, endDate, ordering],
         queryFn: () => api.get('/history', {
             params: {
                 page,
                 page_size: pageSize,
                 search: search || undefined,
                 module: moduleFilter || undefined,
+                department: departmentFilter || undefined,
+                purchase_type: purchaseTypeFilter || undefined,
+                asset_type: assetTypeFilter || undefined,
                 status: statusFilter || undefined,
                 start_date: startDate || undefined,
                 end_date: endDate || undefined,
@@ -242,6 +298,60 @@ export const HistoryPage = () => {
                             </select>
                         </div>
 
+                        {/* Department Dropdown */}
+                        <div>
+                            <label className="text-sm font-semibold text-slate-700 block mb-1.5">Department</label>
+                            <select
+                                value={departmentFilter}
+                                onChange={(e) => {
+                                    setDepartmentFilter(e.target.value);
+                                    setPage(1);
+                                }}
+                                className="h-9 w-full text-sm bg-white border border-slate-200 rounded-md px-2.5 text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            >
+                                {departmentOptions.map((opt) => (
+                                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                ))}
+                            </select>
+                        </div>
+
+                        {/* Purchase Type Dropdown */}
+                        <div>
+                            <label className="text-sm font-semibold text-slate-700 block mb-1.5">Purchase Type</label>
+                            <select
+                                value={purchaseTypeFilter}
+                                onChange={(e) => {
+                                    setPurchaseTypeFilter(e.target.value);
+                                    if (e.target.value === 'non_asset') {
+                                        setAssetTypeFilter('');
+                                    }
+                                    setPage(1);
+                                }}
+                                className="h-9 w-full text-sm bg-white border border-slate-200 rounded-md px-2.5 text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            >
+                                {purchaseTypeOptions.map((opt) => (
+                                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                ))}
+                            </select>
+                        </div>
+
+                        {/* Asset Type Dropdown */}
+                        <div>
+                            <label className="text-sm font-semibold text-slate-700 block mb-1.5">Asset Type</label>
+                            <select
+                                value={assetTypeFilter}
+                                onChange={(e) => {
+                                    setAssetTypeFilter(e.target.value);
+                                    setPage(1);
+                                }}
+                                className="h-9 w-full text-sm bg-white border border-slate-200 rounded-md px-2.5 text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            >
+                                {assetTypeOptions.map((opt) => (
+                                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                ))}
+                            </select>
+                        </div>
+
                         {/* Status Dropdown */}
                         <div>
                             <label className="text-sm font-semibold text-slate-700 block mb-1.5">Status</label>
@@ -327,6 +437,30 @@ export const HistoryPage = () => {
                             </button>
                         </span>
                     )}
+                    {departmentFilter && (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                            Department: {departmentFilter}
+                            <button onClick={() => { setDepartmentFilter(''); setPage(1); }} className="hover:text-blue-900">
+                                <X size={12} />
+                            </button>
+                        </span>
+                    )}
+                    {purchaseTypeFilter && (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                            Purchase Type: {purchaseTypeOptions.find((o) => o.value === purchaseTypeFilter)?.label || purchaseTypeFilter}
+                            <button onClick={() => { setPurchaseTypeFilter(''); setPage(1); }} className="hover:text-blue-900">
+                                <X size={12} />
+                            </button>
+                        </span>
+                    )}
+                    {assetTypeFilter && (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                            Asset Type: {assetTypeOptions.find((o) => o.value === assetTypeFilter)?.label || assetTypeFilter}
+                            <button onClick={() => { setAssetTypeFilter(''); setPage(1); }} className="hover:text-blue-900">
+                                <X size={12} />
+                            </button>
+                        </span>
+                    )}
                     {statusFilter && (
                         <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
                             Status: {statusFilter}
@@ -392,6 +526,14 @@ export const HistoryPage = () => {
                             </TableHead>
                             <TableHead
                                 className="cursor-pointer select-none group hover:text-blue-600 transition-colors"
+                                onClick={() => handleSort('department')}
+                            >
+                                <div className="flex items-center">
+                                    Department {renderSortIndicator('department')}
+                                </div>
+                            </TableHead>
+                            <TableHead
+                                className="cursor-pointer select-none group hover:text-blue-600 transition-colors"
                                 onClick={() => handleSort('status')}
                             >
                                 <div className="flex items-center">
@@ -412,7 +554,7 @@ export const HistoryPage = () => {
                     <TableBody>
                         {isLoading ? (
                             <TableRow>
-                                <TableCell colSpan={7} className="h-48 text-center text-slate-500 animate-pulse">
+                                <TableCell colSpan={8} className="h-48 text-center text-slate-500 animate-pulse">
                                     Loading history...
                                 </TableCell>
                             </TableRow>
@@ -432,7 +574,27 @@ export const HistoryPage = () => {
                                         <TableCell>
                                             <div className="space-y-1">
                                                 <p className="font-semibold text-slate-900">{item.title}</p>
-                                                <p className="text-sm text-slate-500">Ref: {item.reference_id}</p>
+                                                <div className="flex flex-wrap items-center gap-2">
+                                                    <p className="text-sm text-slate-500">Ref: {item.reference_id}</p>
+                                                    {item.purchase_type && (
+                                                        <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${
+                                                            item.purchase_type === 'asset'
+                                                                ? 'bg-blue-50 border-blue-200 text-blue-700'
+                                                                : 'bg-slate-100 border-slate-200 text-slate-700'
+                                                        }`}>
+                                                            {item.purchase_type === 'asset' ? 'Asset' : 'Non Asset'}
+                                                        </span>
+                                                    )}
+                                                    {item.asset_type && (
+                                                        <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${
+                                                            item.asset_type === 'wbs'
+                                                                ? 'bg-indigo-50 border-indigo-200 text-indigo-700'
+                                                                : 'bg-purple-50 border-purple-200 text-purple-700'
+                                                        }`}>
+                                                            {item.asset_type === 'wbs' ? 'WBS' : 'Non WBS'}
+                                                        </span>
+                                                    )}
+                                                </div>
                                             </div>
                                         </TableCell>
                                         <TableCell>
@@ -442,6 +604,9 @@ export const HistoryPage = () => {
                                                 </div>
                                                 <span>{item.requester_name || '-'}</span>
                                             </div>
+                                        </TableCell>
+                                        <TableCell className="text-sm text-slate-700 font-medium">
+                                            {item.department || '-'}
                                         </TableCell>
                                         <TableCell>
                                             {getStatusBadge(item.status)} <br />
@@ -463,7 +628,7 @@ export const HistoryPage = () => {
                                 ))}
                                 {(!history?.results || history.results.length === 0) && (
                                     <TableRow>
-                                        <TableCell colSpan={7} className="h-64 text-center">
+                                        <TableCell colSpan={8} className="h-64 text-center">
                                             <div className="flex flex-col items-center justify-center text-slate-400">
                                                 <Inbox className="h-12 w-12 opacity-10 mb-4" />
                                                 <p className="text-lg font-medium">
