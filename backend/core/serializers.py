@@ -840,6 +840,9 @@ class ApprovalRequestListSerializer(SitAwareSerializerMixin, serializers.ModelSe
     current_step_name = serializers.SerializerMethodField()
     locked_by_name = serializers.SerializerMethodField()
     locked_by_email = serializers.SerializerMethodField()
+    department = serializers.SerializerMethodField()
+    purchase_type = serializers.SerializerMethodField()
+    asset_type = serializers.SerializerMethodField()
 
     class Meta:
         model = ApprovalRequest
@@ -847,8 +850,26 @@ class ApprovalRequestListSerializer(SitAwareSerializerMixin, serializers.ModelSe
             'id', 'reference_id', 'module', 'module_name', 'module_code',
             'module_color', 'module_icon', 'title', 'status', 'priority', 'is_test',
             'current_step', 'current_step_name', 'requester', 'requester_name', 'requester_email',
-            'division', 'division_name', 'locked_by_name', 'locked_by_email', 'created_at', 'updated_at',
+            'division', 'division_name', 'department', 'purchase_type', 'asset_type',
+            'locked_by_name', 'locked_by_email', 'created_at', 'updated_at',
         ]
+
+    def get_department(self, obj):
+        if hasattr(obj, 'dept_sort') and obj.dept_sort:
+            return obj.dept_sort
+        payload = obj.payload if isinstance(obj.payload, dict) else {}
+        return payload.get('requester_department') or payload.get('department') or obj.requester.department or ''
+
+    def get_purchase_type(self, obj):
+        payload = obj.payload if isinstance(obj.payload, dict) else {}
+        return payload.get('purchase_type') or None
+
+    def get_asset_type(self, obj):
+        payload = obj.payload if isinstance(obj.payload, dict) else {}
+        if payload.get('purchase_type') == 'non_asset':
+            return None
+        val = payload.get('asset_type')
+        return val if val else None
 
     def get_requester_name(self, obj):
         return obj.requester.get_full_name() or obj.requester.username
