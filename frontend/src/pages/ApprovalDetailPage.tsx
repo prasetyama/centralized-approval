@@ -55,6 +55,8 @@ const extractAttachmentsFromDetail = (detail: any): AttachmentItem[] => {
                     data: fileData || undefined,
                     url: fileUrl || undefined,
                     source: sourceLabel,
+                    value: rawItem.value,
+                    remark: rawItem.remark,
                 });
             }
             return;
@@ -133,6 +135,8 @@ const extractAvailableQuotations = (detail: any): any[] => {
                     data: item.data,
                     url: item.url,
                     source: sourceLabel || 'Purchasing',
+                    value: item.value,
+                    remark: item.remark,
                     raw: item,
                 });
             }
@@ -226,6 +230,13 @@ export const ApprovalDetailPage = () => {
 
     const detail = request as any;
     const activeStep = detail?.steps?.find((s: any) => s.step_order === detail.current_step);
+
+    const isRequestor = Boolean(
+        user && detail && (
+            (detail.requester && user.id && Number(detail.requester) === Number(user.id)) ||
+            (detail.requester_email && user.email && detail.requester_email.toLowerCase() === user.email.toLowerCase())
+        )
+    );
 
     const isApprover = (() => {
         if (!activeStep || !detail) return false;
@@ -564,6 +575,7 @@ export const ApprovalDetailPage = () => {
                                 attachments={allAttachments}
                                 title="Attachment"
                                 selectedQuotation={selectedQuotation}
+                                hideActions={isRequestor}
                             />
                         </Card>
                     )}
@@ -655,6 +667,7 @@ export const ApprovalDetailPage = () => {
                                     <Timeline
                                         steps={detail.steps}
                                         currentStep={detail.current_step}
+                                        hideAttachmentActions={isRequestor}
                                     />
                                 </div>
                             ) : activeTab === 'activity' ? (
@@ -722,6 +735,7 @@ export const ApprovalDetailPage = () => {
                         canRevise={canRevise && !isLockedByOther}
                         isBeforeQuotationStep={isBeforeQuotationStep}
                         isWatcher={isWatcher}
+                        isRequestor={isRequestor}
                         showDlvDateForm={showDlvDateForm}
                         requiredInputs={activeStep?.required_inputs || []}
                         approverType={activeStep?.approver_type}

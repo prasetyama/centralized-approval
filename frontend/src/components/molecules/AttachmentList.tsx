@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { FileText, Download, Eye, X, ExternalLink, Image as ImageIcon, Paperclip, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/atoms/Button';
-import { formatFileSize } from '@/lib/utils';
+import { formatFileSize, formatCurrency } from '@/lib/utils';
 
 export interface AttachmentItem {
     id: string;
@@ -12,6 +12,8 @@ export interface AttachmentItem {
     url?: string;
     source?: string; // e.g. "Purchasing Step", "Payload"
     uploaderName?: string;
+    value?: number | string;
+    remark?: string;
     raw?: any;
 }
 
@@ -20,6 +22,7 @@ interface AttachmentListProps {
     title?: string;
     selectedQuotation?: any;
     compact?: boolean;
+    hideActions?: boolean;
 }
 
 export const isQuotationSelected = (file: AttachmentItem, selectedQuotation?: any): boolean => {
@@ -131,6 +134,7 @@ export const AttachmentList: React.FC<AttachmentListProps> = ({
     title = 'Lampiran',
     selectedQuotation,
     compact = false,
+    hideActions = false,
 }) => {
     const [previewFile, setPreviewFile] = useState<AttachmentItem | null>(null);
 
@@ -159,6 +163,8 @@ export const AttachmentList: React.FC<AttachmentListProps> = ({
                 type: quotationTarget.type || 'application/pdf',
                 url: synthUrl,
                 data: synthData,
+                value: quotationTarget.value,
+                remark: quotationTarget.remark,
                 source: selectedMeta?.stepName || 'Approval Step',
             });
         }
@@ -208,6 +214,31 @@ export const AttachmentList: React.FC<AttachmentListProps> = ({
 
     const handlePreview = (file: AttachmentItem) => {
         setPreviewFile(file);
+    };
+
+    const renderQuotationMeta = (file: AttachmentItem) => {
+        const hasValue = file.value !== undefined && file.value !== null && String(file.value).trim() !== '';
+        const hasRemark = Boolean(file.remark && String(file.remark).trim() !== '');
+        if (!hasValue && !hasRemark) return null;
+
+        const formattedVal = hasValue
+            ? (!isNaN(Number(file.value)) ? formatCurrency(Number(file.value)) : String(file.value))
+            : null;
+
+        return (
+            <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                {formattedVal && (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200/80">
+                        Value: {formattedVal}
+                    </span>
+                )}
+                {hasRemark && (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-medium bg-slate-100 text-slate-700 border border-slate-200/80 max-w-full truncate" title={file.remark}>
+                        Remark: {file.remark}
+                    </span>
+                )}
+            </div>
+        );
     };
 
     return (
@@ -262,33 +293,36 @@ export const AttachmentList: React.FC<AttachmentListProps> = ({
                                                     </span>
                                                 )}
                                             </div>
+                                            {renderQuotationMeta(file)}
                                         </div>
                                     </div>
 
-                                    <div className="flex items-center gap-1.5 shrink-0">
-                                        <Button
-                                            type="button"
-                                            variant="ghost"
-                                            size="sm"
-                                            onClick={() => handlePreview(file)}
-                                            className="h-8 px-2.5 text-xs text-emerald-700 hover:text-emerald-800 hover:bg-emerald-100 font-bold rounded-lg"
-                                            title="View File"
-                                        >
-                                            <Eye size={14} className="mr-1" />
-                                            View
-                                        </Button>
-                                        <Button
-                                            type="button"
-                                            variant="primary"
-                                            size="sm"
-                                            onClick={() => downloadFile(file)}
-                                            className="h-8 px-2.5 text-xs text-white bg-emerald-600 hover:bg-emerald-700 font-bold rounded-lg shadow-xs"
-                                            title="Download File"
-                                        >
-                                            <Download size={14} className="mr-1" />
-                                            Download
-                                        </Button>
-                                    </div>
+                                    {!hideActions && (
+                                        <div className="flex items-center gap-1.5 shrink-0">
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => handlePreview(file)}
+                                                className="h-8 px-2.5 text-xs text-emerald-700 hover:text-emerald-800 hover:bg-emerald-100 font-bold rounded-lg"
+                                                title="View File"
+                                            >
+                                                <Eye size={14} className="mr-1" />
+                                                View
+                                            </Button>
+                                            <Button
+                                                type="button"
+                                                variant="primary"
+                                                size="sm"
+                                                onClick={() => downloadFile(file)}
+                                                className="h-8 px-2.5 text-xs text-white bg-emerald-600 hover:bg-emerald-700 font-bold rounded-lg shadow-xs"
+                                                title="Download File"
+                                            >
+                                                <Download size={14} className="mr-1" />
+                                                Download
+                                            </Button>
+                                        </div>
+                                    )}
                                 </div>
                             );
                         }
@@ -313,33 +347,36 @@ export const AttachmentList: React.FC<AttachmentListProps> = ({
                                                 </span>
                                             ) : null}
                                         </div>
+                                        {renderQuotationMeta(file)}
                                     </div>
                                 </div>
 
-                                <div className="flex items-center gap-1 shrink-0">
-                                    <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => handlePreview(file)}
-                                        className="h-8 px-2.5 text-xs text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 font-bold rounded-lg"
-                                        title="View File"
-                                    >
-                                        <Eye size={14} className="mr-1" />
-                                        View
-                                    </Button>
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => downloadFile(file)}
-                                        className="h-8 px-2.5 text-xs text-slate-700 hover:bg-slate-100 font-bold rounded-lg border-slate-200"
-                                        title="Download File"
-                                    >
-                                        <Download size={14} className="mr-1" />
-                                        Download
-                                    </Button>
-                                </div>
+                                {!hideActions && (
+                                    <div className="flex items-center gap-1 shrink-0">
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => handlePreview(file)}
+                                            className="h-8 px-2.5 text-xs text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 font-bold rounded-lg"
+                                            title="View File"
+                                        >
+                                            <Eye size={14} className="mr-1" />
+                                            View
+                                        </Button>
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => downloadFile(file)}
+                                            className="h-8 px-2.5 text-xs text-slate-700 hover:bg-slate-100 font-bold rounded-lg border-slate-200"
+                                            title="Download File"
+                                        >
+                                            <Download size={14} className="mr-1" />
+                                            Download
+                                        </Button>
+                                    </div>
+                                )}
                             </div>
                         );
                     })}
