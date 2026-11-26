@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { CheckCircle2, XCircle, AlertTriangle, Paperclip, UploadCloud, FileText, Trash2, Eye, RotateCcw, UserPlus } from 'lucide-react';
 import { Button } from '@/components/atoms/Button';
 import { Card } from '@/components/atoms/Card';
-import { cn } from '@/lib/utils';
+import { cn, formatCurrency } from '@/lib/utils';
 import { useToast } from '@/context/ToastContext';
 import { useAuth } from '@/context/AuthContext';
 import { AttachmentList } from './AttachmentList';
@@ -12,6 +12,8 @@ interface QuotationFile {
     size: number;
     type: string;
     data: string;
+    value?: string;
+    remark?: string;
 }
 
 interface ActionButtonsProps {
@@ -35,6 +37,7 @@ interface ActionButtonsProps {
     allowAdhoc?: boolean;
     adhocUserId?: number | null;
     adhocUserName?: string | null;
+    isRequestor?: boolean;
 }
 
 const getCleanErrorMessage = (err: any): string => {
@@ -89,6 +92,7 @@ export const ActionButtons = ({
     allowAdhoc = false,
     adhocUserId = null,
     adhocUserName = null,
+    isRequestor = false,
 }: ActionButtonsProps) => {
     const { addToast } = useToast();
     const [showModal, setShowModal] = useState<'APPROVE' | 'REJECT' | 'REVISE' | null>(null);
@@ -162,6 +166,8 @@ export const ActionButtons = ({
                         size: file.size,
                         type: file.type,
                         data: base64Data,
+                        value: '',
+                        remark: '',
                     }
                 ]);
             };
@@ -173,6 +179,15 @@ export const ActionButtons = ({
 
     const handleRemoveFile = (indexToRemove: number) => {
         setQuotationFiles((prev) => prev.filter((_, idx) => idx !== indexToRemove));
+    };
+
+    const handleQuotationFieldChange = (index: number, field: 'value' | 'remark', val: string) => {
+        setQuotationFiles((prev) =>
+            prev.map((item, idx) => (idx === index ? { ...item, [field]: val } : item))
+        );
+        if (field === 'value' && quotationError && val.trim()) {
+            setQuotationError(null);
+        }
     };
 
     const handleAction = async () => {
@@ -200,6 +215,9 @@ export const ActionButtons = ({
             }
             if (requiresQuotation && quotationFiles.length === 0) {
                 setQuotationError('Quotation attachment is required (minimum 1 file)');
+                hasError = true;
+            } else if (requiresQuotation && quotationFiles.some((f) => !f.value?.trim() || isNaN(Number(f.value)) || Number(f.value) <= 0)) {
+                setQuotationError('Valid value (> 0) is required for each quotation');
                 hasError = true;
             }
             if (requiresApprovalQuotation) {
@@ -229,7 +247,16 @@ export const ActionButtons = ({
             const stepData: Record<string, any> = {};
             if (requiresPr && prNumber.trim()) stepData.pr_number = prNumber.trim();
             if (requiresPo && poNumber.trim()) stepData.po_number = poNumber.trim();
-            if (requiresQuotation && quotationFiles.length > 0) stepData.quotation = quotationFiles;
+            if (requiresQuotation && quotationFiles.length > 0) {
+                stepData.quotation = quotationFiles.map((f) => ({
+                    name: f.name,
+                    size: f.size,
+                    type: f.type,
+                    data: f.data,
+                    value: f.value ? Number(f.value) : undefined,
+                    remark: f.remark?.trim() || '',
+                }));
+            }
             if (allowAdhoc && useAdhoc && adhocUserId) {
                 stepData.use_adhoc = true;
                 stepData.adhoc_approver_id = Number(adhocUserId);
@@ -333,7 +360,10 @@ export const ActionButtons = ({
 
             {showModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-[2px] p-4 animate-in fade-in duration-200">
-                    <Card className="w-full max-w-md shadow-2xl animate-in zoom-in-95 duration-200">
+                    <Card className={cn(
+                        "w-full shadow-2xl animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto",
+                        (requiresQuotation || requiresApprovalQuotation) ? "max-w-lg" : "max-w-md"
+                    )}>
                         <div className="p-6 space-y-4">
                             <div className="flex items-center gap-3">
                                 <div className={cn(
@@ -431,22 +461,53 @@ export const ActionButtons = ({
 
                                     {/* Attached Files List */}
                                     {quotationFiles.length > 0 && (
-                                        <div className="space-y-1.5 max-h-40 overflow-y-auto pt-1">
+                                        <div className="space-y-2.5 max-h-64 overflow-y-auto pt-1 pr-0.5">
                                             {quotationFiles.map((file, idx) => (
-                                                <div key={idx} className="flex items-center justify-between p-2 rounded-lg bg-slate-100/70 border border-slate-200 text-xs">
-                                                    <div className="flex items-center gap-2 truncate pr-2">
-                                                        <FileText size={16} className="text-indigo-600 shrink-0" />
-                                                        <span className="font-medium text-slate-800 truncate">{file.name}</span>
-                                                        <span className="text-[10px] text-slate-400 shrink-0">({formatFileSize(file.size)})</span>
+                                                <div key={idx} className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-2.5 text-xs">
+                                                    <div className="flex items-center justify-between gap-2">
+                                                        <div className="flex items-center gap-2 truncate">
+                                                            <FileText size={16} className="text-indigo-600 shrink-0" />
+                                                            <span className="font-semibold text-slate-800 truncate">{file.name}</span>
+                                                            <span className="text-[10px] text-slate-400 shrink-0">({formatFileSize(file.size)})</span>
+                                                        </div>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleRemoveFile(idx)}
+                                                            className="text-slate-400 hover:text-red-600 transition-colors p-1 rounded hover:bg-slate-200 shrink-0"
+                                                            title="Hapus file"
+                                                        >
+                                                            <Trash2 size={14} />
+                                                        </button>
                                                     </div>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleRemoveFile(idx)}
-                                                        className="text-slate-400 hover:text-red-600 transition-colors p-1 rounded hover:bg-slate-200"
-                                                        title="Hapus file"
-                                                    >
-                                                        <Trash2 size={14} />
-                                                    </button>
+
+                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                                        <div>
+                                                            <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">
+                                                                Value <span className="text-red-500">*</span>
+                                                            </label>
+                                                            <input
+                                                                type="number"
+                                                                min="0"
+                                                                step="any"
+                                                                placeholder="e.g. 15000000"
+                                                                value={file.value ?? ''}
+                                                                onChange={(e) => handleQuotationFieldChange(idx, 'value', e.target.value)}
+                                                                className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                                            />
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">
+                                                                Remark
+                                                            </label>
+                                                            <input
+                                                                type="text"
+                                                                placeholder="Vendor / notes..."
+                                                                value={file.remark ?? ''}
+                                                                onChange={(e) => handleQuotationFieldChange(idx, 'remark', e.target.value)}
+                                                                className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                                            />
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             ))}
                                         </div>
@@ -489,14 +550,26 @@ export const ActionButtons = ({
                                                             >
                                                                 {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
                                                             </div>
-                                                            <div className="truncate">
-                                                                <p className="text-xs font-bold text-slate-800 truncate">{quot.name}</p>
+                                                            <div className="truncate space-y-0.5">
+                                                                <div className="flex items-center gap-2 flex-wrap">
+                                                                    <p className="text-xs font-bold text-slate-800 truncate">{quot.name}</p>
+                                                                    {quot.value !== undefined && quot.value !== null && String(quot.value).trim() !== '' && (
+                                                                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200 shrink-0">
+                                                                            {!isNaN(Number(quot.value)) ? formatCurrency(Number(quot.value)) : quot.value}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
                                                                 <p className="text-[11px] text-slate-400">
                                                                     {quot.size ? formatFileSize(quot.size) : 'Berkas Penawaran'} {quot.source ? `• ${quot.source}` : ''}
                                                                 </p>
+                                                                {quot.remark && (
+                                                                    <p className="text-[11px] text-slate-600 truncate" title={quot.remark}>
+                                                                        Remark: {quot.remark}
+                                                                    </p>
+                                                                )}
                                                             </div>
                                                         </div>
-                                                        {(quot.url || quot.data) && (
+                                                        {!isRequestor && (quot.url || quot.data) && (
                                                             <button
                                                                 type="button"
                                                                 onClick={(e) => {
@@ -537,13 +610,16 @@ export const ActionButtons = ({
                                         {(selectedQuotation.url || selectedQuotation.quotation) && (
                                             <AttachmentList
                                                 compact
+                                                hideActions={isRequestor}
                                                 attachments={[
                                                     {
                                                         id: `selected-att-1`,
                                                         name: selectedQuotation.quotation.name,
                                                         size: selectedQuotation.quotation.size,
                                                         type: selectedQuotation.quotation.type,
-                                                        data: selectedQuotation.quotation.data
+                                                        data: selectedQuotation.quotation.data,
+                                                        value: selectedQuotation.quotation.value,
+                                                        remark: selectedQuotation.quotation.remark,
                                                     }
                                                 ]}
                                                 selectedQuotation={selectedQuotation.quotation}

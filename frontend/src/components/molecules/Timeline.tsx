@@ -23,6 +23,7 @@ export interface TimelineStep {
 interface TimelineProps {
     steps: TimelineStep[];
     currentStep: number;
+    hideAttachmentActions?: boolean;
 }
 
 const getStepAttachments = (stepData?: Record<string, any>): AttachmentItem[] => {
@@ -64,7 +65,7 @@ const getStepAttachments = (stepData?: Record<string, any>): AttachmentItem[] =>
     return files;
 };
 
-export const Timeline = ({ steps, currentStep }: TimelineProps) => {
+export const Timeline = ({ steps, currentStep, hideAttachmentActions = false }: TimelineProps) => {
     return (
         <div className="space-y-4">
             {steps.map((step, index) => {
@@ -207,6 +208,7 @@ export const Timeline = ({ steps, currentStep }: TimelineProps) => {
                                         attachments={stepAttachments}
                                         compact
                                         selectedQuotation={step.step_data?.approval_quotation}
+                                        hideActions={hideAttachmentActions}
                                     />
                                 </div>
                             )}
