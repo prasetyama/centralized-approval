@@ -1855,7 +1855,7 @@ class PRNonTradeViewSet(viewsets.ModelViewSet):
         pr.goods_service_type = request.data.get('goods_service_type', 'not_lumpsum')
         pr.purchase_type = request.data.get('purchase_type', 'non_asset')
         pr.car_tbr_no = request.data.get('car_tbr_no', '')
-        pr.asset_type = request.data.get('asset_type', 'non_wbs')
+        pr.asset_type = request.data.get('asset_type', '') if pr.purchase_type == 'asset' else ''
         pr.asset_no = request.data.get('asset_no', '')
         pr.wbs_no = request.data.get('wbs_no', '')
         pr.equipment_name = request.data.get('equipment_name', '')
@@ -1916,7 +1916,7 @@ class PRNonTradeViewSet(viewsets.ModelViewSet):
         pr.goods_service_type = request.data.get('goods_service_type', 'not_lumpsum')
         pr.purchase_type = request.data.get('purchase_type', 'non_asset')
         pr.car_tbr_no = request.data.get('car_tbr_no', '')
-        pr.asset_type = request.data.get('asset_type', 'non_wbs')
+        pr.asset_type = request.data.get('asset_type', '') if pr.purchase_type == 'asset' else ''
         pr.asset_no = request.data.get('asset_no', '')
         pr.wbs_no = request.data.get('wbs_no', '')
         pr.equipment_name = request.data.get('equipment_name', '')

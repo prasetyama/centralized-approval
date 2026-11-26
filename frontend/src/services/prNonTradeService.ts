@@ -21,7 +21,7 @@ export interface PRNonTradeData {
     goods_service_type: 'lumpsum' | 'not_lumpsum';
     purchase_type: 'asset' | 'non_asset';
     car_tbr_no?: string;
-    asset_type: 'non_wbs' | 'wbs';
+    asset_type: 'non_wbs' | 'wbs' | '';
     asset_no?: string;
     wbs_no?: string;
     equipment_name?: string;

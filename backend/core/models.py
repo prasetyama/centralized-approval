@@ -1286,7 +1286,8 @@ class PRNonTrade(models.Model):
     asset_type = models.CharField(
         max_length=20,
         choices=ASSET_TYPE_CHOICES,
-        default='non_wbs'
+        blank=True,
+        default=''
     )
     asset_no = models.CharField(max_length=100, blank=True, default='')
     wbs_no = models.CharField(max_length=100, blank=True, default='')
