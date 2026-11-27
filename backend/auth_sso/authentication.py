@@ -56,7 +56,8 @@ class JWTAuthentication(BaseAuthentication):
             if role_code:
                 role = Role.objects.filter(code__iexact=payload.get('title', '')).first()
                 if role:
-                    UserRole.objects.get_or_create(user=user, role=role, defaults={'dept': payload.get('department', '')})
+                    if not UserRole.objects.filter(user=user, role=role).exists():
+                        UserRole.objects.create(user=user, role=role, dept=payload.get('department', ''))
                     
                     is_approver = role_code.lower() != 'viewer'
                     if user.is_approver != is_approver:

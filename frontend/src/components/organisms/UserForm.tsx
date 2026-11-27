@@ -20,6 +20,7 @@ interface User {
     first_name: string;
     last_name: string;
     role: number | string;
+    is_sit: boolean;
     is_active: boolean;
     division: string;
     department: string;
@@ -38,7 +39,8 @@ export const UserForm: React.FC<UserFormProps> = ({ initialData, onClose }) => {
         email: initialData?.email || '',
         first_name: initialData?.first_name || '',
         last_name: initialData?.last_name || '',
-        role: initialData?.role || '',
+        role: initialData?.role ?? '',
+        is_sit: Boolean(initialData?.is_sit || initialData?.role_code?.toUpperCase() === 'SIT'),
         division: initialData?.division || '',
         is_active: initialData?.is_active ?? true,
         department: initialData?.department || '',
@@ -69,16 +71,35 @@ export const UserForm: React.FC<UserFormProps> = ({ initialData, onClose }) => {
             onClose();
         },
         onError: (error: any) => {
-            const msg = JSON.parse(error);
-            addToast(msg.message, 'error');
+            let msg = 'Failed to save user';
+            if (typeof error === 'string') {
+                try {
+                    const parsed = JSON.parse(error);
+                    msg = parsed?.message || error;
+                } catch {
+                    msg = error;
+                }
+            } else if (error?.message) {
+                msg = error.message;
+            }
+            addToast(msg, 'error');
         }
     });
 
+    const roleList = (roles as any)?.results || (Array.isArray(roles) ? roles : []);
+    const sitRoleObj = roleList.find((r: any) => (r.code || '').toUpperCase() === 'SIT');
+
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
+        const parsedRole = formData.role !== '' && formData.role !== null && !Number.isNaN(Number(formData.role))
+            ? Number(formData.role)
+            : null;
+        const isSitRoleSelected = sitRoleObj && parsedRole === sitRoleObj.id;
+
         mutation.mutate({
             ...formData,
-            role: formData.role,
+            role: parsedRole,
+            is_sit: Boolean(formData.is_sit || isSitRoleSelected),
             department: formData.department,
             primary_company: formData.primary_company ? Number(formData.primary_company) : null,
         });
@@ -129,14 +150,12 @@ export const UserForm: React.FC<UserFormProps> = ({ initialData, onClose }) => {
                         placeholder="John"
                         value={formData.first_name}
                         onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
-                        required
                     />
                     <Input
                         label="Last Name"
                         placeholder="Doe"
                         value={formData.last_name}
                         onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
-                        required
                     />
                 </Card>
 
@@ -147,8 +166,15 @@ export const UserForm: React.FC<UserFormProps> = ({ initialData, onClose }) => {
                             label="Role"
                             options={[{ value: '', label: 'Select Role' }, ...roleOptions]}
                             value={formData.role}
-                            onChange={(e) => setFormData({ ...formData, role: parseInt(e.target.value) })}
-                            required
+                            onChange={(e) => {
+                                const val = e.target.value ? parseInt(e.target.value, 10) : '';
+                                const selectedIsSit = Boolean(sitRoleObj && val === sitRoleObj.id);
+                                setFormData({
+                                    ...formData,
+                                    role: val,
+                                    is_sit: selectedIsSit ? true : formData.is_sit,
+                                });
+                            }}
                         />
                         <Select
                             label="Company"
@@ -161,7 +187,6 @@ export const UserForm: React.FC<UserFormProps> = ({ initialData, onClose }) => {
                             placeholder="Division"
                             value={formData.division}
                             onChange={(e) => setFormData({ ...formData, division: e.target.value })}
-                            required
                         />
                         <Input
                             label="Department"
@@ -192,6 +217,18 @@ export const UserForm: React.FC<UserFormProps> = ({ initialData, onClose }) => {
                         />
                         <label htmlFor="is_approver" className="text-sm font-medium text-slate-700">
                             Is Approver
+                        </label>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <input
+                            type="checkbox"
+                            id="is_sit"
+                            checked={formData.is_sit}
+                            onChange={(e) => setFormData({ ...formData, is_sit: e.target.checked })}
+                            className="h-4 w-4 text-amber-600 border-gray-300 rounded focus:ring-amber-500"
+                        />
+                        <label htmlFor="is_sit" className="text-sm font-medium text-slate-700">
+                            SIT Testing User (Redirect all related emails to prasetyama.hidayat@nirwanalestari.com)
                         </label>
                     </div>
                 </Card>

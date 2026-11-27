@@ -82,6 +82,7 @@ class Command(BaseCommand):
             {'code': 'FIN_HEAD', 'name': 'Finance Head', 'description': 'Finance Head role'},
             {'code': 'HR_HEAD', 'name': 'HR Head', 'description': 'HR Head role'},
             {'code': 'ADMIN', 'name': 'System Administrator', 'description': 'Full system access'},
+            {'code': 'SIT', 'name': 'SIT', 'description': 'Role untuk user testing (SIT)'},
         ]
         roles = {}
         for rd in roles_data:
