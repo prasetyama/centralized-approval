@@ -177,6 +177,7 @@ export const AdminUserPage = () => {
                             <TableHead>Role</TableHead>
                             <TableHead>Division</TableHead>
                             <TableHead>Department</TableHead>
+                            <TableHead>Company</TableHead>
                             <TableHead>Status</TableHead>
                             <TableHead className="text-right">Action</TableHead>
                         </TableRow>
@@ -235,6 +236,9 @@ export const AdminUserPage = () => {
                                         </div>
                                     </TableCell>
                                     <TableCell>
+                                        <span className="text-sm font-medium text-slate-600">{user.company || '-'}</span>
+                                    </TableCell>
+                                    <TableCell>
                                         <Badge variant={user.is_active ? 'success' : 'secondary'}>
                                             {user.is_active ? 'Active' : 'Inactive'}
                                         </Badge>
@@ -265,7 +269,7 @@ export const AdminUserPage = () => {
                         })}
                         {(!users?.results || users.results.length === 0) && (
                             <TableRow>
-                                <TableCell colSpan={7} className="h-48 text-center">
+                                <TableCell colSpan={8} className="h-48 text-center">
                                     <div className="flex flex-col items-center justify-center text-slate-400">
                                         <Users className="h-10 w-10 opacity-20 mb-2" />
                                         <p className="text-base font-medium">No users found</p>
