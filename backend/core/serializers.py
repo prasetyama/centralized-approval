@@ -200,10 +200,10 @@ class UserListSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-       fields = [
+        fields = [
             'id', 'username', 'email', 'first_name', 'last_name',
-            'role', 'role_name', 'role_code', 'role_details', 'roles', 'is_sit', 'division', 'division_details',
-            'department', 'department_id', 'company', 'company_id', 'company_code', 'company_details',
+            'role', 'role_name', 'role_code', 'roles', 'is_sit', 'division', 'division_name',
+            'department', 'department_id', 'company', 'company_id', 'company_code',
             'primary_company', 'phone',
             'is_approver', 'is_active', 'is_superuser', 'is_staff', 'password', 'date_joined',
         ]
@@ -354,10 +354,10 @@ class UserDetailSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             'id', 'username', 'email', 'first_name', 'last_name',
-            'role', 'role_name', 'role_code', 'roles', 'is_sit',
-            'division', 'division_name', 'department', 'department_id',
-            'company', 'company_id', 'company_code', 'primary_company', 'is_approver', 'is_active',
-            'is_superuser', 'is_staff',
+            'role', 'role_name', 'role_code', 'role_details', 'roles', 'is_sit',
+            'division', 'division_details', 'department', 'department_id',
+            'company', 'company_id', 'company_code', 'company_details', 'primary_company', 'is_approver', 'is_active',
+            'is_superuser', 'is_staff', 'password'
         ]
         read_only_fields = ['date_joined']
 
@@ -1118,5 +1118,3 @@ class PRNonTradeSerializer(SitAwareSerializerMixin, serializers.ModelSerializer)
             for order, item_data in enumerate(items_data, 1):
                 PRNonTradeItem.objects.create(pr_non_trade=instance, item_order=order, **item_data)
         return instance
-
-
