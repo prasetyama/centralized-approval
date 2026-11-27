@@ -24,6 +24,7 @@ interface User {
     is_active: boolean;
     division: string;
     department: string;
+    primary_company: number | string;
     is_approver: boolean;
 }
 
@@ -43,12 +44,18 @@ export const UserForm: React.FC<UserFormProps> = ({ initialData, onClose }) => {
         division: initialData?.division || '',
         is_active: initialData?.is_active ?? true,
         department: initialData?.department || '',
+        primary_company: initialData?.primary_company || initialData?.company_id || '',
         is_approver: initialData?.is_approver || false,
     });
 
     const { data: roles } = useQuery<any>({
         queryKey: ['admin-roles'],
         queryFn: () => api.get('/admin/roles'),
+    });
+
+    const { data: companies } = useQuery<any>({
+        queryKey: ['admin-companies'],
+        queryFn: () => api.get('/admin/companies', { params: { page_size: 100 } }),
     });
 
     const mutation = useMutation({
@@ -94,10 +101,15 @@ export const UserForm: React.FC<UserFormProps> = ({ initialData, onClose }) => {
             role: parsedRole,
             is_sit: Boolean(formData.is_sit || isSitRoleSelected),
             department: formData.department,
+            primary_company: formData.primary_company ? Number(formData.primary_company) : null,
         });
     };
 
-    const roleOptions = roleList.map((r: any) => ({ value: r.id, label: `${r.name} (${r.code})` }));
+    const roleOptions = ((roles as any)?.results || []).map((r: any) => ({ value: r.id, label: r.name }));
+    const companyOptions = ((companies as any)?.results || companies || []).map((c: any) => ({
+        value: c.id,
+        label: c.code ? `${c.name} (${c.code})` : c.name,
+    }));
 
     return (
         <form onSubmit={handleSubmit} className="space-y-6 animate-in zoom-in-95 duration-300">
@@ -163,6 +175,12 @@ export const UserForm: React.FC<UserFormProps> = ({ initialData, onClose }) => {
                                     is_sit: selectedIsSit ? true : formData.is_sit,
                                 });
                             }}
+                        />
+                        <Select
+                            label="Company"
+                            options={[{ value: '', label: 'Select Company' }, ...companyOptions]}
+                            value={formData.primary_company}
+                            onChange={(e) => setFormData({ ...formData, primary_company: e.target.value ? parseInt(e.target.value, 10) : '' })}
                         />
                         <Input
                             label="Division"

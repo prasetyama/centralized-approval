@@ -200,12 +200,12 @@ class UserListSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = [
+       fields = [
             'id', 'username', 'email', 'first_name', 'last_name',
-            'role', 'role_name', 'role_code', 'roles', 'is_sit',
-            'division', 'division_name', 'department', 'department_id',
-            'company', 'company_id', 'company_code', 'is_approver', 'is_active',
-            'is_superuser', 'is_staff',
+            'role', 'role_name', 'role_code', 'role_details', 'roles', 'is_sit', 'division', 'division_details',
+            'department', 'department_id', 'company', 'company_id', 'company_code', 'company_details',
+            'primary_company', 'phone',
+            'is_approver', 'is_active', 'is_superuser', 'is_staff', 'password', 'date_joined',
         ]
 
     def _get_user_role_tuple(self, obj):
@@ -354,9 +354,10 @@ class UserDetailSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             'id', 'username', 'email', 'first_name', 'last_name',
-            'role', 'role_name', 'role_code', 'role_details', 'roles', 'is_sit', 'division', 'division_details',
-            'department', 'department_id', 'company', 'company_id', 'company_code', 'company_details', 'phone',
-            'is_approver', 'is_active', 'is_superuser', 'is_staff', 'password', 'date_joined',
+            'role', 'role_name', 'role_code', 'roles', 'is_sit',
+            'division', 'division_name', 'department', 'department_id',
+            'company', 'company_id', 'company_code', 'primary_company', 'is_approver', 'is_active',
+            'is_superuser', 'is_staff',
         ]
         read_only_fields = ['date_joined']
 
