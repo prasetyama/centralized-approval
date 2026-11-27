@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FileText, Download, Eye, X, ExternalLink, Image as ImageIcon, Paperclip, CheckCircle2 } from 'lucide-react';
+import { FileText, Download, Eye, X, ExternalLink, Image as ImageIcon, Paperclip, CheckCircle2, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { Button } from '@/components/atoms/Button';
 import { formatFileSize, formatCurrency } from '@/lib/utils';
 
@@ -137,6 +137,27 @@ export const AttachmentList: React.FC<AttachmentListProps> = ({
     hideActions = false,
 }) => {
     const [previewFile, setPreviewFile] = useState<AttachmentItem | null>(null);
+    const [sortField, setSortField] = useState<'value' | 'remark' | null>(null);
+    const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+
+    const handleSort = (field: 'value' | 'remark') => {
+        if (sortField !== field) {
+            setSortField(field);
+            setSortDir('asc');
+        } else if (sortDir === 'asc') {
+            setSortDir('desc');
+        } else {
+            setSortField(null);
+            setSortDir('asc');
+        }
+    };
+
+    const renderSortIcon = (field: 'value' | 'remark') => {
+        if (sortField !== field) return <ArrowUpDown size={12} className="text-slate-400" />;
+        return sortDir === 'asc'
+            ? <ArrowUp size={12} className="text-blue-600" />
+            : <ArrowDown size={12} className="text-blue-600" />;
+    };
 
     // Extract metadata if selectedQuotation has approval wrapper
     const selectedMeta = typeof selectedQuotation === 'object' && selectedQuotation !== null && selectedQuotation.quotation !== undefined
@@ -170,8 +191,26 @@ export const AttachmentList: React.FC<AttachmentListProps> = ({
         }
     }
 
-    // Sort to ensure the selected quotation is placed at the top of the list
+    // Sort by selected field (Value / Remark) or keep selected quotation at the top by default
     const sortedAttachments = [...fileList].sort((a, b) => {
+        if (sortField === 'value') {
+            const aHas = a.value !== undefined && a.value !== null && String(a.value).trim() !== '' && !isNaN(Number(a.value));
+            const bHas = b.value !== undefined && b.value !== null && String(b.value).trim() !== '' && !isNaN(Number(b.value));
+            if (!aHas && !bHas) return 0;
+            if (!aHas) return 1;
+            if (!bHas) return -1;
+            const diff = Number(a.value) - Number(b.value);
+            return sortDir === 'asc' ? diff : -diff;
+        }
+        if (sortField === 'remark') {
+            const aRem = (a.remark || '').trim();
+            const bRem = (b.remark || '').trim();
+            if (!aRem && !bRem) return 0;
+            if (!aRem) return 1;
+            if (!bRem) return -1;
+            const cmp = aRem.localeCompare(bRem, undefined, { sensitivity: 'base' });
+            return sortDir === 'asc' ? cmp : -cmp;
+        }
         const aSelected = isQuotationSelected(a, selectedQuotation);
         const bSelected = isQuotationSelected(b, selectedQuotation);
         if (aSelected && !bSelected) return -1;
@@ -252,10 +291,37 @@ export const AttachmentList: React.FC<AttachmentListProps> = ({
                                 {title} ({sortedAttachments.length})
                             </h3>
                         </div>
+                        {sortedAttachments.length > 1 && (
+                            <div className="flex items-center gap-1.5 text-xs">
+                                <span className="text-slate-400 font-medium mr-0.5">Sort:</span>
+                                <button
+                                    type="button"
+                                    onClick={() => handleSort('value')}
+                                    className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border font-semibold transition-colors cursor-pointer ${
+                                        sortField === 'value'
+                                            ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                            : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                                    }`}
+                                >
+                                    Value {renderSortIcon('value')}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => handleSort('remark')}
+                                    className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border font-semibold transition-colors cursor-pointer ${
+                                        sortField === 'remark'
+                                            ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                            : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                                    }`}
+                                >
+                                    Remark {renderSortIcon('remark')}
+                                </button>
+                            </div>
+                        )}
                     </div>
                 )}
 
-                <div className={compact ? "space-y-2" : "grid grid-cols-2 gap-3"}>
+                <div className={compact ? "space-y-2 max-h-[240px] overflow-y-auto pr-1" : "space-y-2.5 max-h-[420px] overflow-y-auto pr-1"}>
                     {sortedAttachments.map((file) => {
                         const isSelected = isQuotationSelected(file, selectedQuotation);
 
