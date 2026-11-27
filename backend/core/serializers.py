@@ -1118,5 +1118,3 @@ class PRNonTradeSerializer(SitAwareSerializerMixin, serializers.ModelSerializer)
             for order, item_data in enumerate(items_data, 1):
                 PRNonTradeItem.objects.create(pr_non_trade=instance, item_order=order, **item_data)
         return instance
-
-
