@@ -151,6 +151,14 @@ class User(AbstractUser):
     division = models.CharField(max_length=50, blank=True, default='')
     phone = models.CharField(max_length=20, blank=True, default='')
     is_approver = models.BooleanField(default=False, help_text="Whether this user can approve requests")
+    primary_company = models.ForeignKey(
+        Company,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='primary_users',
+        help_text="Default/fallback company when user is not yet mapped in OrganizationStructure"
+    )
 
     class Meta:
         db_table = 'aw_user'
@@ -229,11 +237,15 @@ class User(AbstractUser):
             models.Q(dept_head=self),
             company__isnull=False
         ).select_related('company').first()
-        return dept.company if dept else None
+        if dept and dept.company:
+            return dept.company
+        return self.primary_company
 
     def get_company_ids(self):
-        """Returns a list of company IDs associated with this user from aw_organization_structure and aw_department."""
+        """Returns a list of company IDs associated with this user from aw_organization_structure, aw_department, and primary_company."""
         comp_ids = set()
+        if self.primary_company_id:
+            comp_ids.add(self.primary_company_id)
         for c_id, d_c_id in self.org_positions.values_list('company_id', 'department__company_id'):
             if c_id:
                 comp_ids.add(c_id)

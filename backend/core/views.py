@@ -1095,7 +1095,9 @@ class RoleViewSet(viewsets.ModelViewSet):
 
 class UserViewSet(viewsets.ModelViewSet):
     """CRUD for Users."""
-    queryset = User.objects.prefetch_related(
+    queryset = User.objects.select_related(
+        'primary_company'
+    ).prefetch_related(
         'user_roles__role',
         'org_positions__company',
         'org_positions__department__company'
@@ -1123,6 +1125,7 @@ class UserViewSet(viewsets.ModelViewSet):
             if not target_company_ids:
                 return qs.none()
             qs = qs.filter(
+                Q(primary_company_id__in=target_company_ids) |
                 Q(org_positions__company_id__in=target_company_ids) |
                 Q(org_positions__department__company_id__in=target_company_ids) |
                 Q(dept_approver_1__company_id__in=target_company_ids) |

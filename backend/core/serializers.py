@@ -201,7 +201,7 @@ class UserListSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'username', 'email', 'first_name', 'last_name',
             'role', 'role_name', 'role_code', 'division', 'division_name', 'department', 'department_id',
-            'company', 'company_id', 'company_code', 'is_approver', 'is_active',
+            'company', 'company_id', 'company_code', 'primary_company', 'is_approver', 'is_active',
             'is_superuser', 'is_staff',
         ]
 
@@ -320,7 +320,8 @@ class UserDetailSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'username', 'email', 'first_name', 'last_name',
             'role', 'role_name', 'role_code', 'role_details', 'roles', 'division', 'division_details',
-            'department', 'department_id', 'company', 'company_id', 'company_code', 'company_details', 'phone',
+            'department', 'department_id', 'company', 'company_id', 'company_code', 'company_details',
+            'primary_company', 'phone',
             'is_approver', 'is_active', 'is_superuser', 'is_staff', 'password', 'date_joined',
         ]
         read_only_fields = ['date_joined']
